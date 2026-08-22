@@ -1,0 +1,147 @@
+{
+  "name": "assets/0ad6d46f20404551b1b402de3118b68a",
+  "displayName": "BaseMind Light",
+  "styleGuidelines": "## Brand & Style\n\nThe design system is a high-contrast, premium evolution of the product's identity, specifically engineered for clarity and professional focus in a B2B SaaS environment. The brand personality is **Clean, Authoritative, and Highly Legible**, shifting from the dense technicality of a dark interface to an airy, open, and trustworthy workspace.\n\nThe aesthetic follows a **Minimalist Corporate** style with **Skeuomorphic touches**. It leverages expansive whitespace, a refined \"paper-white\" surface architecture, and razor-sharp typography to manage complex RAG-based AI workflows. The visual language emphasizes \"calm productivity,\" replacing heavy backgrounds with structured tonal layers and precision-engineered shadows that suggest a physical stack of intelligence tools.\n\n## Layout & Spacing\n\nThe design system utilizes a **Fluid Grid** model with a rigid 8px baseline rhythm to ensure mathematical alignment across all technical components.\n\n- **Desktop (1440px):** 12-column grid with 24px gutters. The \"airy\" vibe is achieved by using generous page margins (40px) and wide internal padding within modules.\n- **Mobile (Up to 767px):** 4-column grid with 16px margins. Content should reflow vertically, with complex \"Split-Pane\" layouts stacking to reveal the chat/result interface below the configuration logic.\n- **Rhythm:** Spacing between related elements (labels and inputs) should use 8px (1 unit). Spacing between unrelated sections should use 32px or 48px to create clear visual separation without the need for heavy dividers.\n\n## Elevation & Depth\n\nIn light mode, depth is conveyed through **Tonal Layering** and **Soft Ambient Shadows**. The goal is to make the UI feel like physical layers of paper or cards.\n\n- **Level 0 (Base):** White (#FFFFFF). Used for the main canvas.\n- **Level 1 (Sub-surface):** Slate 50 (#F8FAFC). Used for sidebars or background regions to push content forward.\n- **Level 2 (Cards/Floating):** White surface with a very soft, multi-layered shadow (0px 4px 12px rgba(15, 23, 42, 0.08)) and a 1px border (#E2E8F0).\n- **Level 3 (Interactive/Modals):** A more pronounced shadow (0px 12px 24px rgba(15, 23, 42, 0.12)) to indicate high-level priority.\n\nAvoid pure black shadows; always tint shadows with the Neutral Foundation color to maintain a premium, integrated feel.\n\n## Components\n\n- **Buttons:** \n    - *Primary:* Solid Teal (#0D9488) with White text. Use Geist Bold for the label.\n    - *Secondary:* Ghost style with a 1px Slate-300 border and Charcoal text.\n- **Input Fields:** Use a white background with a 1px Slate-200 border. On focus, the border transitions to Primary Teal with a subtle glow.\n- **Data Cards:** Features a 1px border (#E2E8F0). The header of the card should use a Slate-50 background to separate metadata from the main content.\n- **AI Status Chips:** Use a light green tint (10% opacity of Secondary) for the background and solid Secondary Green for the text and icon.\n- **Code Snippets:** Unlike the rest of the light UI, code blocks should remain in a \"Dark Mode\" container (#0F172A) to preserve the developer-centric mental model and provide a high-contrast focal point within the page.\n- **Dividers:** Use subtle 1px lines (#F1F5F9) to maintain a clean aesthetic without fragmenting the layout too aggressively.",
+  "theme": {
+    "colorMode": "LIGHT",
+    "font": "GEIST",
+    "roundness": "ROUND_EIGHT",
+    "customColor": "#0d9488",
+    "headlineFont": "GEIST",
+    "bodyFont": "INTER",
+    "labelFont": "INTER",
+    "namedColors": {
+      "background": "#faf8ff",
+      "error": "#ba1a1a",
+      "error_container": "#ffdad6",
+      "inverse_on_surface": "#eef0ff",
+      "inverse_primary": "#6bd8cb",
+      "inverse_surface": "#283044",
+      "on-surface": "#0f172a",
+      "on-surface-variant": "#475569",
+      "on_background": "#131b2e",
+      "on_error": "#ffffff",
+      "on_error_container": "#93000a",
+      "on_primary": "#ffffff",
+      "on_primary_container": "#f4fffc",
+      "on_primary_fixed": "#00201d",
+      "on_primary_fixed_variant": "#005049",
+      "on_secondary": "#ffffff",
+      "on_secondary_container": "#007230",
+      "on_secondary_fixed": "#002109",
+      "on_secondary_fixed_variant": "#005320",
+      "on_surface": "#131b2e",
+      "on_surface_variant": "#3d4947",
+      "on_tertiary": "#ffffff",
+      "on_tertiary_container": "#fdfcff",
+      "on_tertiary_fixed": "#001d31",
+      "on_tertiary_fixed_variant": "#004b73",
+      "outline": "#cbd5e1",
+      "outline-variant": "#e2e8f0",
+      "outline_variant": "#bcc9c6",
+      "primary": "#00685f",
+      "primary_container": "#008378",
+      "primary_fixed": "#89f5e7",
+      "primary_fixed_dim": "#6bd8cb",
+      "secondary": "#006e2d",
+      "secondary_container": "#7cf994",
+      "secondary_fixed": "#7ffc97",
+      "secondary_fixed_dim": "#62df7d",
+      "surface": "#ffffff",
+      "surface-container": "#f1f5f9",
+      "surface-dim": "#f8fafc",
+      "surface_bright": "#faf8ff",
+      "surface_container": "#eaedff",
+      "surface_container_high": "#e2e7ff",
+      "surface_container_highest": "#dae2fd",
+      "surface_container_low": "#f2f3ff",
+      "surface_container_lowest": "#ffffff",
+      "surface_dim": "#d2d9f4",
+      "surface_tint": "#006a61",
+      "surface_variant": "#dae2fd",
+      "tertiary": "#006194",
+      "tertiary_container": "#007bb9",
+      "tertiary_fixed": "#cce5ff",
+      "tertiary_fixed_dim": "#93ccff"
+    },
+    "designMd": "---\nname: BaseMind Light\ncolors:\n  surface: '#ffffff'\n  surface-dim: '#f8fafc'\n  surface-bright: '#faf8ff'\n  surface-container-lowest: '#ffffff'\n  surface-container-low: '#f2f3ff'\n  surface-container: '#f1f5f9'\n  surface-container-high: '#e2e7ff'\n  surface-container-highest: '#dae2fd'\n  on-surface: '#0f172a'\n  on-surface-variant: '#475569'\n  inverse-surface: '#283044'\n  inverse-on-surface: '#eef0ff'\n  outline: '#cbd5e1'\n  outline-variant: '#e2e8f0'\n  surface-tint: '#006a61'\n  primary: '#00685f'\n  on-primary: '#ffffff'\n  primary-container: '#008378'\n  on-primary-container: '#f4fffc'\n  inverse-primary: '#6bd8cb'\n  secondary: '#006e2d'\n  on-secondary: '#ffffff'\n  secondary-container: '#7cf994'\n  on-secondary-container: '#007230'\n  tertiary: '#006194'\n  on-tertiary: '#ffffff'\n  tertiary-container: '#007bb9'\n  on-tertiary-container: '#fdfcff'\n  error: '#ba1a1a'\n  on-error: '#ffffff'\n  error-container: '#ffdad6'\n  on-error-container: '#93000a'\n  primary-fixed: '#89f5e7'\n  primary-fixed-dim: '#6bd8cb'\n  on-primary-fixed: '#00201d'\n  on-primary-fixed-variant: '#005049'\n  secondary-fixed: '#7ffc97'\n  secondary-fixed-dim: '#62df7d'\n  on-secondary-fixed: '#002109'\n  on-secondary-fixed-variant: '#005320'\n  tertiary-fixed: '#cce5ff'\n  tertiary-fixed-dim: '#93ccff'\n  on-tertiary-fixed: '#001d31'\n  on-tertiary-fixed-variant: '#004b73'\n  background: '#faf8ff'\n  on-background: '#131b2e'\n  surface-variant: '#dae2fd'\ntypography:\n  headline-lg:\n    fontFamily: Geist\n    fontSize: 48px\n    fontWeight: '700'\n    lineHeight: 56px\n    letterSpacing: -0.02em\n  headline-lg-mobile:\n    fontFamily: Geist\n    fontSize: 32px\n    fontWeight: '700'\n    lineHeight: 40px\n    letterSpacing: -0.01em\n  headline-md:\n    fontFamily: Geist\n    fontSize: 32px\n    fontWeight: '600'\n    lineHeight: 40px\n    letterSpacing: -0.01em\n  headline-sm:\n    fontFamily: Geist\n    fontSize: 24px\n    fontWeight: '600'\n    lineHeight: 32px\n    letterSpacing: 0em\n  body-lg:\n    fontFamily: Inter\n    fontSize: 18px\n    fontWeight: '400'\n    lineHeight: 28px\n  body-md:\n    fontFamily: Inter\n    fontSize: 16px\n    fontWeight: '400'\n    lineHeight: 24px\n  body-sm:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '400'\n    lineHeight: 20px\n  label-md:\n    fontFamily: Inter\n    fontSize: 14px\n    fontWeight: '500'\n    lineHeight: 20px\n    letterSpacing: 0.02em\n  label-sm:\n    fontFamily: Inter\n    fontSize: 12px\n    fontWeight: '600'\n    lineHeight: 16px\n    letterSpacing: 0.05em\nrounded:\n  sm: 0.25rem\n  DEFAULT: 0.5rem\n  md: 0.75rem\n  lg: 1rem\n  xl: 1.5rem\n  full: 9999px\nspacing:\n  unit: 8px\n  gutter: 24px\n  margin-desktop: 40px\n  margin-mobile: 16px\n  container-max: 1440px\n---\n\n## Brand & Style\n\nThe design system is a high-contrast, premium evolution of the product's identity, specifically engineered for clarity and professional focus in a B2B SaaS environment. The brand personality is **Clean, Authoritative, and Highly Legible**, shifting from the dense technicality of a dark interface to an airy, open, and trustworthy workspace.\n\nThe aesthetic follows a **Minimalist Corporate** style with **Skeuomorphic touches**. It leverages expansive whitespace, a refined \"paper-white\" surface architecture, and razor-sharp typography to manage complex RAG-based AI workflows. The visual language emphasizes \"calm productivity,\" replacing heavy backgrounds with structured tonal layers and precision-engineered shadows that suggest a physical stack of intelligence tools.\n\n## Colors\n\nThe light mode palette is designed for maximum visual comfort during long-duration technical tasks, utilizing a \"Charcoal on Paper\" high-contrast philosophy.\n\n- **Primary (#0D9488):** A calibrated Teal used for high-intent actions and primary navigation markers. Adjusted for 4.5:1+ contrast against light surfaces.\n- **Secondary (#16A34A):** A professional Green for success states and active AI status.\n- **Neutral / Text (#0F172A):** A deep Slate-Charcoal used for all primary copy to ensure \"AAA\" level readability.\n- **Surface Architecture:** The system uses a pristine White (#FFFFFF) base with cool-gray increments (Slate 50 and 100) to create a hierarchical container system.\n- **Interactive States:** Use a 10% opacity tint of the primary color for hover states on light containers to maintain the \"airy\" aesthetic.\n\n## Typography\n\nThis system employs a high-contrast typographic hierarchy to manage information density. \n\n**Geist** is the display and technical font. Its geometric, slightly condensed structure provides a modern \"engineering\" feel. Use it for all headings and status numbers to evoke precision.\n\n**Inter** is the functional workhorse for all UI elements, body text, and labels. It is optimized for high-density dashboards where legibility of metadata is paramount.\n\nTo maintain the high-contrast requirement, body copy should never fall below 14px, and secondary labels should maintain a medium or semi-bold weight to ensure they remain legible against off-white backgrounds.\n\n## Layout & Spacing\n\nThe design system utilizes a **Fluid Grid** model with a rigid 8px baseline rhythm to ensure mathematical alignment across all technical components.\n\n- **Desktop (1440px):** 12-column grid with 24px gutters. The \"airy\" vibe is achieved by using generous page margins (40px) and wide internal padding within modules.\n- **Mobile (Up to 767px):** 4-column grid with 16px margins. Content should reflow vertically, with complex \"Split-Pane\" layouts stacking to reveal the chat/result interface below the configuration logic.\n- **Rhythm:** Spacing between related elements (labels and inputs) should use 8px (1 unit). Spacing between unrelated sections should use 32px or 48px to create clear visual separation without the need for heavy dividers.\n\n## Elevation & Depth\n\nIn light mode, depth is conveyed through **Tonal Layering** and **Soft Ambient Shadows**. The goal is to make the UI feel like physical layers of paper or cards.\n\n- **Level 0 (Base):** White (#FFFFFF). Used for the main canvas.\n- **Level 1 (Sub-surface):** Slate 50 (#F8FAFC). Used for sidebars or background regions to push content forward.\n- **Level 2 (Cards/Floating):** White surface with a very soft, multi-layered shadow (0px 4px 12px rgba(15, 23, 42, 0.08)) and a 1px border (#E2E8F0).\n- **Level 3 (Interactive/Modals):** A more pronounced shadow (0px 12px 24px rgba(15, 23, 42, 0.12)) to indicate high-level priority.\n\nAvoid pure black shadows; always tint shadows with the Neutral Foundation color to maintain a premium, integrated feel.\n\n## Shapes\n\nThe design system uses a **Rounded (0.5rem)** language to soften the high-contrast technicality, making the product feel more approachable and modern.\n\n- **Standard Buttons & Inputs:** 8px radius.\n- **Information Chips:** 100% (Pill-shaped) to distinguish them from interactive buttons.\n- **Main Workspace Cards:** 16px (rounded-lg) to create a distinct frame for AI outputs.\n- **Selection States:** Focus rings should be 2px thick, Primary Teal, with a 2px offset from the element's edge.\n\n## Components\n\n- **Buttons:** \n    - *Primary:* Solid Teal (#0D9488) with White text. Use Geist Bold for the label.\n    - *Secondary:* Ghost style with a 1px Slate-300 border and Charcoal text.\n- **Input Fields:** Use a white background with a 1px Slate-200 border. On focus, the border transitions to Primary Teal with a subtle glow.\n- **Data Cards:** Features a 1px border (#E2E8F0). The header of the card should use a Slate-50 background to separate metadata from the main content.\n- **AI Status Chips:** Use a light green tint (10% opacity of Secondary) for the background and solid Secondary Green for the text and icon.\n- **Code Snippets:** Unlike the rest of the light UI, code blocks should remain in a \"Dark Mode\" container (#0F172A) to preserve the developer-centric mental model and provide a high-contrast focal point within the page.\n- **Dividers:** Use subtle 1px lines (#F1F5F9) to maintain a clean aesthetic without fragmenting the layout too aggressively.",
+    "colorVariant": "FIDELITY",
+    "overridePrimaryColor": "#0d9488",
+    "overrideSecondaryColor": "#16a34a",
+    "overrideTertiaryColor": "#0284c7",
+    "overrideNeutralColor": "#0f172a",
+    "spacingScale": 2,
+    "typography": {
+      "body-lg": {
+        "fontFamily": "Inter",
+        "fontSize": "18px",
+        "fontWeight": "400",
+        "lineHeight": "28px"
+      },
+      "body-md": {
+        "fontFamily": "Inter",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "24px"
+      },
+      "body-sm": {
+        "fontFamily": "Inter",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "20px"
+      },
+      "headline-lg": {
+        "fontFamily": "Geist",
+        "fontSize": "48px",
+        "fontWeight": "700",
+        "lineHeight": "56px",
+        "letterSpacing": "-0.02em"
+      },
+      "headline-lg-mobile": {
+        "fontFamily": "Geist",
+        "fontSize": "32px",
+        "fontWeight": "700",
+        "lineHeight": "40px",
+        "letterSpacing": "-0.01em"
+      },
+      "headline-md": {
+        "fontFamily": "Geist",
+        "fontSize": "32px",
+        "fontWeight": "600",
+        "lineHeight": "40px",
+        "letterSpacing": "-0.01em"
+      },
+      "headline-sm": {
+        "fontFamily": "Geist",
+        "fontSize": "24px",
+        "fontWeight": "600",
+        "lineHeight": "32px",
+        "letterSpacing": "0em"
+      },
+      "label-md": {
+        "fontFamily": "Inter",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "lineHeight": "20px",
+        "letterSpacing": "0.02em"
+      },
+      "label-sm": {
+        "fontFamily": "Inter",
+        "fontSize": "12px",
+        "fontWeight": "600",
+        "lineHeight": "16px",
+        "letterSpacing": "0.05em"
+      }
+    },
+    "spacing": {
+      "container-max": "1440px",
+      "gutter": "24px",
+      "margin-desktop": "40px",
+      "margin-mobile": "16px",
+      "unit": "8px"
+    },
+    "headlineFontFamily": "Geist",
+    "bodyFontFamily": "Inter",
+    "labelFontFamily": "Inter"
+  }
+}

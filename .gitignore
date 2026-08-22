@@ -1,0 +1,27 @@
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.vercel/
+next-env.d.ts
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Env & secrets
+.env
+.env.*
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Tools
+graphify-out/
+stitchify-out/

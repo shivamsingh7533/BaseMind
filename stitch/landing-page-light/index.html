@@ -1,0 +1,279 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "outline": "#6f7977", "surface-container-lowest": "#ffffff", "on-surface": "#171d1b", "primary-container": "#69f2e3", "inverse-on-surface": "#ecf2ef", "tertiary": "#00678d", "secondary": "#006d2d", "primary-fixed": "#69f2e3", "surface-variant": "#dbe5e2", "on-error": "#ffffff", "background": "#f4fbf8", "on-error-container": "#410002", "on-primary-fixed-variant": "#005049", "on-primary": "#ffffff", "surface-dim": "#d5dbd9", "primary-fixed-dim": "#48d5c7", "on-secondary-fixed": "#002109", "surface-container": "#eef5f2", "on-secondary-container": "#002109", "on-tertiary-container": "#001e2c", "inverse-primary": "#48d5c7", "outline-variant": "#bec9c6", "on-background": "#171d1b", "on-primary-container": "#00201d", "error-container": "#ffdad6", "tertiary-fixed-dim": "#63d3ff", "inverse-surface": "#2b3230", "surface": "#f4fbf8", "tertiary-container": "#c4e7ff", "surface-container-highest": "#e2e9e6", "tertiary-fixed": "#c4e7ff", "secondary-container": "#89fa9b", "surface-container-low": "#f4fbf8", "on-tertiary-fixed-variant": "#004c69", "on-tertiary": "#ffffff", "secondary-fixed-dim": "#6efc81", "on-tertiary-fixed": "#001e2c", "surface-bright": "#f4fbf8", "surface-container-high": "#e8efec", "on-surface-variant": "#3f4947", "error": "#ba1a1a", "surface-tint": "#006a61", "on-secondary-fixed-variant": "#005321", "secondary-fixed": "#89fa9b", "on-primary-fixed": "#00201d", "primary": "#006a61", "on-secondary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" }, "spacing": { "gutter": "24px", "margin-mobile": "16px", "unit-lg": "24px", "container-max": "1440px", "unit-md": "16px", "unit-xl": "48px", "unit-xs": "4px", "margin-desktop": "40px", "unit-sm": "8px" }, "fontFamily": { "body-lg": ["Inter"], "headline-lg-mobile": ["Geist"], "headline-md": ["Geist"], "code-md": ["Geist"], "label-sm": ["Inter"], "label-md": ["Inter"], "body-md": ["Inter"], "headline-sm": ["Geist"], "headline-lg": ["Geist"], "body-sm": ["Inter"] }, "fontSize": { "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }], "headline-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }], "headline-md": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "code-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }], "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500" }], "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "headline-sm": ["24px", { "lineHeight": "32px", "letterSpacing": "0em", "fontWeight": "600" }], "headline-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }] } } } }</script><style>@layer base{html,body{width:100vw;margin:0;padding:0;overflow-x:hidden;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-surface font-body-md text-on-surface"><main class="relative w-full min-h-screen"><div class="flex flex-col w-full text-on-surface">
+<!-- Hero Section -->
+<section class="relative w-full overflow-hidden pb-unit-xl">
+<!-- Ambient Background Graphic (CSS/SVG) -->
+<div class="absolute inset-0 pointer-events-none opacity-10">
+<svg class="absolute w-full h-full" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<lineargradient id="heroGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#006a61"></stop>
+<stop offset="100%" stop-color="#ffffff"></stop>
+</lineargradient>
+<filter id="blur">
+<fegaussianblur stddeviation="40"></fegaussianblur>
+</filter>
+</defs>
+<circle cx="20%" cy="10%" fill="url(#heroGrad)" filter="url(#blur)" r="40%"></circle>
+<circle cx="80%" cy="50%" fill="url(#heroGrad)" filter="url(#blur)" opacity="0.5" r="50%"></circle>
+</svg>
+</div>
+<div class="relative px-margin-mobile pt-unit-xl flex flex-col items-center text-center">
+<!-- Status Pill -->
+<div class="inline-flex items-center gap-2 bg-secondary/10 px-3 py-1.5 rounded-full mb-unit-lg shadow-[0_0_15px_rgba(0,109,45,0.1)]">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-sm text-secondary tracking-widest uppercase">BaseMind 2.0 Live</span>
+</div>
+<h1 class="font-headline-lg-mobile text-on-surface mb-unit-md max-w-sm">
+        Scale Your Support with <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Custom AI Agents</span>
+</h1>
+<p class="font-body-md text-on-surface-variant mb-unit-xl max-w-xs">
+        Transform your knowledge base into an intelligent, conversational support agent in minutes. No coding required.
+      </p>
+<div class="flex flex-col w-full gap-4 max-w-sm">
+<button class="w-full bg-primary text-on-primary font-label-md py-4 rounded-xl shadow-[0_4px_20px_rgba(0,106,97,0.2)] flex items-center justify-center gap-2 active:scale-95 transition-transform">
+          Start Free Trial <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+<button class="w-full bg-surface-container text-on-surface font-label-md py-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform border border-outline-variant/50">
+<span class="material-symbols-outlined text-[18px]">play_circle</span> Watch Demo
+        </button>
+</div>
+<p class="font-label-sm text-on-surface-variant mt-4">14-day free trial. No credit card required.</p>
+</div>
+<!-- Visual: Documents to Chat Transformation -->
+<div class="relative w-full px-margin-mobile mt-unit-xl pb-unit-xl">
+<div class="relative w-full h-[320px] rounded-2xl bg-surface-container overflow-hidden border border-outline-variant/30 shadow-[0_10px_40px_rgba(0,0,0,0.05)]">
+<!-- Left side: Documents -->
+<div class="absolute left-[-20%] top-[10%] w-[60%] h-[80%] bg-surface flex flex-col gap-3 p-4 rounded-xl shadow-lg transform rotate-[-5deg] opacity-90 border border-outline-variant/20">
+<div class="w-3/4 h-3 bg-surface-container-highest rounded-full"></div>
+<div class="w-full h-2 bg-surface-container-highest rounded-full"></div>
+<div class="w-5/6 h-2 bg-surface-container-highest rounded-full"></div>
+<div class="mt-4 w-1/2 h-24 bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant/10">
+<span class="material-symbols-outlined text-outline-variant text-[32px]">description</span>
+</div>
+</div>
+<div class="absolute left-[5%] top-[15%] w-[60%] h-[75%] bg-surface flex flex-col gap-3 p-4 rounded-xl shadow-xl transform rotate-[-2deg] opacity-95 border border-outline-variant/30">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-[20px]">picture_as_pdf</span>
+<div class="w-1/2 h-2 bg-primary/20 rounded-full"></div>
+</div>
+<div class="w-full h-1.5 bg-outline-variant/40 rounded-full"></div>
+<div class="w-5/6 h-1.5 bg-outline-variant/40 rounded-full"></div>
+<div class="w-4/5 h-1.5 bg-outline-variant/40 rounded-full"></div>
+<div class="w-full h-1.5 bg-outline-variant/40 rounded-full mt-2"></div>
+</div>
+<!-- Connection/Transformation Animation -->
+<div class="absolute left-[50%] top-[50%] transform -translate-x-1/2 -translate-y-1/2 z-10 w-[80px] h-[80px]">
+<svg class="w-full h-full animate-spin-slow" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="40" stroke="url(#heroGrad)" stroke-dasharray="10 10" stroke-width="2"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-[32px] drop-shadow-[0_0_10px_rgba(0,109,45,0.3)] bg-surface rounded-full">memory</span>
+</div>
+</div>
+<!-- Right side: Chat UI -->
+<div class="absolute right-[-10%] top-[20%] w-[60%] h-[80%] bg-surface flex flex-col gap-3 p-4 rounded-t-xl shadow-2xl border-t border-l border-outline-variant/40">
+<div class="flex gap-2">
+<div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[14px]">smart_toy</span>
+</div>
+<div class="bg-surface-container-highest rounded-lg rounded-tl-none p-3 max-w-[80%] border border-outline-variant/20">
+<div class="w-full h-1.5 bg-outline-variant/60 rounded-full mb-2"></div>
+<div class="w-3/4 h-1.5 bg-outline-variant/60 rounded-full"></div>
+</div>
+</div>
+<div class="flex gap-2 self-end mt-2">
+<div class="bg-primary/10 rounded-lg rounded-tr-none p-3 max-w-[80%] border border-primary/20">
+<div class="w-16 h-1.5 bg-primary/60 rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Features Grid Section -->
+<section class="px-margin-mobile py-unit-xl bg-surface-container-lowest">
+<div class="text-center mb-unit-lg">
+<h2 class="font-headline-sm text-on-surface mb-2">Built for Precision</h2>
+<p class="font-body-sm text-on-surface-variant max-w-[280px] mx-auto">Advanced RAG architecture ensuring hallucination-free, context-aware responses.</p>
+</div>
+<div class="flex flex-col gap-unit-md">
+<!-- Feature 1: Data Ingestion -->
+<div class="bg-surface-container rounded-2xl p-6 relative overflow-hidden group border border-outline-variant/30 shadow-sm">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<div class="w-12 h-12 bg-surface rounded-xl flex items-center justify-center mb-4 text-primary relative z-10 border border-primary/20 shadow-sm">
+<span class="material-symbols-outlined text-[24px]">cloud_upload</span>
+</div>
+<h3 class="font-headline-sm text-[20px] text-on-surface mb-2 relative z-10">Frictionless Upload</h3>
+<p class="font-body-sm text-on-surface-variant relative z-10 mb-4">Drag and drop PDFs, connect Notion, or sync with Zendesk. We parse everything.</p>
+<!-- Mini visualization -->
+<div class="w-full h-24 bg-surface rounded-lg mt-2 flex items-center p-3 gap-3 border border-outline-variant/20 relative z-10 shadow-inner">
+<div class="flex-1 bg-surface-container h-full rounded flex items-center justify-center border border-outline-variant/30 border-dashed">
+<span class="material-symbols-outlined text-outline-variant">add</span>
+</div>
+<div class="flex-1 bg-surface-container h-full rounded p-2 flex flex-col gap-2 border border-outline-variant/10">
+<div class="flex items-center gap-1"><span class="material-symbols-outlined text-error text-[12px]">picture_as_pdf</span> <span class="font-label-sm text-[10px] text-on-surface">docs.pdf</span></div>
+<div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="w-[80%] h-full bg-secondary"></div></div>
+</div>
+</div>
+</div>
+<!-- Feature 2: RAG Processing -->
+<div class="bg-surface-container rounded-2xl p-6 relative overflow-hidden group border border-outline-variant/30 shadow-sm">
+<div class="absolute top-0 right-0 w-32 h-32 bg-tertiary/5 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<div class="w-12 h-12 bg-surface rounded-xl flex items-center justify-center mb-4 text-tertiary relative z-10 border border-tertiary/20 shadow-sm">
+<span class="material-symbols-outlined text-[24px]">account_tree</span>
+</div>
+<h3 class="font-headline-sm text-[20px] text-on-surface mb-2 relative z-10">Semantic Search</h3>
+<p class="font-body-sm text-on-surface-variant relative z-10 mb-4">Vector embeddings ensure the agent understands context, not just keywords.</p>
+<!-- Mini visualization: Nodes -->
+<div class="w-full h-24 bg-surface rounded-lg mt-2 relative overflow-hidden border border-outline-variant/20 z-10 flex items-center justify-center shadow-inner">
+<svg class="absolute inset-0 w-full h-full" viewbox="0 0 200 100">
+<path d="M 50 50 Q 100 20 150 50" fill="none" stroke="rgba(0,103,141,0.2)" stroke-width="2"></path>
+<path d="M 50 50 Q 100 80 150 50" fill="none" stroke="rgba(0,103,141,0.2)" stroke-width="2"></path>
+<circle cx="50" cy="50" fill="#00678d" r="4"></circle>
+<circle cx="150" cy="50" fill="#00678d" r="4"></circle>
+<circle cx="100" cy="20" fill="#00678d" opacity="0.5" r="3"></circle>
+<circle cx="100" cy="80" fill="#00678d" opacity="0.5" r="3"></circle>
+</svg>
+<div class="w-8 h-8 rounded-full bg-surface flex items-center justify-center absolute left-[35px] border border-tertiary/20 shadow-sm">
+<span class="material-symbols-outlined text-tertiary text-[14px]">search</span>
+</div>
+<div class="w-8 h-8 rounded-full bg-surface flex items-center justify-center absolute right-[35px] border border-tertiary/20 shadow-sm">
+<span class="material-symbols-outlined text-tertiary text-[14px]">psychology</span>
+</div>
+</div>
+</div>
+<!-- Feature 3: Embed Widget -->
+<div class="bg-surface-container rounded-2xl p-6 relative overflow-hidden group border border-outline-variant/30 shadow-sm">
+<div class="absolute top-0 right-0 w-32 h-32 bg-secondary/5 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+<div class="w-12 h-12 bg-surface rounded-xl flex items-center justify-center mb-4 text-secondary relative z-10 border border-secondary/20 shadow-sm">
+<span class="material-symbols-outlined text-[24px]">code</span>
+</div>
+<h3 class="font-headline-sm text-[20px] text-on-surface mb-2 relative z-10">One-Line Embed</h3>
+<p class="font-body-sm text-on-surface-variant relative z-10 mb-4">Drop a single script tag into your app and instantly deploy your custom agent.</p>
+<!-- Mini visualization: Code snippet -->
+<div class="w-full bg-surface-container-highest rounded-lg mt-2 p-3 border border-outline-variant/40 relative z-10 overflow-hidden">
+<pre class="font-code-md text-[11px] text-on-surface-variant leading-relaxed overflow-x-hidden"><span class="text-secondary">&lt;script&gt;</span>
+  window.BaseMind = {
+    agentId: <span class="text-tertiary">"bm_a7x9f"</span>,
+    theme: <span class="text-tertiary">"light"</span>
+  };
+<span class="text-secondary">&lt;/script&gt;</span>
+<span class="text-secondary">&lt;script</span> <span class="text-primary">src</span>=<span class="text-tertiary">"https://cdn.basemind.ai/v1.js"</span><span class="text-secondary">&gt;&lt;/script&gt;</span></pre>
+</div>
+</div>
+</div>
+</section>
+<!-- Pricing Section -->
+<section class="px-margin-mobile py-unit-xl">
+<div class="text-center mb-unit-lg">
+<h2 class="font-headline-sm text-on-surface mb-2">Transparent Pricing</h2>
+<p class="font-body-sm text-on-surface-variant">Scale without surprises.</p>
+</div>
+<!-- Pricing Toggle (Monthly/Yearly) -->
+<div class="flex justify-center mb-8">
+<div class="bg-surface-container-highest p-1 rounded-full inline-flex border border-outline-variant/30">
+<button class="px-4 py-1.5 rounded-full bg-surface text-on-surface font-label-md shadow-sm border border-outline-variant/20">Monthly</button>
+<button class="px-4 py-1.5 rounded-full text-on-surface-variant font-label-md hover:text-on-surface transition-colors flex items-center gap-1">
+            Annual <span class="text-[10px] bg-secondary/10 text-secondary px-1.5 py-0.5 rounded-sm border border-secondary/20">-20%</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col gap-6">
+<!-- Starter Card -->
+<div class="bg-surface rounded-2xl p-6 border border-outline-variant/30 shadow-sm">
+<h3 class="font-headline-sm text-[20px] text-on-surface mb-1">Starter</h3>
+<p class="font-body-sm text-on-surface-variant mb-4">Perfect for side projects.</p>
+<div class="flex items-baseline gap-1 mb-6">
+<span class="font-headline-md text-on-surface">$0</span>
+<span class="font-body-sm text-on-surface-variant">/mo</span>
+</div>
+<button class="w-full py-3 rounded-lg border border-primary text-primary font-label-md mb-6 hover:bg-primary/5 transition-colors">Get Started</button>
+<ul class="flex flex-col gap-3">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface-variant">1 Custom Agent</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface-variant">500 Messages/mo</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface-variant">Basic File Uploads (PDF, TXT)</span>
+</li>
+</ul>
+</div>
+<!-- Pro Card (Highlighted) -->
+<div class="bg-surface-container rounded-2xl p-6 border-2 border-primary relative shadow-md">
+<div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-on-primary font-label-sm px-3 py-1 rounded-full uppercase tracking-wider">
+          Most Popular
+        </div>
+<h3 class="font-headline-sm text-[20px] text-on-surface mb-1 mt-2">Pro</h3>
+<p class="font-body-sm text-on-surface-variant mb-4">For growing support teams.</p>
+<div class="flex items-baseline gap-1 mb-6">
+<span class="font-headline-md text-on-surface">$49</span>
+<span class="font-body-sm text-on-surface-variant">/mo</span>
+</div>
+<button class="w-full py-3 rounded-lg bg-primary text-on-primary font-label-md mb-6 shadow-sm active:scale-95 transition-transform">Start Free Trial</button>
+<ul class="flex flex-col gap-3">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface">Unlimited Agents</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface">10,000 Messages/mo</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface">Zendesk &amp; Notion Sync</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface">Remove BaseMind Branding</span>
+</li>
+</ul>
+</div>
+<!-- Enterprise Card -->
+<div class="bg-surface rounded-2xl p-6 border border-outline-variant/30 shadow-sm">
+<h3 class="font-headline-sm text-[20px] text-on-surface mb-1">Enterprise</h3>
+<p class="font-body-sm text-on-surface-variant mb-4">Custom scale &amp; security.</p>
+<div class="flex items-baseline gap-1 mb-6">
+<span class="font-headline-md text-on-surface">Custom</span>
+</div>
+<button class="w-full py-3 rounded-lg border border-outline-variant/60 text-on-surface font-label-md mb-6 hover:bg-surface-container transition-colors">Contact Sales</button>
+<ul class="flex flex-col gap-3">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-outline-variant text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface-variant">SSO &amp; SOC2</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-outline-variant text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface-variant">Dedicated Account Manager</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-outline-variant text-[18px] mt-0.5">check_circle</span>
+<span class="font-body-sm text-on-surface-variant">Custom LLM Fine-tuning</span>
+</li>
+</ul>
+</div>
+</div>
+</section>
+<!-- Footer CTA -->
+<section class="px-margin-mobile py-unit-xl pb-[100px] bg-surface-container relative overflow-hidden flex flex-col items-center text-center border-t border-outline-variant/20">
+<div class="absolute inset-0 pointer-events-none opacity-[0.03]">
+<div class="w-full h-full" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23006a61\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+</div>
+<h2 class="font-headline-md text-on-surface mb-4 relative z-10">Ready to automate?</h2>
+<p class="font-body-md text-on-surface-variant mb-6 relative z-10 max-w-[250px]">Join thousands of companies building better support experiences.</p>
+<button class="bg-primary text-on-primary font-label-md px-8 py-4 rounded-xl shadow-md relative z-10 active:scale-95 transition-transform">
+        Get Started for Free
+     </button>
+</section>
+</div></main></body></html>
