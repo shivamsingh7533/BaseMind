@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, PlayCircle } from "lucide-react";
-import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -164,31 +163,6 @@ const EMBED_CODE = `<script>
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-card/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Bot className="size-4.5" />
-            </span>
-            <span className="font-heading text-lg font-bold tracking-tight">
-              BaseMind
-            </span>
-          </Link>
-          <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground md:flex">
-            <a href="#features" className="hover:text-foreground">Features</a>
-            <a href="#pricing" className="hover:text-foreground">Pricing</a>
-          </nav>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost">
-              <Link href="/login">Sign In</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/dashboard">Start Free Trial</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
       <section className="mx-auto max-w-6xl px-6 pb-20 pt-20 text-center">
         <Badge variant="outline" className="mb-5 gap-1.5 border-primary/40 text-primary">
           <span className="relative flex size-2">

@@ -83,6 +83,12 @@ export default function AgentsPage() {
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-20 w-full" />
             </>
+          ) : agents.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No agents yet — click{" "}
+              <span className="font-medium text-foreground">New Agent</span> to
+              deploy your first support bot.
+            </p>
           ) : (
             agents.map((a, i) => (
               <div key={a.id}>

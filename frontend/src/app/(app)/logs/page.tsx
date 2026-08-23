@@ -188,6 +188,10 @@ export default function LogsPage() {
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
               </div>
+            ) : filtered.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">
+                No conversations yet — support sessions will appear here.
+              </p>
             ) : (
               filtered.map((c) => {
                 const activeSel = c.id === selected?.id;

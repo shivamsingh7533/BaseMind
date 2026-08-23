@@ -140,7 +140,18 @@ export default function KnowledgeBasePage() {
                   </TableRow>
                 </TableHeader>
               <TableBody>
-                {docs.map((d) => (
+                {docs.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="py-10 text-center text-sm text-muted-foreground"
+                    >
+                      No knowledge sources yet — upload your first document to
+                      get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                docs.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -170,7 +181,8 @@ export default function KnowledgeBasePage() {
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+                )}
               </TableBody>
               </Table>
             </div>

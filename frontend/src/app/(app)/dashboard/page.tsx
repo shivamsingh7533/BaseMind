@@ -54,7 +54,14 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            {data.stats.map((s) => (
+            {data.stats.length === 0 ? (
+              <Card className="sm:col-span-3">
+                <CardContent className="pt-6 text-sm text-muted-foreground">
+                  No metrics yet — connect your first agent to see stats here.
+                </CardContent>
+              </Card>
+            ) : (
+              data.stats.map((s) => (
               <Card key={s.id}>
                 <CardContent className="pt-6">
                   <p className="text-sm font-medium text-muted-foreground">
@@ -89,7 +96,8 @@ export default function DashboardPage() {
                   ) : null}
                 </CardContent>
               </Card>
-            ))}
+            ))
+            )}
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -124,7 +132,12 @@ export default function DashboardPage() {
                 </Link>
               </CardHeader>
               <CardContent className="space-y-1">
-                {data.activity.map((a, i) => {
+                {data.activity.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No activity yet — actions will appear here as they happen.
+                  </p>
+                ) : (
+                  data.activity.map((a, i) => {
                   const Icon = ICONS[a.icon];
                   return (
                     <div key={a.id}>
@@ -152,7 +165,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   );
-                })}
+                  })
+                )}
               </CardContent>
             </Card>
           </div>
