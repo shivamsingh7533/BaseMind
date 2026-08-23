@@ -52,7 +52,7 @@ export default function AgentsPage() {
   const live = agents?.filter((a) => a.status === "active").length ?? 0;
 
   return (
-    <div className="mx-auto max-w-5xl p-6 lg:p-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 font-heading text-2xl font-bold tracking-tight">
           Agents

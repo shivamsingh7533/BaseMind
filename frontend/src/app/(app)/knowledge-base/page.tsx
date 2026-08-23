@@ -60,7 +60,7 @@ export default function KnowledgeBasePage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-5xl p-6 lg:p-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-heading text-2xl font-bold tracking-tight">
           Knowledge Base
@@ -133,14 +133,15 @@ export default function KnowledgeBasePage() {
           {!docs ? (
             <Skeleton className="h-36 w-full" />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {docs.map((d) => (
                   <TableRow key={d.id}>
@@ -174,7 +175,8 @@ export default function KnowledgeBasePage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
