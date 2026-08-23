@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
@@ -23,7 +23,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { getDashboard, type DashboardData } from "@/lib/api";
+import { useAppData } from "@/lib/store";
 
 const ICONS = {
   agent: Bot,
@@ -33,13 +33,14 @@ const ICONS = {
 
 export default function DashboardPage() {
   const { getToken } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const data = useAppData((s) => s.dashboard);
+  const fetchDashboard = useAppData((s) => s.fetchDashboard);
 
   useEffect(() => {
     getToken()
-      .then((t) => getDashboard(t).then(setData))
+      .then((t) => fetchDashboard(t))
       .catch(() => {});
-  }, [getToken]);
+  }, [getToken, fetchDashboard]);
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">

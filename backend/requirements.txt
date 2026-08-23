@@ -5,3 +5,4 @@ asyncpg>=0.29
 pydantic-settings>=2.2
 pyjwt[crypto]>=2.8
 httpx2>=0.1
+upstash-redis>=1.3

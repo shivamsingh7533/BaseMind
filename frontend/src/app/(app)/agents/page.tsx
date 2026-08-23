@@ -24,7 +24,8 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { getAgents, type Agent, type AgentStatus } from "@/lib/api";
+import { type AgentStatus } from "@/lib/api";
+import { useAppData } from "@/lib/store";
 
 const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   active: {
@@ -43,13 +44,16 @@ const STATUS: Record<AgentStatus, { label: string; className: string }> = {
 
 export default function AgentsPage() {
   const { getToken } = useAuth();
-  const [agents, setAgents] = useState<Agent[] | null>(null);
+  const agents = useAppData((s) => s.agents);
+  const fetchAgents = useAppData((s) => s.fetchAgents);
   const [domains, setDomains] = useState<string[]>(["*.acmecorp.com"]);
   const [domainDraft, setDomainDraft] = useState("");
 
   useEffect(() => {
-    getToken().then((t) => getAgents(t).then(setAgents)).catch(() => {});
-  }, [getToken]);
+    getToken()
+      .then((t) => fetchAgents(t))
+      .catch(() => {});
+  }, [getToken, fetchAgents]);
 
   const live = agents?.filter((a) => a.status === "active").length ?? 0;
 

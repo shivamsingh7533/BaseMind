@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .auth import get_current_user
+from .cache import cache_get, cache_set, invalidate_user_cache
 from .db import get_db
 from .models import Agent, Conversation, Document, Message, User
 from .schemas import (
@@ -35,10 +36,16 @@ async def _get_owned(db: AsyncSession, model, obj_id: str, user: User):
 
 @router.get("/agents")
 async def list_agents(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    cache_key = f"agents:{user.id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     result = await db.execute(
         select(Agent).where(Agent.user_id == user.id).order_by(Agent.created_at.desc())
     )
-    return [serialize_agent(a) for a in result.scalars()]
+    payload = [serialize_agent(a) for a in result.scalars()]
+    await cache_set(cache_key, payload)
+    return payload
 
 
 @router.post("/agents", status_code=201)
@@ -51,6 +58,7 @@ async def create_agent(
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
+    await invalidate_user_cache(user.id)
     return serialize_agent(agent)
 
 
@@ -66,6 +74,7 @@ async def update_agent(
         setattr(agent, field, value)
     await db.commit()
     await db.refresh(agent)
+    await invalidate_user_cache(user.id)
     return serialize_agent(agent)
 
 
@@ -78,16 +87,23 @@ async def delete_agent(
     agent = await _get_owned(db, Agent, agent_id, user)
     await db.delete(agent)
     await db.commit()
+    await invalidate_user_cache(user.id)
 
 
 @router.get("/documents")
 async def list_documents(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    cache_key = f"docs:{user.id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     result = await db.execute(
         select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc())
     )
-    return [serialize_document(d) for d in result.scalars()]
+    payload = [serialize_document(d) for d in result.scalars()]
+    await cache_set(cache_key, payload)
+    return payload
 
 
 @router.post("/documents", status_code=201)
@@ -109,6 +125,7 @@ async def create_document(
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
+    await invalidate_user_cache(user.id)
     return serialize_document(doc)
 
 
@@ -121,19 +138,26 @@ async def delete_document(
     doc = await _get_owned(db, Document, document_id, user)
     await db.delete(doc)
     await db.commit()
+    await invalidate_user_cache(user.id)
 
 
 @router.get("/conversations")
 async def list_conversations(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    cache_key = f"convs:{user.id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     result = await db.execute(
         select(Conversation)
         .options(selectinload(Conversation.messages))
         .where(Conversation.user_id == user.id)
         .order_by(Conversation.started_at.desc())
     )
-    return [serialize_conversation(c) for c in result.scalars()]
+    payload = [serialize_conversation(c) for c in result.scalars()]
+    await cache_set(cache_key, payload)
+    return payload
 
 
 @router.post("/conversations", status_code=201)
@@ -146,6 +170,7 @@ async def create_conversation(
     db.add(conv)
     await db.commit()
     await db.refresh(conv)
+    await invalidate_user_cache(user.id)
     return serialize_conversation(conv)
 
 
@@ -179,6 +204,7 @@ async def add_message(
     db.add(message)
     await db.commit()
     await db.refresh(message)
+    await invalidate_user_cache(user.id)
     return {
         "id": message.id,
         "role": message.role,
@@ -199,6 +225,7 @@ async def update_conversation(
         setattr(conv, field, value)
     await db.commit()
     await db.refresh(conv)
+    await invalidate_user_cache(user.id)
     return serialize_conversation(conv)
 
 
@@ -206,6 +233,11 @@ async def update_conversation(
 async def dashboard(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    cache_key = f"dash:{user.id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     agents_count = (
         await db.execute(select(func.count()).select_from(Agent).where(Agent.user_id == user.id))
     ).scalar_one()
@@ -261,4 +293,6 @@ async def dashboard(
             "progress": 0,
         },
     ]
-    return {"stats": stats, "activity": []}
+    payload = {"stats": stats, "activity": []}
+    await cache_set(cache_key, payload)
+    return payload

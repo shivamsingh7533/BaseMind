@@ -26,11 +26,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
-  getConversations,
   type ChatMessage,
   type Conversation,
   type ConversationStatus,
 } from "@/lib/api";
+import { useAppData } from "@/lib/store";
 
 const STATUS: Record<
   ConversationStatus,
@@ -135,26 +135,17 @@ function Bubble({ m, userLabel }: { m: ChatMessage; userLabel: string }) {
 
 export default function LogsPage() {
   const { getToken } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[] | null>(
-    null
-  );
+  const conversations = useAppData((s) => s.conversations);
+  const fetchConversations = useAppData((s) => s.fetchConversations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
     getToken()
-      .then((t) => getConversations(t))
-      .then((c) => {
-        if (cancelled) return;
-        setConversations(c);
-        setSelectedId((prev) => prev ?? c[0]?.id ?? null);
-      })
+      .then((t) => fetchConversations(t))
+      .then((c) => setSelectedId((prev) => prev ?? c[0]?.id ?? null))
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [getToken]);
+  }, [getToken, fetchConversations]);
 
   const filtered = useMemo(
     () =>

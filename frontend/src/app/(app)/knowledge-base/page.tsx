@@ -24,7 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getDocuments, type DocStatus, type KnowledgeDoc } from "@/lib/api";
+import { type DocStatus } from "@/lib/api";
+import { useAppData } from "@/lib/store";
 
 const STATUS: Record<
   DocStatus,
@@ -54,12 +55,15 @@ function TypeIcon({ type }: { type: string }) {
 
 export default function KnowledgeBasePage() {
   const { getToken } = useAuth();
-  const [docs, setDocs] = useState<KnowledgeDoc[] | null>(null);
+  const docs = useAppData((s) => s.documents);
+  const fetchDocuments = useAppData((s) => s.fetchDocuments);
   const [syncUrl, setSyncUrl] = useState("");
 
   useEffect(() => {
-    getToken().then((t) => getDocuments(t).then(setDocs)).catch(() => {});
-  }, [getToken]);
+    getToken()
+      .then((t) => fetchDocuments(t))
+      .catch(() => {});
+  }, [getToken, fetchDocuments]);
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
