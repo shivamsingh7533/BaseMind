@@ -178,9 +178,14 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-foreground">Features</a>
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
           </nav>
-          <Button asChild>
-            <Link href="/dashboard">Start Free Trial</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost">
+              <Link href="/login">Sign In</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/dashboard">Start Free Trial</Link>
+            </Button>
+          </div>
         </div>
       </header>
 
