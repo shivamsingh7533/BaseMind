@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -22,7 +23,17 @@ if _settings.database_url:
         _url = _url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif _url.startswith("postgresql://"):
         _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(_url, pool_pre_ping=True)
+
+    _parts = urlsplit(_url)
+    _query = [(k, v) for k, v in parse_qsl(_parts.query) if k != "sslmode"]
+    _needs_ssl = "sslmode=" in _settings.database_url
+    _url = urlunsplit((_parts.scheme, _parts.netloc, _parts.path, urlencode(_query), _parts.fragment))
+
+    engine = create_async_engine(
+        _url,
+        pool_pre_ping=True,
+        connect_args={"ssl": True} if _needs_ssl else {},
+    )
     SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
 
 

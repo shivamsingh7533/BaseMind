@@ -31,7 +31,7 @@ class Agent(Base):
     __tablename__ = "agents"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     url: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(Text, default="paused")
@@ -49,8 +49,8 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[str] = mapped_column(Text, default="PDF")
     detail: Mapped[str] = mapped_column(Text, default="")
@@ -65,8 +65,8 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     visitor: Mapped[str] = mapped_column(Text, default="Guest")
     status: Mapped[str] = mapped_column(Text, default="active")
     preview: Mapped[str] = mapped_column(Text, default="")
@@ -83,7 +83,7 @@ class Message(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
     conversation_id: Mapped[str] = mapped_column(
-        ForeignKey("conversations.id"), nullable=False, index=True
+        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -96,7 +96,7 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     plan: Mapped[str] = mapped_column(Text, default="free")
     status: Mapped[str] = mapped_column(Text, default="active")
     stripe_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True)
