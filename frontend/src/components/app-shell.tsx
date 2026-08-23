@@ -62,9 +62,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               AC
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">Acme Corp</p>
+              <p className="truncate text-sm font-medium">Alex Chen</p>
               <p className="truncate text-xs text-muted-foreground">
-                Pro plan
+                alex@acmecorp.io
               </p>
             </div>
           </div>

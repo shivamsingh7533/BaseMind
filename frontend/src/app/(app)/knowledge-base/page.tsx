@@ -65,9 +65,6 @@ export default function KnowledgeBasePage() {
         <h1 className="font-heading text-2xl font-bold tracking-tight">
           Knowledge Base
         </h1>
-        <Button variant="ghost" size="icon" className="rounded-full bg-muted">
-          AC
-        </Button>
       </div>
       <p className="-mt-3 mb-6 text-sm text-muted-foreground">
         Train your agents by connecting data sources. Supported formats: PDF,

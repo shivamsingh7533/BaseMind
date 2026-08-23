@@ -43,9 +43,6 @@ export default function DashboardPage() {
         <h1 className="font-heading text-2xl font-bold tracking-tight">
           Dashboard
         </h1>
-        <Button variant="ghost" size="icon" className="rounded-full bg-muted">
-          <Bot className="size-5" />
-        </Button>
       </div>
 
       {!data ? (

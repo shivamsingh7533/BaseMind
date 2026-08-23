@@ -163,9 +163,6 @@ export default function LogsPage() {
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-heading text-2xl font-bold tracking-tight">Logs</h1>
-        <Button variant="ghost" size="icon" className="rounded-full bg-muted">
-          AC
-        </Button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
