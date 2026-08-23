@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import {
   ArrowUp,
   Bot,
@@ -31,11 +32,14 @@ const ICONS = {
 };
 
 export default function DashboardPage() {
+  const { getToken } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
 
   useEffect(() => {
-    getDashboard().then(setData);
-  }, []);
+    getToken()
+      .then((t) => getDashboard(t).then(setData))
+      .catch(() => {});
+  }, [getToken]);
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import {
   CircleCheckBig,
   Copy,
@@ -133,6 +134,7 @@ function Bubble({ m, userLabel }: { m: ChatMessage; userLabel: string }) {
 }
 
 export default function LogsPage() {
+  const { getToken } = useAuth();
   const [conversations, setConversations] = useState<Conversation[] | null>(
     null
   );
@@ -140,11 +142,19 @@ export default function LogsPage() {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    getConversations().then((c) => {
-      setConversations(c);
-      setSelectedId((prev) => prev ?? c[0]?.id ?? null);
-    });
-  }, []);
+    let cancelled = false;
+    getToken()
+      .then((t) => getConversations(t))
+      .then((c) => {
+        if (cancelled) return;
+        setConversations(c);
+        setSelectedId((prev) => prev ?? c[0]?.id ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
 
   const filtered = useMemo(
     () =>

@@ -75,26 +75,47 @@ export interface Conversation {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function getJson<T>(path: string, fallback: T): Promise<T> {
+async function request<T>(
+  path: string,
+  fallback: T,
+  options: RequestInit = {}
+): Promise<T> {
   try {
     const res = await fetch(`${API_URL}${path}`, {
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers ?? {}),
+      },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (res.status === 204) return fallback;
     return (await res.json()) as T;
   } catch {
     return fallback;
   }
 }
 
-export const getDashboard = () =>
-  getJson<DashboardData>("/api/dashboard", db.dashboard);
+function authHeader(token?: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
-export const getAgents = () => getJson<Agent[]>("/api/agents", db.agents);
+export const getDashboard = (token?: string | null) =>
+  request<DashboardData>("/api/dashboard", db.dashboard, {
+    headers: authHeader(token),
+  });
 
-export const getDocuments = () =>
-  getJson<KnowledgeDoc[]>("/api/documents", db.documents);
+export const getAgents = (token?: string | null) =>
+  request<Agent[]>("/api/agents", db.agents, { headers: authHeader(token) });
 
-export const getConversations = () =>
-  getJson<Conversation[]>("/api/conversations", db.conversations);
+export const getDocuments = (token?: string | null) =>
+  request<KnowledgeDoc[]>("/api/documents", db.documents, {
+    headers: authHeader(token),
+  });
+
+export const getConversations = (token?: string | null) =>
+  request<Conversation[]>("/api/conversations", db.conversations, {
+    headers: authHeader(token),
+  });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import {
   CirclePlus,
   Headset,
@@ -41,13 +42,14 @@ const STATUS: Record<AgentStatus, { label: string; className: string }> = {
 };
 
 export default function AgentsPage() {
+  const { getToken } = useAuth();
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [domains, setDomains] = useState<string[]>(["*.acmecorp.com"]);
   const [domainDraft, setDomainDraft] = useState("");
 
   useEffect(() => {
-    getAgents().then(setAgents);
-  }, []);
+    getToken().then((t) => getAgents(t).then(setAgents)).catch(() => {});
+  }, [getToken]);
 
   const live = agents?.filter((a) => a.status === "active").length ?? 0;
 

@@ -1,21 +1,31 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .data import AGENTS, CONVERSATIONS, DASHBOARD, DOCUMENTS
+from .config import get_settings
+from .db import init_db
+from .routers import router
 
-import os
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
 
 app = FastAPI(
     title="BaseMind API",
-    version="0.1.0",
-    description="Backend for the BaseMind AI SaaS platform demo.",
+    version="0.2.0",
+    description="Backend for the BaseMind AI SaaS platform.",
+    lifespan=lifespan,
 )
 
 _origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-_extra = os.environ.get("ALLOWED_ORIGINS", "")
+_extra = get_settings().allowed_origins
 if _extra:
     _origins.extend(o.strip() for o in _extra.split(",") if o.strip())
 
@@ -28,43 +38,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(router)
+
 
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok", "service": "basemind-api"}
-
-
-@app.get("/api/dashboard")
-def dashboard() -> dict:
-    return DASHBOARD
-
-
-@app.get("/api/agents")
-def agents() -> list[dict]:
-    return AGENTS
-
-
-@app.get("/api/agents/{agent_id}")
-def agent_detail(agent_id: str) -> dict:
-    for agent in AGENTS:
-        if agent["id"] == agent_id:
-            return agent
-    return {"error": "agent not found", "id": agent_id}
-
-
-@app.get("/api/documents")
-def documents() -> list[dict]:
-    return DOCUMENTS
-
-
-@app.get("/api/conversations")
-def conversations() -> list[dict]:
-    return CONVERSATIONS
-
-
-@app.get("/api/conversations/{conversation_id}")
-def conversation_detail(conversation_id: str) -> dict:
-    for conversation in CONVERSATIONS:
-        if conversation["id"] == conversation_id:
-            return conversation
-    return {"error": "conversation not found", "id": conversation_id}

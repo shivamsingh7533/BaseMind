@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, Menu } from "lucide-react";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -24,7 +25,6 @@ const APP_LINKS = [
   { href: "/agents", label: "Agents" },
   { href: "/knowledge-base", label: "Knowledge" },
   { href: "/logs", label: "Logs" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export function Navbar() {
@@ -66,15 +66,17 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <span className="mr-1 flex size-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-            AC
-          </span>
-          <Button asChild variant="ghost">
-            <Link href="/login">Sign In</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/dashboard">Start Free Trial</Link>
-          </Button>
+          <Show when="signed-out">
+            <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
+              <Button variant="ghost">Sign In</Button>
+            </SignInButton>
+            <Button asChild>
+              <Link href="/signup">Start Free Trial</Link>
+            </Button>
+          </Show>
+          <Show when="signed-in">
+            <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
+          </Show>
         </div>
 
         <Sheet open={open} onOpenChange={setOpen}>
@@ -99,24 +101,21 @@ export function Navbar() {
                 </Link>
               ))}
               <div className="my-3 h-px bg-border" />
-              <div className="flex items-center gap-3 px-3 py-2">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                  AC
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">Alex Chen</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    alex@acmecorp.io
-                  </p>
-                </div>
+              <div className="flex items-center justify-between px-3 py-2">
+                <Show when="signed-out">
+                  <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
+                    <Button variant="ghost" className="justify-start">
+                      Sign In
+                    </Button>
+                  </SignInButton>
+                </Show>
+                <Show when="signed-in">
+                  <UserButton />
+                  <span className="text-sm font-medium">Account</span>
+                </Show>
               </div>
-              <Button asChild variant="ghost" className="mt-2 justify-start">
-                <Link href="/login" onClick={() => setOpen(false)}>
-                  Sign In
-                </Link>
-              </Button>
               <Button asChild className="mt-1">
-                <Link href="/dashboard" onClick={() => setOpen(false)}>
+                <Link href="/signup" onClick={() => setOpen(false)}>
                   Start Free Trial
                 </Link>
               </Button>

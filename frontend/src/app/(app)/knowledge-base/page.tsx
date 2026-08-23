@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import {
   CloudUpload,
   FileSpreadsheet,
@@ -52,12 +53,13 @@ function TypeIcon({ type }: { type: string }) {
 }
 
 export default function KnowledgeBasePage() {
+  const { getToken } = useAuth();
   const [docs, setDocs] = useState<KnowledgeDoc[] | null>(null);
   const [syncUrl, setSyncUrl] = useState("");
 
   useEffect(() => {
-    getDocuments().then(setDocs);
-  }, []);
+    getToken().then((t) => getDocuments(t).then(setDocs)).catch(() => {});
+  }, [getToken]);
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
