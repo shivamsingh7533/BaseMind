@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   CloudUpload,
@@ -8,6 +8,7 @@ import {
   FileText,
   Globe,
   Link2,
+  Loader2,
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { type DocStatus } from "@/lib/api";
+import { type DocStatus, uploadDocument } from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
 const STATUS: Record<
@@ -58,12 +59,31 @@ export default function KnowledgeBasePage() {
   const docs = useAppData((s) => s.documents);
   const fetchDocuments = useAppData((s) => s.fetchDocuments);
   const [syncUrl, setSyncUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getToken()
       .then((t) => fetchDocuments(t))
       .catch(() => {});
   }, [getToken, fetchDocuments]);
+
+  const handleFile = async (file: File | undefined | null) => {
+    if (!file || uploading) return;
+    setUploading(true);
+    try {
+      const doc = await uploadDocument(await getToken(), file);
+      if (doc) {
+        toast.success(`${file.name} indexed`, {
+          description: doc.detail,
+        });
+        await fetchDocuments(await getToken());
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
@@ -79,18 +99,37 @@ export default function KnowledgeBasePage() {
 
       <Card>
         <CardContent className="grid gap-6 pt-6 lg:grid-cols-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt,.csv,.md"
+            className="hidden"
+            onChange={(e) => void handleFile(e.target.files?.[0])}
+          />
           <button
             type="button"
-            onClick={() =>
-              toast.info("Uploads are mocked in this demo", {
-                description: "Wire this to POST /api/documents in the backend.",
-              })
-            }
-            className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors hover:border-primary/60 hover:bg-accent/50"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              void handleFile(e.dataTransfer.files?.[0]);
+            }}
+            className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors hover:border-primary/60 hover:bg-accent/50 disabled:opacity-60"
           >
-            <CloudUpload className="size-8 text-primary" />
-            <p className="text-sm font-medium">Drag & Drop files here</p>
-            <p className="text-xs text-muted-foreground">or click to browse</p>
+            {uploading ? (
+              <Loader2 className="size-8 animate-spin text-primary" />
+            ) : (
+              <CloudUpload className="size-8 text-primary" />
+            )}
+            <p className="text-sm font-medium">
+              {uploading
+                ? "Indexing your document…"
+                : "Drag & Drop files here"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {uploading ? "This may take a few seconds" : "or click to browse (PDF, TXT, CSV · max 10MB)"}
+            </p>
           </button>
 
           <div className="flex flex-col justify-center gap-2">

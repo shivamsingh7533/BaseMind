@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { db } from "@/lib/seed-data";
 
 export interface Stat {
@@ -125,6 +126,35 @@ export type ChatEvent =
   | { type: "token"; token: string }
   | { type: "error"; error: string }
   | { type: "done"; messageId: string | null };
+
+export async function uploadDocument(
+  token: string | null | undefined,
+  file: File
+): Promise<KnowledgeDoc | null> {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/api/documents/upload`, {
+      method: "POST",
+      headers: authHeader(token),
+      body: form,
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {
+        /* keep status text */
+      }
+      toast.error(detail);
+      return null;
+    }
+    return (await res.json()) as KnowledgeDoc;
+  } catch {
+    return null;
+  }
+}
 
 export async function createConversation(
   token?: string | null
