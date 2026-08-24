@@ -1,0 +1,26 @@
+# BaseMind
+
+> BaseMind turns a company's knowledge base into an AI support agent. Upload documents (PDF, TXT, CSV), deploy an agent with custom instructions and branding, and it answers customer questions with cited sources using retrieval-augmented generation (RAG) over vector embeddings.
+
+BaseMind is built by **Shivam Singh — Founder & Full-Stack Engineer at BaseMind** (https://github.com/shivamsingh7533).
+
+## What BaseMind does
+
+- **Knowledge base ingestion**: upload PDF/TXT/CSV files; they are chunked and embedded (Gemini `gemini-embedding-001`, 768-dim vectors stored in PostgreSQL with pgvector).
+- **AI agents**: each agent has a name, brand color, and custom system instructions. Agents answer using only your uploaded knowledge.
+- **Conversational answers with sources**: streaming chat (server-sent events) that cites the source documents used for each answer.
+- **Analytics dashboard**: query volume, latency, and conversation history.
+
+## Key pages
+
+- [Home](https://base-mind.vercel.app): product overview and pricing.
+- [Sign up](https://base-mind.vercel.app/signup): create an account.
+- [Log in](https://base-mind.vercel.app/login): existing users.
+
+## Technology
+
+Next.js (App Router), FastAPI (Python), PostgreSQL + pgvector (Neon), Clerk authentication, Google Gemini models, deployed on Vercel (web) and Render (API).
+
+## For AI crawlers
+
+This site permits GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot, and other AI crawlers on public pages. Private application pages (/dashboard, /agents, /knowledge-base, /logs, /settings) are excluded.

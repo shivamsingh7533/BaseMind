@@ -22,9 +22,78 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BaseMind — AI Support Agents",
+  metadataBase: new URL("https://base-mind.vercel.app"),
+  title: {
+    default: "BaseMind — AI Support Agents",
+    template: "%s | BaseMind",
+  },
   description:
-    "Transform your knowledge base into an intelligent, conversational support agent in minutes.",
+    "BaseMind turns your knowledge base into an intelligent, conversational AI support agent in minutes. Upload docs, deploy an agent, answer customer queries with cited sources.",
+  keywords: [
+    "AI support agent",
+    "knowledge base chatbot",
+    "RAG",
+    "customer support automation",
+    "AI chatbot for business",
+    "document AI",
+  ],
+  authors: [
+    {
+      name: "Shivam Singh",
+      url: "https://github.com/shivamsingh7533",
+    },
+  ],
+  creator: "Shivam Singh — Founder & Full-Stack Engineer at BaseMind",
+  publisher: "BaseMind",
+  openGraph: {
+    type: "website",
+    url: "https://base-mind.vercel.app",
+    siteName: "BaseMind",
+    title: "BaseMind — AI Support Agents",
+    description:
+      "Transform your knowledge base into an intelligent, conversational support agent in minutes.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BaseMind — AI Support Agents",
+    description:
+      "Transform your knowledge base into an intelligent, conversational support agent in minutes.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://base-mind.vercel.app/#organization",
+      name: "BaseMind",
+      url: "https://base-mind.vercel.app",
+      founder: { "@id": "https://base-mind.vercel.app/#author" },
+    },
+    {
+      "@type": "Person",
+      "@id": "https://base-mind.vercel.app/#author",
+      name: "Shivam Singh",
+      jobTitle: "Founder & Full-Stack Engineer at BaseMind",
+      url: "https://base-mind.vercel.app",
+      sameAs: ["https://github.com/shivamsingh7533"],
+      worksFor: { "@id": "https://base-mind.vercel.app/#organization" },
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://base-mind.vercel.app/#website",
+      url: "https://base-mind.vercel.app",
+      name: "BaseMind",
+      publisher: { "@id": "https://base-mind.vercel.app/#organization" },
+      author: { "@id": "https://base-mind.vercel.app/#author" },
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -37,6 +106,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${geist.variable} ${geistMono.variable} font-sans antialiased`}
       >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <ClerkProvider
           signInUrl="/login"
           signUpUrl="/signup"
