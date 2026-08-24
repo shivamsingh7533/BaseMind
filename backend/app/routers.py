@@ -1,14 +1,24 @@
+import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from .ai import chunk_text, embed_texts, extract_text, stream_answer
 from .auth import get_current_user
 from .cache import cache_get, cache_set, invalidate_user_cache
-from .db import get_db
-from .models import Agent, Conversation, Document, Message, User
+from .db import SessionFactory, get_db
+from .models import Agent, Conversation, Document, DocumentChunk, Message, User
 from .schemas import (
     AgentCreate,
     AgentUpdate,
@@ -20,6 +30,8 @@ from .schemas import (
     serialize_conversation,
     serialize_document,
 )
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 router = APIRouter(prefix="/api")
 
@@ -123,6 +135,56 @@ async def create_document(
         status="ready",
     )
     db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    await invalidate_user_cache(user.id)
+    return serialize_document(doc)
+
+
+@router.post("/documents/upload", status_code=201)
+async def upload_document(
+    file: UploadFile = File(...),
+    agent_id: str | None = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    raw = await file.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 10MB)")
+    if agent_id:
+        await _get_owned(db, Agent, agent_id, user)
+
+    text = extract_text(file.filename or "upload.txt", raw)
+    chunks = chunk_text(text)
+    if not chunks:
+        raise HTTPException(status_code=422, detail="No readable text found in file")
+
+    embeddings = await embed_texts(chunks)
+
+    doc_type = "PDF" if (file.filename or "").lower().endswith(".pdf") else "Text"
+    doc = Document(
+        user_id=user.id,
+        name=file.filename or "upload.txt",
+        type=doc_type,
+        detail=f"{len(chunks)} chunks indexed",
+        status="ready",
+        agent_id=agent_id,
+    )
+    db.add(doc)
+    await db.flush()
+
+    for index, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        db.add(
+            DocumentChunk(
+                document_id=doc.id,
+                user_id=user.id,
+                agent_id=agent_id,
+                content=chunk,
+                chunk_index=index,
+                embedding=embedding,
+            )
+        )
+
     await db.commit()
     await db.refresh(doc)
     await invalidate_user_cache(user.id)
@@ -296,3 +358,95 @@ async def dashboard(
     payload = {"stats": stats, "activity": []}
     await cache_set(cache_key, payload)
     return payload
+
+
+@router.post("/conversations/{conversation_id}/chat")
+async def chat(
+    conversation_id: str,
+    payload: MessageIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.role != "user":
+        raise HTTPException(status_code=422, detail="role must be 'user'")
+
+    conv = await _get_owned(db, Conversation, conversation_id, user)
+    agent_id = conv.agent_id
+
+    user_message = Message(conversation_id=conv.id, role="user", content=payload.text)
+    conv.preview = payload.text[:120]
+    db.add(user_message)
+    await db.commit()
+    await db.refresh(user_message)
+
+    result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conv.id, Message.id != user_message.id)
+        .order_by(Message.created_at.desc())
+        .limit(6)
+    )
+    recent = list(reversed(result.scalars().all()))
+    history = [
+        {"role": "model" if m.role == "agent" else "user", "content": m.content}
+        for m in recent
+    ]
+
+    query_embedding = (await embed_texts([payload.text]))[0]
+
+    search = select(DocumentChunk, Document.name).join(
+        Document, DocumentChunk.document_id == Document.id
+    )
+    search = search.where(DocumentChunk.user_id == user.id)
+    if agent_id:
+        search = search.where(
+            (DocumentChunk.agent_id == agent_id) | (DocumentChunk.agent_id.is_(None))
+        )
+    search = (
+        search.order_by(DocumentChunk.embedding.cosine_distance(query_embedding))
+        .limit(4)
+    )
+    matches = (await db.execute(search)).all()
+    contexts = [
+        {"source": name, "index": chunk.chunk_index, "content": chunk.content}
+        for chunk, name in matches
+    ]
+    conversation_id_value = conv.id
+    user_id_value = user.id
+    question = payload.text
+
+    async def event_stream():
+        answer_parts: list[str] = []
+        sources_line = json.dumps(
+            {"type": "sources", "sources": [{"source": c["source"]} for c in contexts]}
+        )
+        yield f"data: {sources_line}\n\n"
+        try:
+            async for token in stream_answer(question, contexts, history):
+                answer_parts.append(token)
+                yield "data: " + json.dumps({"type": "token", "token": token}) + "\n\n"
+        except Exception as exc:
+            yield "data: " + json.dumps({"type": "error", "error": str(exc)}) + "\n\n"
+            return
+
+        full_answer = "".join(answer_parts)
+        assistant_id = None
+        try:
+            async with SessionFactory() as session:
+                assistant = Message(
+                    conversation_id=conversation_id_value,
+                    role="agent",
+                    content=full_answer,
+                )
+                session.add(assistant)
+                await session.commit()
+                await session.refresh(assistant)
+                assistant_id = assistant.id
+        except Exception:
+            pass
+
+        await invalidate_user_cache(user_id_value)
+
+        done_line = json.dumps({"type": "done", "messageId": assistant_id})
+        yield f"data: {done_line}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

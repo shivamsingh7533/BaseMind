@@ -119,3 +119,79 @@ export const getConversations = (token?: string | null) =>
   request<Conversation[]>("/api/conversations", db.conversations, {
     headers: authHeader(token),
   });
+
+export type ChatEvent =
+  | { type: "sources"; sources: { source: string }[] }
+  | { type: "token"; token: string }
+  | { type: "error"; error: string }
+  | { type: "done"; messageId: string | null };
+
+export async function createConversation(
+  token?: string | null
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/conversations`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify({ visitor: "Studio Test" }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Conversation;
+    return data.id;
+  } catch {
+    return null;
+  }
+}
+
+export async function streamChat(
+  token: string | null | undefined,
+  conversationId: string,
+  text: string,
+  onEvent: (event: ChatEvent) => void
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/conversations/${conversationId}/chat`, {
+      method: "POST",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify({ text, role: "user" }),
+    });
+  } catch {
+    onEvent({ type: "error", error: "Network error" });
+    return;
+  }
+  if (!res.ok || !res.body) {
+    onEvent({
+      type: "error",
+      error: res.status === 503 ? "AI not configured" : `HTTP ${res.status}`,
+    });
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith("data: ")) continue;
+      try {
+        onEvent(JSON.parse(line.slice(6)) as ChatEvent);
+      } catch {
+        /* skip malformed frame */
+      }
+    }
+  }
+}

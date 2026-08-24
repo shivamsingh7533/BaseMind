@@ -3,8 +3,11 @@ from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .db import Base
+
+EMBEDDING_DIM = 768
 
 
 def _uuid() -> str:
@@ -90,6 +93,20 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM))
 
 
 class Subscription(Base):

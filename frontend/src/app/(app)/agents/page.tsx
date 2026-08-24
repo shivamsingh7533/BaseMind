@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
+  Bot,
   CirclePlus,
   Headset,
   Rocket,
+  Send,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +26,11 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { type AgentStatus } from "@/lib/api";
+import {
+  createConversation,
+  streamChat,
+  type AgentStatus,
+} from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
 const STATUS: Record<AgentStatus, { label: string; className: string }> = {
@@ -48,12 +54,75 @@ export default function AgentsPage() {
   const fetchAgents = useAppData((s) => s.fetchAgents);
   const [domains, setDomains] = useState<string[]>(["*.acmecorp.com"]);
   const [domainDraft, setDomainDraft] = useState("");
+  const [chatMessages, setChatMessages] = useState<
+    { role: "user" | "agent"; text: string }[]
+  >([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatting, setChatting] = useState(false);
+  const [studioConvId, setStudioConvId] = useState<string | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getToken()
       .then((t) => fetchAgents(t))
       .catch(() => {});
   }, [getToken, fetchAgents]);
+
+  useEffect(() => {
+    chatScrollRef.current?.scrollTo({
+      top: chatScrollRef.current.scrollHeight,
+    });
+  }, [chatMessages, chatting]);
+
+  const sendChat = async () => {
+    const text = chatDraft.trim();
+    if (!text || chatting) return;
+    setChatDraft("");
+    setChatMessages((prev) => [
+      ...prev,
+      { role: "user", text },
+      { role: "agent", text: "" },
+    ]);
+    setChatting(true);
+    try {
+      let convId = studioConvId;
+      if (!convId) {
+        convId = await createConversation(await getToken());
+        if (convId) setStudioConvId(convId);
+      }
+      if (!convId) throw new Error("no-conversation");
+      await streamChat(await getToken(), convId, text, (event) => {
+        if (event.type === "token") {
+          setChatMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last?.role === "agent") {
+              copy[copy.length - 1] = { ...last, text: last.text + event.token };
+            }
+            return copy;
+          });
+        } else if (event.type === "error") {
+          toast.error(event.error);
+          setChatMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            if (last?.role === "agent" && !last.text) copy.pop();
+            return copy;
+          });
+        }
+      });
+    } catch {
+      toast.error("Could not reach the agent");
+      setChatMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last?.role === "agent" && !last.text) copy.pop();
+        return copy;
+      });
+    } finally {
+      setChatting(false);
+    }
+  };
 
   const live = agents?.filter((a) => a.status === "active").length ?? 0;
 
@@ -244,6 +313,69 @@ export default function AgentsPage() {
               <Rocket className="size-4" /> Deploy Agent
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="font-heading">Test Your Agent</CardTitle>
+          <CardDescription>
+            Chat with your knowledge base before going live.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div
+            ref={chatScrollRef}
+            className="flex h-72 flex-col gap-3 overflow-y-auto rounded-lg border bg-muted/30 p-4"
+          >
+            {chatMessages.length === 0 && (
+              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                Ask a question about your uploaded documents.
+              </div>
+            )}
+            {chatMessages.map((m, i) => (
+              <div
+                key={i}
+                className={`flex gap-2 ${
+                  m.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                {m.role === "agent" && (
+                  <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Bot className="size-4" />
+                  </span>
+                )}
+                <div
+                  className={`max-w-[80%] whitespace-pre-wrap rounded-xl px-3.5 py-2 text-sm ${
+                    m.role === "user"
+                      ? "rounded-br-sm bg-primary text-primary-foreground"
+                      : m.text
+                        ? "rounded-bl-sm border bg-card"
+                        : "rounded-bl-sm border bg-card text-muted-foreground italic"
+                  }`}
+                >
+                  {m.text || (chatting ? "Thinking…" : "")}
+                </div>
+              </div>
+            ))}
+          </div>
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendChat();
+            }}
+          >
+            <Input
+              value={chatDraft}
+              onChange={(e) => setChatDraft(e.target.value)}
+              placeholder="Ask a question about your docs…"
+              disabled={chatting}
+            />
+            <Button type="submit" size="icon" disabled={chatting || !chatDraft.trim()}>
+              <Send className="size-4" />
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
