@@ -13,7 +13,6 @@ export default function LoginPage() {
         <Bot className="size-7" />
       </Link>
       <SignIn
-        signUpUrl="/signup"
         fallbackRedirectUrl="/dashboard"
         appearance={{
           variables: {
