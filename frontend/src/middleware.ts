@@ -9,18 +9,17 @@ const isProtectedRoute = createRouteMatcher([
   "/settings(.*)",
 ]);
 
-function passthrough() {
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    const { userId } = await auth();
+    if (!userId) {
+      const url = new URL("/login", req.url);
+      url.searchParams.set("redirect_url", req.nextUrl.pathname);
+      return NextResponse.redirect(url);
+    }
+  }
   return NextResponse.next();
-}
-
-export default process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  ? clerkMiddleware(async (auth, req) => {
-      if (isProtectedRoute(req)) {
-        await auth.protect();
-      }
-      return NextResponse.next();
-    })
-  : passthrough;
+});
 
 export const config = {
   matcher: ["/((?!_next|[^?]*\\.[^?]*$).*)", "/(api|trpc)(.*)"],
