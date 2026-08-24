@@ -42,7 +42,21 @@ async def _get_owned(db: AsyncSession, model, obj_id: str, user: User):
     )
     obj = result.scalar_one_or_none()
     if obj is None:
-        raise HTTPException(status_code=404, detail="Not found")
+        exists = await db.execute(
+            select(model.id).where(model.id == obj_id)
+        )
+        if exists.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"{model.__name__} belongs to a different account "
+                    "(you may have signed in with another method)"
+                ),
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=f"{model.__name__} not found — it may already be deleted",
+        )
     return obj
 
 
