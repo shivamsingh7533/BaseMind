@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  createAgent,
   createConversation,
   streamChat,
   type AgentStatus,
@@ -54,6 +55,11 @@ export default function AgentsPage() {
   const fetchAgents = useAppData((s) => s.fetchAgents);
   const [domains, setDomains] = useState<string[]>(["*.acmecorp.com"]);
   const [domainDraft, setDomainDraft] = useState("");
+  const [botName, setBotName] = useState("Customer Success Bot");
+  const [brandColor, setBrandColor] = useState("#0d9488");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [deploying, setDeploying] = useState(false);
+  const [testAgentId, setTestAgentId] = useState<string>("");
   const [chatMessages, setChatMessages] = useState<
     { role: "user" | "agent"; text: string }[]
   >([]);
@@ -87,7 +93,7 @@ export default function AgentsPage() {
     try {
       let convId = studioConvId;
       if (!convId) {
-        convId = await createConversation(await getToken());
+        convId = await createConversation(await getToken(), testAgentId || null);
         if (convId) setStudioConvId(convId);
       }
       if (!convId) throw new Error("no-conversation");
@@ -125,6 +131,31 @@ export default function AgentsPage() {
   };
 
   const live = agents?.filter((a) => a.status === "active").length ?? 0;
+
+  const deployAgent = async () => {
+    if (deploying) return;
+    if (!botName.trim()) {
+      toast.error("Give your bot a name first");
+      return;
+    }
+    setDeploying(true);
+    try {
+      const created = await createAgent(await getToken(), {
+        name: botName.trim(),
+        instructions: systemPrompt.trim(),
+        color: brandColor,
+      });
+      if (created) {
+        toast.success(`${created.name} is live`, {
+          description: "Test it in the Test Your Agent panel below.",
+        });
+        await fetchAgents(await getToken());
+        setTestAgentId(created.id);
+      }
+    } finally {
+      setDeploying(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
@@ -219,13 +250,22 @@ export default function AgentsPage() {
         <CardHeader>
           <CardTitle className="font-heading">Agent Studio</CardTitle>
           <CardDescription>
-            Configure and deploy a new support agent.
+            Name your agent, tell it how to behave, then deploy. It answers
+            using the documents in your Knowledge Base.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="bot-name">Bot Name</Label>
-            <Input id="bot-name" placeholder="Customer Success Bot" />
+            <Input
+              id="bot-name"
+              value={botName}
+              onChange={(e) => setBotName(e.target.value)}
+              placeholder="Customer Success Bot"
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown to customers in the chat widget header.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -234,23 +274,45 @@ export default function AgentsPage() {
               <input
                 id="brand-color"
                 type="color"
-                defaultValue="#0d9488"
+                value={brandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
                 className="h-9 w-14 cursor-pointer rounded-md border bg-card p-1"
               />
-              <span className="text-sm text-muted-foreground">#0d9488</span>
+              <span className="text-sm text-muted-foreground">
+                {brandColor}
+              </span>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Accent color for buttons and bubbles.
+            </p>
           </div>
 
           <div className="space-y-2 lg:col-span-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="system-prompt">
-                System Prompt & Instructions
+                System Prompt &amp; Instructions
               </Label>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1.5 text-xs text-primary"
-                onClick={() => toast.success("Template loaded")}
+                onClick={() =>
+                  setSystemPrompt(
+                    [
+                      "## Identity",
+                      "You are the support assistant for Acme Corp.",
+                      "",
+                      "## Tone",
+                      "- Friendly and professional. Keep replies under 100 words.",
+                      "- Address the customer by name if they shared it.",
+                      "",
+                      "## Rules",
+                      "- Answer ONLY from the knowledge base documents.",
+                      "- If something is not in the documents, say so honestly and suggest contacting a human.",
+                      "- Never invent prices, dates, or policies.",
+                    ].join("\n")
+                  )
+                }
               >
                 Use Template
               </Button>
@@ -258,9 +320,17 @@ export default function AgentsPage() {
             <Textarea
               id="system-prompt"
               rows={6}
-              placeholder={"# system_prompt.md\nYou are a helpful support agent for..."}
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder={
+                "Optional — tell your bot how to talk.\nExample:\nYou are the support assistant for Acme Corp.\nBe friendly, keep replies short.\nOnly answer from my documents; if you don't know, say so."
+              }
               className="font-mono text-xs"
             />
+            <p className="text-xs text-muted-foreground">
+              Not sure what to write? Click <span className="font-medium text-primary">Use Template</span> and edit the
+              parts between ## headings. Leave empty for sensible defaults.
+            </p>
           </div>
 
           <div className="space-y-2 lg:col-span-2">
@@ -304,13 +374,14 @@ export default function AgentsPage() {
 
           <div className="lg:col-span-2">
             <Separator className="mb-5" />
-            <Button
-              size="lg"
-              onClick={() => toast.success("Agent deployed", {
-                description: "It may take a minute to propagate to the edge.",
-              })}
-            >
-              <Rocket className="size-4" /> Deploy Agent
+            <Button size="lg" disabled={deploying} onClick={() => void deployAgent()}>
+              {deploying ? (
+                <>Deploying…</>
+              ) : (
+                <>
+                  <Rocket className="size-4" /> Deploy Agent
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
@@ -318,10 +389,35 @@ export default function AgentsPage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="font-heading">Test Your Agent</CardTitle>
-          <CardDescription>
-            Chat with your knowledge base before going live.
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="font-heading">Test Your Agent</CardTitle>
+              <CardDescription>
+                Chat with your knowledge base before going live.
+              </CardDescription>
+            </div>
+            {(agents?.length ?? 0) > 0 && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Test with:
+                <select
+                  value={testAgentId}
+                  onChange={(e) => {
+                    setTestAgentId(e.target.value);
+                    setStudioConvId(null);
+                    setChatMessages([]);
+                  }}
+                  className="h-8 rounded-md border bg-card px-2 text-xs outline-none"
+                >
+                  <option value="">All documents (no specific agent)</option>
+                  {agents!.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div

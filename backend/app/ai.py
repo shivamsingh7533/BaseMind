@@ -84,10 +84,20 @@ def extract_text(filename: str, raw: bytes) -> str:
 
 
 async def stream_answer(
-    question: str, contexts: list[dict], history: list[dict]
+    question: str,
+    contexts: list[dict],
+    history: list[dict],
+    extra_instructions: str = "",
 ) -> AsyncIterator[str]:
     client = get_ai_client()
     from google.genai import types
+
+    system_prompt = SYSTEM_PROMPT
+    if extra_instructions.strip():
+        system_prompt += (
+            "\n\nThe operator of this agent added these specific "
+            f"instructions — follow them closely:\n{extra_instructions.strip()}"
+        )
 
     context_block = (
         "\n\n".join(
@@ -108,7 +118,7 @@ async def stream_answer(
             ],
         },
     ]
-    config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
+    config = types.GenerateContentConfig(system_instruction=system_prompt)
     stream = await client.aio.models.generate_content_stream(
         model=CHAT_MODEL, contents=contents, config=config
     )

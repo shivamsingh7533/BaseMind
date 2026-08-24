@@ -19,6 +19,8 @@ def _fmt_duration(seconds: int) -> str:
 class AgentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     url: str = Field(default="", max_length=2048)
+    instructions: str = Field(default="", max_length=8000)
+    color: str = Field(default="#0d9488", pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class AgentUpdate(BaseModel):
@@ -54,6 +56,8 @@ def serialize_agent(agent) -> dict:
         "id": agent.id,
         "name": agent.name,
         "url": agent.url,
+        "instructions": getattr(agent, "instructions", "") or "",
+        "color": getattr(agent, "color", "") or "#0d9488",
         "status": agent.status,
         "queries24h": agent.queries_24h,
         "avgLatencyMs": agent.avg_latency_ms,

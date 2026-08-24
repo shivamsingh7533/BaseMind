@@ -29,6 +29,8 @@ export interface Agent {
   id: string;
   name: string;
   url: string;
+  instructions: string;
+  color: string;
   status: AgentStatus;
   queries24h: number;
   avgLatencyMs: number;
@@ -156,8 +158,41 @@ export async function uploadDocument(
   }
 }
 
+export async function createAgent(
+  token: string | null | undefined,
+  input: { name: string; instructions: string; color: string }
+): Promise<Agent | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/agents`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {
+        /* keep status text */
+      }
+      toast.error(`Could not deploy agent: ${detail}`);
+      return null;
+    }
+    return (await res.json()) as Agent;
+  } catch {
+    toast.error("Network error while deploying agent");
+    return null;
+  }
+}
+
 export async function createConversation(
-  token?: string | null
+  token?: string | null,
+  agentId?: string | null
 ): Promise<string | null> {
   try {
     const res = await fetch(`${API_URL}/api/conversations`, {
@@ -167,7 +202,10 @@ export async function createConversation(
         "Content-Type": "application/json",
         ...authHeader(token),
       },
-      body: JSON.stringify({ visitor: "Studio Test" }),
+      body: JSON.stringify({
+        visitor: "Studio Test",
+        ...(agentId ? { agent_id: agentId } : {}),
+      }),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as Conversation;

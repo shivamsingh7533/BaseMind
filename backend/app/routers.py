@@ -66,7 +66,15 @@ async def create_agent(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    agent = Agent(user_id=user.id, name=payload.name, url=payload.url, status="paused")
+    agent = Agent(
+        user_id=user.id,
+        name=payload.name,
+        url=payload.url,
+        instructions=payload.instructions,
+        color=payload.color,
+        status="active",
+        train_progress=100,
+    )
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
@@ -373,6 +381,14 @@ async def chat(
     conv = await _get_owned(db, Conversation, conversation_id, user)
     agent_id = conv.agent_id
 
+    extra_instructions = ""
+    if agent_id:
+        agent_row = (
+            await db.execute(select(Agent).where(Agent.id == agent_id))
+        ).scalar_one_or_none()
+        if agent_row:
+            extra_instructions = agent_row.instructions or ""
+
     user_message = Message(conversation_id=conv.id, role="user", content=payload.text)
     conv.preview = payload.text[:120]
     db.add(user_message)
@@ -421,7 +437,9 @@ async def chat(
         )
         yield f"data: {sources_line}\n\n"
         try:
-            async for token in stream_answer(question, contexts, history):
+            async for token in stream_answer(
+                question, contexts, history, extra_instructions
+            ):
                 answer_parts.append(token)
                 yield "data: " + json.dumps({"type": "token", "token": token}) + "\n\n"
         except Exception as exc:

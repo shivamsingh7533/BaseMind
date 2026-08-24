@@ -37,6 +37,8 @@ class Agent(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     url: Mapped[str] = mapped_column(Text, default="")
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    color: Mapped[str] = mapped_column(Text, default="#0d9488")
     status: Mapped[str] = mapped_column(Text, default="paused")
     train_progress: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queries_24h: Mapped[int] = mapped_column(Integer, default=0)
