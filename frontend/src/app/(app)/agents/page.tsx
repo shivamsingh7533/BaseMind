@@ -6,8 +6,11 @@ import {
   Bot,
   CirclePlus,
   Headset,
+  Pause,
+  Play,
   Rocket,
   Send,
+  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,7 +32,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   createAgent,
   createConversation,
+  deleteAgent,
+  setAgentStatus,
   streamChat,
+  type Agent,
   type AgentStatus,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
@@ -131,6 +137,40 @@ export default function AgentsPage() {
   };
 
   const live = agents?.filter((a) => a.status === "active").length ?? 0;
+
+  const toggleAgent = async (agent: Agent) => {
+    const next: AgentStatus = agent.status === "active" ? "paused" : "active";
+    const ok = await setAgentStatus(await getToken(), agent.id, next);
+    if (ok) {
+      toast.success(
+        `${agent.name} ${next === "active" ? "activated" : "paused"}`
+      );
+      await fetchAgents(await getToken());
+    } else {
+      toast.error("Could not update agent");
+    }
+  };
+
+  const removeAgent = async (agent: Agent) => {
+    if (
+      !window.confirm(
+        `Delete "${agent.name}"? Its conversations will also be removed.`
+      )
+    )
+      return;
+    const ok = await deleteAgent(await getToken(), agent.id);
+    if (ok) {
+      toast.success(`${agent.name} deleted`);
+      if (testAgentId === agent.id) {
+        setTestAgentId("");
+        setStudioConvId(null);
+        setChatMessages([]);
+      }
+      await fetchAgents(await getToken());
+    } else {
+      toast.error("Could not delete agent");
+    }
+  };
 
   const deployAgent = async () => {
     if (deploying) return;
@@ -239,6 +279,33 @@ export default function AgentsPage() {
                       </div>
                     </div>
                   )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={a.status === "training"}
+                      onClick={() => void toggleAgent(a)}
+                    >
+                      {a.status === "active" ? (
+                        <>
+                          <Pause className="size-3.5" /> Pause
+                        </>
+                      ) : (
+                        <>
+                          <Play className="size-3.5" /> Activate
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Delete ${a.name}`}
+                      onClick={() => void removeAgent(a)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))

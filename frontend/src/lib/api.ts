@@ -123,6 +123,43 @@ export const getConversations = (token?: string | null) =>
     headers: authHeader(token),
   });
 
+export async function setAgentStatus(
+  token: string | null | undefined,
+  agentId: string,
+  status: AgentStatus
+): Promise<Agent | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/agents/${agentId}`, {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Agent;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteAgent(
+  token: string | null | undefined,
+  agentId: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/agents/${agentId}`, {
+      method: "DELETE",
+      headers: authHeader(token),
+    });
+    return res.ok || res.status === 204;
+  } catch {
+    return false;
+  }
+}
+
 export type ChatEvent =
   | { type: "sources"; sources: { source: string }[] }
   | { type: "token"; token: string }

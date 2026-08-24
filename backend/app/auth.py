@@ -30,6 +30,12 @@ def verify_clerk_token(token: str) -> dict:
     settings = get_settings()
     try:
         key = _get_jwks_client().get_signing_key_from_jwt(token)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Cannot fetch signing key from CLERK_JWKS_URL: {exc}",
+        )
+    try:
         return pyjwt.decode(
             token,
             key.key,
@@ -37,10 +43,32 @@ def verify_clerk_token(token: str) -> dict:
             issuer=settings.clerk_issuer or None,
             options={"verify_aud": False},
         )
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except pyjwt.InvalidIssuerError:
+        actual = ""
+        try:
+            unverified = pyjwt.decode(token, options={"verify_signature": False})
+            actual = unverified.get("iss", "")
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "Issuer mismatch: token iss="
+                f"'{actual}' but CLERK_ISSUER='{settings.clerk_issuer or '(not set)'}'. "
+                "Fix the env var to match your Clerk instance."
+            ),
+        )
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired — refresh the page")
+    except pyjwt.ImmatureSignatureError:
+        raise HTTPException(status_code=401, detail="Token not yet valid — refresh the page")
+    except pyjwt.InvalidSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Signature invalid — token is from a different Clerk instance than CLERK_JWKS_URL",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
 
 
 async def upsert_user(db: AsyncSession, claims: dict) -> User:
