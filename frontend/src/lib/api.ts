@@ -170,6 +170,10 @@ export async function uploadDocument(
   token: string | null | undefined,
   file: File
 ): Promise<KnowledgeDoc | null> {
+  if (!token) {
+    toast.error("Login session nahi mili — page refresh karke dobara login karo");
+    return null;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
   try {
@@ -198,7 +202,7 @@ export async function uploadDocument(
     toast.error(
       aborted
         ? "Upload timed out — backend slow tha, dobara try karo"
-        : "Backend tak pahunch hi nahi paaye (Render jaag raha hoga). 30 sec baad dobara try karo."
+        : `Network error (${err instanceof Error ? err.message : "unknown"}) — Render jaag raha hoga, 30 sec baad dobara try karo.`
     );
     return null;
   } finally {

@@ -72,7 +72,7 @@ export default function KnowledgeBasePage() {
     if (!file || uploading) return;
     setUploading(true);
     try {
-      const doc = await uploadDocument(await getToken(), file);
+      const doc = await uploadDocument(await getToken().catch(() => null), file);
       if (doc) {
         toast.success(`${file.name} indexed`, {
           description: doc.detail,
@@ -150,15 +150,14 @@ export default function KnowledgeBasePage() {
                     toast.error("Enter a URL first");
                     return;
                   }
-                  toast.success(`Queued crawl for ${syncUrl}`);
-                  setSyncUrl("");
+                  toast.info("URL crawling Phase 3 me aa raha hai — abhi files upload karo, wo fully kaam karta hai");
                 }}
               >
                 Sync
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              We will crawl the page and linked pages up to depth 2.
+              Coming in Phase 3 — file upload works fully today.
             </p>
           </div>
         </CardContent>
