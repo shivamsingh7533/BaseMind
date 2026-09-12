@@ -1,5 +1,7 @@
 import asyncio
 import json
+import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -43,8 +45,25 @@ from .schemas import (
 )
 from .storage import delete_original, download_url, is_b2_enabled, upload_original
 
+log = logging.getLogger("basemind.api")
+
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_SYNC_BYTES = 2 * 1024 * 1024
+
+CHAT_RATE_WINDOW_SECONDS = 300.0
+CHAT_RATE_MAX = 20
+_chat_hits: dict[str, list[float]] = {}
+
+
+def _allow_chat(user_id: str) -> bool:
+    now = time.time()
+    hits = [t for t in _chat_hits.get(user_id, []) if now - t < CHAT_RATE_WINDOW_SECONDS]
+    if len(hits) >= CHAT_RATE_MAX:
+        _chat_hits[user_id] = hits
+        return False
+    hits.append(now)
+    _chat_hits[user_id] = hits
+    return True
 
 router = APIRouter(prefix="/api")
 
@@ -240,7 +259,10 @@ async def upload_document(
     try:
         source = await upload_original(user.id, file.filename or "upload.txt", raw)
     except Exception:
-        pass
+        log.warning(
+            "B2 upload_original failed for user %s file %r", user.id, file.filename,
+            exc_info=True,
+        )
 
     doc = await _persist_document(
         db,
@@ -488,6 +510,18 @@ async def update_conversation(
     await db.refresh(conv, attribute_names=["messages"])
     await invalidate_user_cache(user.id)
     return serialize_conversation(conv)
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await _get_owned(db, Conversation, conversation_id, user)
+    await db.delete(conv)
+    await db.commit()
+    await invalidate_user_cache(user.id)
 
 
 @router.get("/settings/status")
@@ -823,6 +857,14 @@ async def chat(
 ):
     if payload.role != "user":
         raise HTTPException(status_code=422, detail="role must be 'user'")
+    if not _allow_chat(user.id):
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Chat rate limit exceeded — max {CHAT_RATE_MAX} messages per "
+                f"{int(CHAT_RATE_WINDOW_SECONDS // 60)} minutes. Please wait a moment."
+            ),
+        )
 
     conv = await _get_owned(db, Conversation, conversation_id, user)
     agent_id = conv.agent_id
@@ -899,6 +941,7 @@ async def chat(
                 answer_parts.append(token)
                 yield "data: " + json.dumps({"type": "token", "token": token}) + "\n\n"
         except Exception as exc:
+            log.exception("chat stream failed for conversation %s", conversation_id_value)
             yield "data: " + json.dumps({"type": "error", "error": str(exc)}) + "\n\n"
             return
 
@@ -916,7 +959,7 @@ async def chat(
                 await session.refresh(assistant)
                 assistant_id = assistant.id
         except Exception:
-            pass
+            log.exception("failed persisting assistant message for conversation %s", conversation_id_value)
 
         await invalidate_user_cache(user_id_value)
 

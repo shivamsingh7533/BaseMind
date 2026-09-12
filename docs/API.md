@@ -95,6 +95,15 @@ Aggregated stats + recent activity for the dashboard page.
 `perAgent`: one object per agent `{id, name, color, queries24h, conversations, agentMsgs, resolved, avgLatencyMs}`, sorted by agent messages (desc).
 `trend7d`: exactly 7 day buckets `{date: "YYYY-MM-DD", conversations, agentMsgs}` (oldest → today), 0-filled for empty days.
 
+### `PATCH /api/conversations/{id}`
+Payload `{status: "active"|"resolved"|"halted"}`. Returns the serialized conversation.
+
+### `DELETE /api/conversations/{id}`
+Auth: bearer token. 204. Deletes the conversation + all its messages (FK `ondelete=CASCADE`), owner-scoped via `_get_owned`.
+
+### `POST /api/conversations/{id}/chat`
+SSE chat. **Rate limited** per user: max 20 chat calls per 5 minutes (sliding in-memory window) → `429` with an exact-reason message.
+
 ## Workspace
 ### `GET /api/settings/status`
 Auth: bearer token. Returns `{db_configured, b2_enabled}` booleans for the Settings page service-status card.

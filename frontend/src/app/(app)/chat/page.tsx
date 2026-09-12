@@ -10,6 +10,7 @@ import {
   Loader,
   MessageSquare,
   OctagonX,
+  Trash2,
   RotateCcw,
   RotateCw,
   Send,
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   createConversation,
+  deleteConversation,
   getConversation,
   getDocumentDownloadUrl,
   getDocumentPreview,
@@ -174,6 +176,26 @@ function Chat() {
     setSelectedId(created);
     router.replace(`/chat?id=${created}`, { scroll: false });
     setDraft("");
+  };
+
+  const removeConversation = async (id: string, name: string) => {
+    if (streaming) return;
+    if (!window.confirm(`Delete "${name}"? This removes the whole thread.`))
+      return;
+    const ok = await deleteConversation(await getToken(), id);
+    if (!ok) {
+      toast.error("Could not delete conversation");
+      return;
+    }
+    if (id === selectedId) {
+      setSelectedId(null);
+      setDetail(null);
+      setMessages([]);
+      setFollowUps([]);
+      router.replace("/chat", { scroll: false });
+    }
+    await fetchConversations(await getToken(), true);
+    toast.success("Conversation deleted");
   };
 
   const send = useCallback(
@@ -359,43 +381,59 @@ function Chat() {
               conversations.map((c) => {
                 const activeSel = c.id === selectedId;
                 return (
-                  <button
+                  <div
                     key={c.id}
-                    type="button"
-                    onClick={() => selectConversation(c.id)}
                     className={cn(
-                      "block w-full rounded-lg border-b p-3 text-left transition-colors hover:bg-muted/60",
-                      activeSel && "bg-accent/70 hover:bg-accent/70"
+                      "group relative rounded-lg border-b border-border/60",
+                      activeSel && "bg-accent/70"
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold">
-                        {c.user}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {c.time}
-                      </span>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={cn("mt-1.5", STATUS[c.status].badge)}
+                    <button
+                      type="button"
+                      onClick={() => selectConversation(c.id)}
+                      className="block w-full rounded-lg p-3 text-left transition-colors hover:bg-muted/60"
                     >
-                      <span
-                        className={cn(
-                          "mr-1 size-1.5 rounded-full",
-                          STATUS[c.status].dot
-                        )}
-                      />
-                      {STATUS[c.status].label}
-                    </Badge>
-                    <p className="mt-1.5 line-clamp-1 text-sm text-muted-foreground">
-                      {c.preview || "New chat"}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                      <MessageSquare className="size-3" /> {c.messageCount}{" "}
-                      Messages
-                    </p>
-                  </button>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold">
+                          {c.user}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {c.time}
+                        </span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn("mt-1.5", STATUS[c.status].badge)}
+                      >
+                        <span
+                          className={cn(
+                            "mr-1 size-1.5 rounded-full",
+                            STATUS[c.status].dot
+                          )}
+                        />
+                        {STATUS[c.status].label}
+                      </Badge>
+                      <p className="mt-1.5 line-clamp-1 text-sm text-muted-foreground">
+                        {c.preview || "New chat"}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <MessageSquare className="size-3" /> {c.messageCount}{" "}
+                        Messages
+                      </p>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Delete conversation"
+                      aria-label={`Delete ${c.user}`}
+                      onClick={() =>
+                        void removeConversation(c.id, c.user)
+                      }
+                      className="absolute right-2 top-2 size-6 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
                 );
               })
             )}

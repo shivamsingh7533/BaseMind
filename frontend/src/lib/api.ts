@@ -254,6 +254,22 @@ export async function deleteDocument(
   }
 }
 
+export async function deleteConversation(
+  token?: string | null,
+  conversationId?: string | null
+): Promise<boolean> {
+  if (!conversationId) return false;
+  try {
+    const res = await fetch(`${API_URL}/api/conversations/${conversationId}`, {
+      method: "DELETE",
+      headers: authHeader(token),
+    });
+    return res.ok || res.status === 204;
+  } catch {
+    return false;
+  }
+}
+
 export type ChatEvent =
   | {
       type: "sources";

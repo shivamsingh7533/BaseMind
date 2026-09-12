@@ -19,6 +19,9 @@
 - SDK quirks: `client.aio.models.list()` pager needs `await`; streaming call needs `await` before async-for.
 - Occasional 503 model overload → chat surfaces error event; retry usually succeeds.
 
+## Chat rate limit
+- Hard cap 20 chat posts per user per 5 min (in-memory sliding window). Exceeding returns `429` with the exact reason; a page refresh does not reset it (per-process state). Local uvicorn `--reload` restarts reset it.
+
 ## CORS
 - Preflight verified for `https://base-mind.vercel.app`; wildcard subdomain regex covers preview URLs. Missing origin in `ALLOWED_ORIGINS` manifests as silent fetch failures client-side.
 

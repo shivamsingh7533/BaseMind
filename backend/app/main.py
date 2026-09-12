@@ -1,11 +1,19 @@
+import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .db import init_db
 from .routers import router
+
+log = logging.getLogger("basemind.http")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 
 @asynccontextmanager
@@ -39,6 +47,16 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    if not request.url.path.startswith("/api/conversations/") or not request.url.path.endswith("/chat"):
+        log.info("%s %s -> %d (%.0fms)", request.method, request.url.path, response.status_code, elapsed_ms)
+    return response
 
 
 @app.get("/api/health")
