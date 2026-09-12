@@ -135,7 +135,7 @@ function Pricing() {
               variant={plan.popular ? "default" : "outline"}
               asChild
             >
-              <Link href="/dashboard">Get Started</Link>
+              <Link href="/signup">Get Started</Link>
             </Button>
             <ul className="mt-5 space-y-2.5">
               {plan.features.map((f) => (
@@ -181,7 +181,7 @@ export default function LandingPage() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Button size="lg" asChild>
-            <Link href="/dashboard">Start Free Trial</Link>
+            <Link href="/signup">Start Free Trial</Link>
           </Button>
           <Button size="lg" variant="ghost" className="gap-2">
             <PlayCircle className="size-5" /> Watch Demo
@@ -242,7 +242,21 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        © 2026 BaseMind. All rights reserved.
+        <div className="flex items-center justify-center gap-5">
+          <Link
+            href="/legal/privacy"
+            className="hover:text-foreground hover:underline"
+          >
+            Privacy Policy
+          </Link>
+          <Link
+            href="/legal/terms"
+            className="hover:text-foreground hover:underline"
+          >
+            Terms of Service
+          </Link>
+        </div>
+        <p className="mt-3">© 2026 BaseMind. All rights reserved.</p>
       </footer>
     </div>
   );
