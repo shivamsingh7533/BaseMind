@@ -1,6 +1,8 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -14,7 +16,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .ai import chunk_text, embed_texts, extract_text, stream_answer
+from .ai import (
+    chunk_text,
+    embed_texts,
+    extract_html,
+    extract_text,
+    page_title,
+    stream_answer,
+)
 from .auth import get_current_user
 from .cache import cache_get, cache_set, invalidate_user_cache
 from .db import SessionFactory, get_db
@@ -26,12 +35,16 @@ from .schemas import (
     ConversationUpdate,
     DocumentCreate,
     MessageIn,
+    SyncUrlRequest,
+    _fmt_time,
     serialize_agent,
     serialize_conversation,
     serialize_document,
 )
+from .storage import upload_original
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_SYNC_BYTES = 2 * 1024 * 1024
 
 router = APIRouter(prefix="/api")
 
@@ -163,34 +176,29 @@ async def create_document(
     return serialize_document(doc)
 
 
-@router.post("/documents/upload", status_code=201)
-async def upload_document(
-    file: UploadFile = File(...),
-    agent_id: str | None = Form(None),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    raw = await file.read()
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="File too large (max 10MB)")
-    if agent_id:
-        await _get_owned(db, Agent, agent_id, user)
-
-    text = extract_text(file.filename or "upload.txt", raw)
+async def _persist_document(
+    db: AsyncSession,
+    *,
+    user: User,
+    name: str,
+    doc_type: str,
+    text: str,
+    agent_id: str | None = None,
+    source: str | None = None,
+) -> Document:
     chunks = chunk_text(text)
     if not chunks:
-        raise HTTPException(status_code=422, detail="No readable text found in file")
-
+        raise HTTPException(status_code=422, detail="No readable text found")
     embeddings = await embed_texts(chunks)
 
-    doc_type = "PDF" if (file.filename or "").lower().endswith(".pdf") else "Text"
     doc = Document(
         user_id=user.id,
-        name=file.filename or "upload.txt",
+        name=name[:220],
         type=doc_type,
         detail=f"{len(chunks)} chunks indexed",
         status="ready",
         agent_id=agent_id,
+        storage_key=source,
     )
     db.add(doc)
     await db.flush()
@@ -209,6 +217,100 @@ async def upload_document(
 
     await db.commit()
     await db.refresh(doc)
+    return doc
+
+
+@router.post("/documents/upload", status_code=201)
+async def upload_document(
+    file: UploadFile = File(...),
+    agent_id: str | None = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    raw = await file.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 10MB)")
+    if agent_id:
+        await _get_owned(db, Agent, agent_id, user)
+
+    text = extract_text(file.filename or "upload.txt", raw)
+    doc_type = "PDF" if (file.filename or "").lower().endswith(".pdf") else "Text"
+
+    source = None
+    try:
+        source = await upload_original(user.id, file.filename or "upload.txt", raw)
+    except Exception:
+        pass
+
+    doc = await _persist_document(
+        db,
+        user=user,
+        name=file.filename or "upload.txt",
+        doc_type=doc_type,
+        text=text,
+        agent_id=agent_id,
+        source=source,
+    )
+    await invalidate_user_cache(user.id)
+    return serialize_document(doc)
+
+
+@router.post("/documents/sync", status_code=201)
+async def sync_url(
+    payload: SyncUrlRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    parsed = httpx.URL(payload.url)
+    if parsed.scheme not in ("http", "https") or not parsed.host:
+        raise HTTPException(
+            status_code=422, detail="Invalid URL — must be a full http(s) link"
+        )
+    if payload.agent_id:
+        await _get_owned(db, Agent, payload.agent_id, user)
+
+    raw = b""
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            async with client.stream("GET", str(parsed)) as res:
+                if res.status_code != 200:
+                    raise HTTPException(
+                        status_code=422, detail=f"Page returned HTTP {res.status_code}"
+                    )
+                async for block in res.aiter_bytes():
+                    raw += block
+                    if len(raw) > MAX_SYNC_BYTES:
+                        raise HTTPException(
+                            status_code=413, detail="Page too large (max 2MB)"
+                        )
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504, detail=f"Timed out reaching {parsed.host}"
+        )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=422, detail=f"Couldn't reach {parsed.host}")
+    if not raw:
+        raise HTTPException(status_code=422, detail="Empty response from site")
+
+    html = raw.decode("utf-8", errors="ignore")
+    title = page_title(html) or parsed.host or payload.url
+    text = extract_html(html)
+    if not text:
+        raise HTTPException(
+            status_code=422, detail="No readable text found at that URL"
+        )
+
+    doc = await _persist_document(
+        db,
+        user=user,
+        name=title,
+        doc_type="Web Link",
+        text=text,
+        agent_id=payload.agent_id,
+        source=str(parsed),
+    )
     await invalidate_user_cache(user.id)
     return serialize_document(doc)
 
@@ -342,42 +444,155 @@ async def dashboard(
             .where(Conversation.user_id == user.id, Conversation.started_at >= day_start)
         )
     ).scalar_one()
+    agents_today = (
+        await db.execute(
+            select(func.count())
+            .select_from(Agent)
+            .where(Agent.user_id == user.id, Agent.created_at >= day_start)
+        )
+    ).scalar_one()
+    docs_today = (
+        await db.execute(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.user_id == user.id, Document.created_at >= day_start)
+        )
+    ).scalar_one()
+    active_agents = (
+        await db.execute(
+            select(func.count()).select_from(Agent).where(Agent.user_id == user.id, Agent.status == "active")
+        )
+    ).scalar_one()
+
+    top_agent = (
+        await db.execute(
+            select(Agent)
+            .where(Agent.user_id == user.id)
+            .order_by(Agent.queries_24h.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    failed_docs = (
+        await db.execute(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.user_id == user.id, Document.status == "failed")
+        )
+    ).scalar_one()
+
+    doc_types = (await db.execute(
+        select(Document.type, func.count())
+        .where(Document.user_id == user.id)
+        .group_by(Document.type)
+    )).all()
+    web_count = sum(n for t, n in doc_types if t and str(t).lower().startswith("web"))
+    file_count = sum(n for t, n in doc_types) - web_count
+
+    recent_docs = (
+        await db.execute(
+            select(Document)
+            .where(Document.user_id == user.id)
+            .order_by(Document.created_at.desc())
+            .limit(3)
+        )
+    ).scalars().all()
+    recent_agents = (
+        await db.execute(
+            select(Agent)
+            .where(Agent.user_id == user.id)
+            .order_by(Agent.created_at.desc())
+            .limit(2)
+        )
+    ).scalars().all()
+    recent_convs = (
+        await db.execute(
+            select(Conversation)
+            .where(Conversation.user_id == user.id)
+            .order_by(Conversation.started_at.desc())
+            .limit(3)
+        )
+    ).scalars().all()
+
+    activity: list[dict] = []
+    for a in recent_docs:
+        failed = a.status == "failed"
+        activity.append({
+            "id": f"doc-{a.id}",
+            "icon": "warning" if failed else "sync",
+            "highlight": a.name,
+            "text": "failed to index" if failed else "indexed as a knowledge source",
+            "time": _fmt_time(a.created_at),
+        })
+    for ag in recent_agents:
+        activity.append({
+            "id": f"agent-{ag.id}",
+            "icon": "agent",
+            "highlight": ag.name,
+            "text": "agent created",
+            "time": _fmt_time(ag.created_at),
+        })
+    for c in recent_convs:
+        label = (c.preview or "").strip()[:48]
+        activity.append({
+            "id": f"conv-{c.id}",
+            "icon": "agent",
+            "highlight": label or "New conversation",
+            "text": "conversation started",
+            "time": _fmt_time(c.started_at),
+        })
+
+    resolution_value = "0%"
+    resolution_sub = "needs live traffic"
+    if convs_count:
+        answered = (
+            await db.execute(
+                select(func.count()).select_from(Message).where(
+                    Message.conversation_id.in_(select(Conversation.id).where(Conversation.user_id == user.id)),
+                    Message.role == "agent",
+                )
+            )
+        ).scalar_one()
+        resolution_value = f"{min(round(answered / convs_count * 100), 100)}%"
+        resolution_sub = f"{answered} answered of {convs_count} conversations"
 
     stats = [
         {
             "id": "agents",
             "label": "Total Agents",
             "value": str(agents_count),
-            "delta": "+0",
-            "sub": f"{docs_count} knowledge sources",
+            "delta": f"+{agents_today}" if agents_today else None,
+            "sub": (
+                f"{active_agents} active · best: {top_agent.name}" if top_agent else f"{active_agents} active"
+            ),
             "progress": min(agents_count * 10, 100),
         },
         {
             "id": "documents",
             "label": "Knowledge Files",
             "value": str(docs_count),
-            "delta": "+0",
-            "sub": "indexed & searchable",
+            "delta": f"+{docs_today}" if docs_today else None,
+            "sub": f"{web_count} web · {file_count} files",
             "progress": min(docs_count * 5, 100),
         },
         {
             "id": "conversations",
             "label": "Conversations",
             "value": str(convs_count),
-            "delta": f"+{convs_today}",
+            "delta": f"+{convs_today}" if convs_today else None,
             "sub": f"{convs_today} today",
             "progress": min(convs_count * 2, 100),
         },
         {
             "id": "resolution",
             "label": "Auto-resolution",
-            "value": "0%",
+            "value": resolution_value,
             "delta": "—",
-            "sub": "needs live traffic",
-            "progress": 0,
+            "sub": resolution_sub,
+            "progress": int(resolution_value[:-1]) if resolution_value != "0%" else 0,
         },
     ]
-    payload = {"stats": stats, "activity": []}
+    payload = {"stats": stats, "activity": activity[:8]}
     await cache_set(cache_key, payload)
     return payload
 

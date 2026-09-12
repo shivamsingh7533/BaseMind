@@ -210,6 +210,52 @@ export async function uploadDocument(
   }
 }
 
+export async function syncUrl(
+  token: string | null | undefined,
+  url: string
+): Promise<KnowledgeDoc | null> {
+  if (!token) {
+    toast.error("Login session nahi mili — page refresh karke dobara login karo");
+    return null;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+  try {
+    const res = await fetch(`${API_URL}/api/documents/sync`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify({ url }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {
+        /* keep status text */
+      }
+      toast.error(`Sync failed: ${detail}`);
+      return null;
+    }
+    return (await res.json()) as KnowledgeDoc;
+  } catch (err) {
+    const aborted = err instanceof DOMException && err.name === "AbortError";
+    toast.error(
+      aborted
+        ? "Sync timed out — backend slow tha, dobara try karo"
+        : `Network error (${err instanceof Error ? err.message : "unknown"}) — Render jaag raha hoga, 30 sec baad dobara try karo.`
+    );
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function createAgent(
   token: string | null | undefined,
   input: { name: string; instructions: string; color: string }

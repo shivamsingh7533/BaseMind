@@ -36,6 +36,11 @@ class DocumentCreate(BaseModel):
     agent_id: str | None = None
 
 
+class SyncUrlRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+    agent_id: str | None = None
+
+
 class MessageIn(BaseModel):
     role: Literal["user", "agent"]
     text: str = Field(min_length=1, max_length=8000)

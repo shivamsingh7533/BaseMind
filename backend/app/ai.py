@@ -58,14 +58,17 @@ def chunk_text(text: str) -> list[str]:
         return []
     chunks: list[str] = []
     start = 0
-    while start < len(cleaned):
-        end = min(start + CHUNK_SIZE, len(cleaned))
-        if end < len(cleaned):
+    length = len(cleaned)
+    while start < length:
+        end = min(start + CHUNK_SIZE, length)
+        if end < length:
             period = cleaned.rfind(". ", start + CHUNK_SIZE // 2, end)
             if period > start:
                 end = period + 1
         chunks.append(cleaned[start:end].strip())
-        start = max(end - CHUNK_OVERLAP, start + 1)
+        if end >= length:
+            break
+        start = end - CHUNK_OVERLAP
     return [c for c in chunks if c]
 
 
@@ -81,6 +84,53 @@ def extract_text(filename: str, raw: bytes) -> str:
             pages.append(extracted)
         return "\n".join(pages)
     return raw.decode("utf-8", errors="ignore")
+
+
+IGNORED_TAGS = {"script", "style", "noscript", "svg", "head", "iframe"}
+BLOCK_TAGS = {
+    "p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
+    "section", "article", "header", "footer", "nav", "blockquote",
+}
+
+
+def page_title(html: str) -> str:
+    lower = html.lower()
+    start = lower.find("<title")
+    if start == -1:
+        return ""
+    start = lower.find(">", start) + 1
+    end = lower.find("</title>", start)
+    if start == 0 or end == -1:
+        return ""
+    return " ".join(html[start:end].split())[:200]
+
+
+def extract_html(raw: str) -> str:
+    from html.parser import HTMLParser
+
+    class _Text(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts: list[str] = []
+            self._skip = 0
+
+        def handle_starttag(self, tag, attrs):
+            if tag in IGNORED_TAGS:
+                self._skip += 1
+            elif tag in BLOCK_TAGS and self.parts:
+                self.parts.append("\n")
+
+        def handle_endtag(self, tag):
+            if tag in IGNORED_TAGS and self._skip:
+                self._skip -= 1
+
+        def handle_data(self, data):
+            if not self._skip and data.strip():
+                self.parts.append(data.strip())
+
+    parser = _Text()
+    parser.feed(raw)
+    return "\n".join(parser.parts)
 
 
 async def stream_answer(

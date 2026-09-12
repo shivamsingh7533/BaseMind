@@ -23,4 +23,4 @@
 ## Phase status
 - **Phase 1 — Auth + CRUD**: done (Clerk login/signup/OAuth, agents CRUD, dashboard).
 - **Phase 2 — RAG pipeline**: done (upload+embed+pgvector search, SSE streaming chat with sources, Agent Studio instructions/color, real KB uploads).
-- **Phase 3 — planned**: URL crawler ingestion ("Sync URL"), Backblaze B2 large-file storage, deeper analytics, production Clerk instance with custom domain.
+- **Phase 3 — in progress**: URL crawler ingestion ("Sync URL") **done** (`POST /api/documents/sync` + UI); deeper analytics **done** (real deltas, active/best agent, web-vs-file split, resolution %, populated activity feed); Backblaze B2 raw-original storage **enabled** (private bucket `BaseMind`, scoped Read/Write app key; smoke-tested upload/delete); production Clerk instance with custom domain **pending (needs paid plan + domain)**.

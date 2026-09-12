@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
     gemini_api_key: str = ""
+    b2_application_key_id: str = ""
+    b2_application_key: str = ""
+    b2_bucket_name: str = ""
 
 
 @lru_cache

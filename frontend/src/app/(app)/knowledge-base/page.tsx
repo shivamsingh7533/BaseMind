@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { type DocStatus, uploadDocument } from "@/lib/api";
+import { type DocStatus, syncUrl, uploadDocument } from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
 const STATUS: Record<
@@ -58,7 +58,8 @@ export default function KnowledgeBasePage() {
   const { getToken } = useAuth();
   const docs = useAppData((s) => s.documents);
   const fetchDocuments = useAppData((s) => s.fetchDocuments);
-  const [syncUrl, setSyncUrl] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [syncing, setSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +83,28 @@ export default function KnowledgeBasePage() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSync = async () => {
+    const url = urlInput.trim();
+    if (!url) {
+      toast.error("Enter a URL first");
+      return;
+    }
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const doc = await syncUrl(await getToken().catch(() => null), url);
+      if (doc) {
+        toast.success(`${doc.name} synced`, {
+          description: doc.detail,
+        });
+        setUrlInput("");
+        await fetchDocuments(await getToken());
+      }
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -138,26 +161,24 @@ export default function KnowledgeBasePage() {
               <div className="relative flex-1">
                 <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  value={syncUrl}
-                  onChange={(e) => setSyncUrl(e.target.value)}
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://docs.example.com"
                   className="pl-9"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSync();
+                  }}
                 />
               </div>
-              <Button
-                onClick={() => {
-                  if (!syncUrl.trim()) {
-                    toast.error("Enter a URL first");
-                    return;
-                  }
-                  toast.info("URL crawling Phase 3 me aa raha hai — abhi files upload karo, wo fully kaam karta hai");
-                }}
-              >
-                Sync
+              <Button onClick={() => void handleSync()} disabled={syncing}>
+                {syncing ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : null}
+                {syncing ? "Syncing…" : "Sync"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Coming in Phase 3 — file upload works fully today.
+              Fetches the page, extracts text, and indexes it for RAG.
             </p>
           </div>
         </CardContent>
@@ -190,8 +211,8 @@ export default function KnowledgeBasePage() {
                       colSpan={3}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
-                      No knowledge sources yet — upload your first document to
-                      get started.
+                      No knowledge sources yet — upload a file or sync a URL to
+                      train your first agent.
                     </TableCell>
                   </TableRow>
                 ) : (

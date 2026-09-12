@@ -33,7 +33,14 @@ JSON metadata-only document (used by tests/tools).
 ### `POST /api/documents/upload` → 201
 `multipart/form-data`, field `file`. Max 10 MB. Formats: PDF, TXT, CSV, MD.
 Pipeline: extract text (pypdf/plain) → chunk (1200 chars, 150 overlap) → embed via Gemini (`gemini-embedding-001`, 768-dim) → store rows in `document_chunks`.
+When Backblaze B2 is configured, the raw file is also uploaded (object key stored in `Document.storage_key`); upload failures are skipped, indexing still succeeds.
 Response includes `detail` like `"indexed, N chunks"`.
+
+### `POST /api/documents/sync` → 201
+URL crawler ingestion. Body: `{ "url": "https://docs.example.com", "agent_id": "optional-uuid" }`.
+Fetches the page with redirects (15 s timeout, 2 MB cap), extracts the title + readable text via stdlib HTMLParser, then runs the same chunk → embed → pgvector pipeline as upload.
+Document `type` is `"Web Link"` (renders with a globe icon in the UI); `storage_key` keeps the source URL.
+Exact-reason errors: `422 "Invalid URL — must be a full http(s) link"`, `422 "Page returned HTTP {status}"`, `413 "Page too large (max 2MB)"`, `504 "Timed out reaching {host}"`, `422 "Couldn't reach {host}"`, `422 "No readable text found at that URL"`.
 
 ## Conversations
 ### `GET /api/conversations`
@@ -65,3 +72,5 @@ Flow: embed question → top-k semantic search over `document_chunks` → system
 ## Dashboard
 ### `GET /api/dashboard`
 Aggregated stats + recent activity for the dashboard page.
+`stats` (4 cards): Total Agents (delta today, `sub` "`{active} active · best: {name}`"), Knowledge Files (delta today, `sub` "`{n} web · {n} files`"), Conversations (delta today), Auto-resolution (`%` = agent messages / conversations, capped at 100).
+`activity` (max 8, newest first): `doc-*` (`sync` icon, `warning` if failed), `agent-*` (`agent`), `conv-*` (`agent`, preview text); each `{id, icon, highlight, text, time}`.
