@@ -662,6 +662,20 @@ async def dashboard(
             )
         ).all()
     }
+    resolved_by_agent = {
+        agent_id: count
+        for agent_id, count in (
+            await db.execute(
+                select(Conversation.agent_id, func.count())
+                .where(
+                    Conversation.user_id == user.id,
+                    Conversation.status == "resolved",
+                    Conversation.agent_id.isnot(None),
+                )
+                .group_by(Conversation.agent_id)
+            )
+        ).all()
+    }
     per_agent = [
         {
             "id": ag.id,
@@ -670,6 +684,7 @@ async def dashboard(
             "queries24h": ag.queries_24h,
             "conversations": conv_by_agent.get(ag.id, 0),
             "agentMsgs": msgs_by_agent.get(ag.id, 0),
+            "resolved": resolved_by_agent.get(ag.id, 0),
             "avgLatencyMs": ag.avg_latency_ms,
         }
         for ag in agents

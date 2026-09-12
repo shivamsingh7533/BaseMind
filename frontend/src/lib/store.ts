@@ -20,7 +20,10 @@ interface AppDataState {
   _ts: Record<string, number>;
   fetchDashboard: (token?: string | null) => Promise<DashboardData>;
   fetchAgents: (token?: string | null) => Promise<Agent[]>;
-  fetchDocuments: (token?: string | null) => Promise<KnowledgeDoc[]>;
+  fetchDocuments: (
+    token?: string | null,
+    force?: boolean
+  ) => Promise<KnowledgeDoc[]>;
   fetchConversations: (
     token?: string | null,
     force?: boolean
@@ -60,19 +63,22 @@ export const useAppData = create<AppDataState>((set, get) => ({
     return get().agents as Agent[];
   },
 
-  fetchDocuments: async (token) => {
+  fetchDocuments: (token?: string | null, force?: boolean) => {
     const state = get();
     const fresh =
+      !force &&
       state.documents !== null &&
       Date.now() - (state._ts.documents ?? 0) < TTL_MS;
     if (!fresh) {
-      const data = await getDocuments(token);
-      set((s) => ({
-        documents: data,
-        _ts: { ...s._ts, documents: Date.now() },
-      }));
+      return getDocuments(token).then((data) => {
+        set((s) => ({
+          documents: data,
+          _ts: { ...s._ts, documents: Date.now() },
+        }));
+        return data;
+      });
     }
-    return get().documents as KnowledgeDoc[];
+    return Promise.resolve(get().documents as KnowledgeDoc[]);
   },
 
   fetchConversations: (token?: string | null, force?: boolean) => {

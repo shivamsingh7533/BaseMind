@@ -18,9 +18,28 @@ export interface ActivityItem {
   time: string;
 }
 
+export interface PerAgent {
+  id: string;
+  name: string;
+  color: string;
+  queries24h: number;
+  conversations: number;
+  agentMsgs: number;
+  resolved: number;
+  avgLatencyMs: number;
+}
+
+export interface TrendDay {
+  date: string;
+  conversations: number;
+  agentMsgs: number;
+}
+
 export interface DashboardData {
   stats: Stat[];
   activity: ActivityItem[];
+  perAgent: PerAgent[];
+  trend7d: TrendDay[];
 }
 
 export type AgentStatus = "active" | "training" | "paused";
@@ -211,6 +230,21 @@ export async function deleteAgent(
 ): Promise<boolean> {
   try {
     const res = await fetch(`${API_URL}/api/agents/${agentId}`, {
+      method: "DELETE",
+      headers: authHeader(token),
+    });
+    return res.ok || res.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteDocument(
+  token: string | null | undefined,
+  documentId: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/documents/${documentId}`, {
       method: "DELETE",
       headers: authHeader(token),
     });

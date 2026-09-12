@@ -13,7 +13,12 @@ export const db: {
   documents: KnowledgeDoc[];
   conversations: Conversation[];
 } = {
-  dashboard: { stats: [] as Stat[], activity: [] as ActivityItem[] },
+  dashboard: {
+    stats: [] as Stat[],
+    activity: [] as ActivityItem[],
+    perAgent: [],
+    trend7d: [],
+  },
   agents: [],
   documents: [],
   conversations: [],

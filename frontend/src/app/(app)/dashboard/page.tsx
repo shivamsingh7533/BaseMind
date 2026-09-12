@@ -31,6 +31,23 @@ const ICONS = {
   warning: TriangleAlert,
 };
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="shrink-0 text-right">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="font-heading text-sm font-semibold leading-tight">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function shortDay(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
+    weekday: "short",
+  });
+}
+
 export default function DashboardPage() {
   const { getToken } = useAuth();
   const data = useAppData((s) => s.dashboard);
@@ -172,6 +189,151 @@ export default function DashboardPage() {
                   );
                   })
                 )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading">
+                  Agent Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.perAgent.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No agents deployed yet — create one to see per-agent stats.
+                  </p>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-5 pb-2 text-[11px] font-medium text-muted-foreground">
+                      <span className="min-w-32 flex-1">Agent</span>
+                      <MiniStat label="Convs" value="—" />
+                      <MiniStat label="Msgs" value="—" />
+                      <MiniStat label="Resolved" value="—" />
+                      <MiniStat label="Q/24h" value="—" />
+                      <MiniStat label="Avg" value="—" />
+                    </div>
+                    {data.perAgent.map((a, i) => (
+                      <div key={a.id}>
+                        {i > 0 ? <Separator className="my-1" /> : null}
+                        <div className="flex items-center gap-5 py-2">
+                          <span className="flex min-w-32 flex-1 items-center gap-2.5">
+                            <span
+                              className="size-2.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: a.color }}
+                            />
+                            <span className="truncate text-sm font-semibold">
+                              {a.name}
+                            </span>
+                          </span>
+                          <MiniStat
+                            label="Convs"
+                            value={String(a.conversations)}
+                          />
+                          <MiniStat label="Msgs" value={String(a.agentMsgs)} />
+                          <MiniStat label="Resolved" value={String(a.resolved)} />
+                          <MiniStat
+                            label="Q/24h"
+                            value={a.queries24h.toLocaleString()}
+                          />
+                          <MiniStat
+                            label="Avg"
+                            value={`${a.avgLatencyMs}ms`}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle className="font-heading">
+                  Conversation Trend — 7 Days
+                </CardTitle>
+                <Link
+                  href="/logs"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  View All
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const totals = data.trend7d.map(
+                    (t) => t.conversations + t.agentMsgs
+                  );
+                  const peak = Math.max(1, ...totals);
+                  const total = totals.reduce((s, n) => s + n, 0);
+                  if (total === 0)
+                    return (
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        No conversations in the last 7 days.
+                      </p>
+                    );
+                  return (
+                    <div>
+                      <div className="flex items-end gap-2">
+                        {data.trend7d.map((t, i) => {
+                          const sum = t.conversations + t.agentMsgs;
+                          return (
+                            <div
+                              key={t.date}
+                              className="flex flex-1 flex-col items-center"
+                            >
+                              <span className="mb-1 text-[11px] font-medium text-muted-foreground">
+                                {sum}
+                              </span>
+                              <div className="flex h-32 w-full items-end gap-0.5">
+                                {sum === 0 ? (
+                                  <div className="h-1 w-full rounded bg-muted" />
+                                ) : (
+                                  <div className="flex h-full w-full flex-col justify-end gap-0.5">
+                                    <div
+                                      className="w-full rounded-t bg-chart-3/70"
+                                      style={{
+                                        height: `${(t.agentMsgs / peak) * 100}%`,
+                                      }}
+                                    />
+                                    <div
+                                      className="w-full rounded-b bg-primary"
+                                      style={{
+                                        height: `${(t.conversations / peak) * 100}%`,
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                              <span
+                                className={`mt-1.5 text-[11px] ${
+                                  i === data.trend7d.length - 1
+                                    ? "font-semibold text-foreground"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {shortDay(t.date)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <span className="size-2.5 rounded-sm bg-primary" />
+                          Conversations
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="size-2.5 rounded-sm bg-chart-3/70" />
+                          Agent messages
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>

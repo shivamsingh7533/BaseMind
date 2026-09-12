@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   CloudUpload,
+  Download,
+  ExternalLink,
   FileSpreadsheet,
   FileText,
   Globe,
   Link2,
   Loader2,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,7 +28,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { type DocStatus, syncUrl, uploadDocument } from "@/lib/api";
+import {
+  deleteDocument,
+  getDocumentDownloadUrl,
+  type DocStatus,
+  type KnowledgeDoc,
+  syncUrl,
+  uploadDocument,
+} from "@/lib/api";
 import { useAppData } from "@/lib/store";
 
 const STATUS: Record<
@@ -61,6 +71,7 @@ export default function KnowledgeBasePage() {
   const [urlInput, setUrlInput] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -78,7 +89,7 @@ export default function KnowledgeBasePage() {
         toast.success(`${file.name} indexed`, {
           description: doc.detail,
         });
-        await fetchDocuments(await getToken());
+        await fetchDocuments(await getToken(), true);
       }
     } finally {
       setUploading(false);
@@ -101,10 +112,45 @@ export default function KnowledgeBasePage() {
           description: doc.detail,
         });
         setUrlInput("");
-        await fetchDocuments(await getToken());
+        await fetchDocuments(await getToken(), true);
       }
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const openDoc = async (d: KnowledgeDoc) => {
+    if (actionBusy) return;
+    setActionBusy(d.id);
+    const url = await getDocumentDownloadUrl(
+      await getToken().catch(() => null),
+      d.id
+    );
+    setActionBusy(null);
+    if (!url) {
+      toast.error("Could not get download link");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const removeDoc = async (d: KnowledgeDoc) => {
+    if (actionBusy) return;
+    if (
+      !window.confirm(
+        `Delete "${d.name}"? Its indexed chunks and any stored file will also be removed.`
+      )
+    )
+      return;
+    setActionBusy(d.id);
+    const t = await getToken().catch(() => null);
+    const ok = await deleteDocument(t, d.id);
+    setActionBusy(null);
+    if (ok) {
+      toast.success(`${d.name} deleted`);
+      await fetchDocuments(await getToken(), true);
+    } else {
+      toast.error("Could not delete document");
     }
   };
 
@@ -202,13 +248,14 @@ export default function KnowledgeBasePage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
               <TableBody>
                 {docs.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={3}
+                      colSpan={4}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
                       No knowledge sources yet — upload a file or sync a URL to
@@ -245,10 +292,40 @@ export default function KnowledgeBasePage() {
                         {STATUS[d.status].label}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 text-xs"
+                          disabled={d.status === "processing" || actionBusy === d.id}
+                          onClick={() => void openDoc(d)}
+                        >
+                          {actionBusy === d.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : d.type.startsWith("Web") ? (
+                            <ExternalLink className="size-3.5" />
+                          ) : (
+                            <Download className="size-3.5" />
+                          )}
+                          {d.type.startsWith("Web") ? "Open" : "Download"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete ${d.name}`}
+                          disabled={actionBusy !== null}
+                          onClick={() => void removeDoc(d)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </span>
+                    </TableCell>
                   </TableRow>
                 ))
                 )}
-              </TableBody>
+                </TableBody>
               </Table>
             </div>
           )}

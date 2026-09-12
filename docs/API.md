@@ -92,5 +92,5 @@ Flow: embed question → top-k semantic search over `document_chunks` → system
 Aggregated stats + recent activity for the dashboard page.
 `stats` (4 cards): Total Agents (delta today, `sub` "`{active} active · best: {name}`"), Knowledge Files (delta today, `sub` "`{n} web · {n} files`"), Conversations (delta today), Auto-resolution (`%` = agent messages / conversations, capped at 100).
 `activity` (max 8, newest first): `doc-*` (`sync` icon, `warning` if failed), `agent-*` (`agent`), `conv-*` (`agent`, preview text); each `{id, icon, highlight, text, time}`.
-`perAgent`: one object per agent `{id, name, color, queries24h, conversations, agentMsgs, avgLatencyMs}`, sorted by agent messages (desc).
+`perAgent`: one object per agent `{id, name, color, queries24h, conversations, agentMsgs, resolved, avgLatencyMs}`, sorted by agent messages (desc).
 `trend7d`: exactly 7 day buckets `{date: "YYYY-MM-DD", conversations, agentMsgs}` (oldest → today), 0-filled for empty days.
