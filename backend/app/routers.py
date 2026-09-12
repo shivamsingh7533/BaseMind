@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import (
@@ -11,8 +11,8 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from fastapi.responses import RedirectResponse, StreamingResponse
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,7 +41,7 @@ from .schemas import (
     serialize_conversation,
     serialize_document,
 )
-from .storage import upload_original
+from .storage import delete_original, download_url, is_b2_enabled, upload_original
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_SYNC_BYTES = 2 * 1024 * 1024
@@ -322,9 +322,43 @@ async def delete_document(
     db: AsyncSession = Depends(get_db),
 ):
     doc = await _get_owned(db, Document, document_id, user)
+    if doc.storage_key and is_b2_enabled():
+        try:
+            await delete_original(doc.storage_key)
+        except Exception:
+            pass
     await db.delete(doc)
     await db.commit()
     await invalidate_user_cache(user.id)
+
+
+@router.get("/documents/{document_id}/download")
+async def download_document(
+    document_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await _get_owned(db, Document, document_id, user)
+    if doc.type == "Web Link":
+        if not doc.storage_key:
+            raise HTTPException(status_code=404, detail="Original URL not stored")
+        return RedirectResponse(doc.storage_key, 302)
+    if not doc.storage_key:
+        raise HTTPException(
+            status_code=404,
+            detail="Original file not stored (B2 was off when this was uploaded)",
+        )
+    if not is_b2_enabled():
+        raise HTTPException(status_code=503, detail="Storage not configured")
+    try:
+        url = await download_url(doc.storage_key)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Failed to fetch file from storage")
+    if url is None:
+        raise HTTPException(
+            status_code=404, detail="File no longer in storage"
+        )
+    return RedirectResponse(url, 302)
 
 
 @router.get("/conversations")
@@ -548,13 +582,100 @@ async def dashboard(
         answered = (
             await db.execute(
                 select(func.count()).select_from(Message).where(
-                    Message.conversation_id.in_(select(Conversation.id).where(Conversation.user_id == user.id)),
+                    Message.conversation_id.in_(
+                        select(Conversation.id).where(Conversation.user_id == user.id)
+                    ),
                     Message.role == "agent",
                 )
             )
         ).scalar_one()
         resolution_value = f"{min(round(answered / convs_count * 100), 100)}%"
         resolution_sub = f"{answered} answered of {convs_count} conversations"
+
+    agents = (
+        await db.execute(select(Agent).where(Agent.user_id == user.id))
+    ).scalars().all()
+    conv_by_agent = {
+        agent_id: count
+        for agent_id, count in (
+            await db.execute(
+                select(Conversation.agent_id, func.count())
+                .where(Conversation.user_id == user.id)
+                .group_by(Conversation.agent_id)
+            )
+        ).all()
+    }
+    msgs_by_agent = {
+        agent_id: count
+        for agent_id, count in (
+            await db.execute(
+                select(Conversation.agent_id, func.count())
+                .select_from(Message)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .where(
+                    Conversation.user_id == user.id,
+                    Message.role == "agent",
+                    Conversation.agent_id.isnot(None),
+                )
+                .group_by(Conversation.agent_id)
+            )
+        ).all()
+    }
+    per_agent = [
+        {
+            "id": ag.id,
+            "name": ag.name,
+            "color": ag.color,
+            "queries24h": ag.queries_24h,
+            "conversations": conv_by_agent.get(ag.id, 0),
+            "agentMsgs": msgs_by_agent.get(ag.id, 0),
+            "avgLatencyMs": ag.avg_latency_ms,
+        }
+        for ag in agents
+    ]
+    per_agent.sort(key=lambda a: (-a["agentMsgs"], -a["queries24h"]))
+
+    week_start = day_start - timedelta(days=6)
+    conv_day = func.date_trunc(text("'day'"), Conversation.started_at)
+    conv_by_day = {
+        day: count
+        for day, count in (
+            await db.execute(
+                select(conv_day, func.count())
+                .where(
+                    Conversation.user_id == user.id,
+                    Conversation.started_at >= week_start,
+                )
+                .group_by(conv_day)
+            )
+        ).all()
+    }
+    msg_day = func.date_trunc(text("'day'"), Message.created_at)
+    msgs_by_day = {
+        day: count
+        for day, count in (
+            await db.execute(
+                select(msg_day, func.count())
+                .select_from(Message)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .where(
+                    Conversation.user_id == user.id,
+                    Message.role == "agent",
+                    Message.created_at >= week_start,
+                )
+                .group_by(msg_day)
+            )
+        ).all()
+    }
+    trend7d = [
+        {
+            "date": day.strftime("%Y-%m-%d"),
+            "conversations": conv_by_day.get(day, 0),
+            "agentMsgs": msgs_by_day.get(day, 0),
+        }
+        for i in range(6, -1, -1)
+        for day in (day_start - timedelta(days=i),)
+    ]
 
     stats = [
         {
@@ -592,7 +713,12 @@ async def dashboard(
             "progress": int(resolution_value[:-1]) if resolution_value != "0%" else 0,
         },
     ]
-    payload = {"stats": stats, "activity": activity[:8]}
+    payload = {
+        "stats": stats,
+        "activity": activity[:8],
+        "perAgent": per_agent,
+        "trend7d": trend7d,
+    }
     await cache_set(cache_key, payload)
     return payload
 
@@ -652,7 +778,12 @@ async def chat(
     )
     matches = (await db.execute(search)).all()
     contexts = [
-        {"source": name, "index": chunk.chunk_index, "content": chunk.content}
+        {
+            "source": name,
+            "docId": chunk.document_id,
+            "index": chunk.chunk_index,
+            "content": chunk.content,
+        }
         for chunk, name in matches
     ]
     conversation_id_value = conv.id
@@ -662,7 +793,12 @@ async def chat(
     async def event_stream():
         answer_parts: list[str] = []
         sources_line = json.dumps(
-            {"type": "sources", "sources": [{"source": c["source"]} for c in contexts]}
+            {
+                "type": "sources",
+                "sources": [
+                    {"docId": c["docId"], "source": c["source"]} for c in contexts
+                ],
+            }
         )
         yield f"data: {sources_line}\n\n"
         try:

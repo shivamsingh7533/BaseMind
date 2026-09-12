@@ -42,6 +42,13 @@ Fetches the page with redirects (15 s timeout, 2 MB cap), extracts the title + r
 Document `type` is `"Web Link"` (renders with a globe icon in the UI); `storage_key` keeps the source URL.
 Exact-reason errors: `422 "Invalid URL — must be a full http(s) link"`, `422 "Page returned HTTP {status}"`, `413 "Page too large (max 2MB)"`, `504 "Timed out reaching {host}"`, `422 "Couldn't reach {host}"`, `422 "No readable text found at that URL"`.
 
+### `GET /api/documents/{id}/download`
+Download or open the original source. Auth required.
+- **Web Link** documents → `302` to the original source URL.
+- **File** documents → `302` to a short-lived **Backblaze signed URL** (not proxied through the API), keyed on the uploaded `storageKey`; the private bucket's auth token guards it.
+- Errors: `404` not owned / not found / no `storageKey` ("Original file not stored (B2 was off when this was uploaded)") / B2 object gone ("File no longer in storage"), `503 "Storage not configured"` (B2 env vars missing), `502 "Failed to fetch file from storage"`.
+- `DELETE /api/documents/{id}` now also best-effort deletes the matching B2 object.
+
 ## Conversations
 ### `GET /api/conversations`
 List conversations for the user.
@@ -68,9 +75,12 @@ data: {"type": "done", "messageId": "uuid-or-null"}
 data: {"type": "error", "error": "..."}
 ```
 Flow: embed question → top-k semantic search over `document_chunks` → system prompt (base + agent instructions) → `gemini-3.6-flash` streaming → persist both messages after stream completes.
+`sources` entries carry `docId` (the source `Document.id`) so the client can link to view/download the exact source.
 
 ## Dashboard
 ### `GET /api/dashboard`
 Aggregated stats + recent activity for the dashboard page.
 `stats` (4 cards): Total Agents (delta today, `sub` "`{active} active · best: {name}`"), Knowledge Files (delta today, `sub` "`{n} web · {n} files`"), Conversations (delta today), Auto-resolution (`%` = agent messages / conversations, capped at 100).
 `activity` (max 8, newest first): `doc-*` (`sync` icon, `warning` if failed), `agent-*` (`agent`), `conv-*` (`agent`, preview text); each `{id, icon, highlight, text, time}`.
+`perAgent`: one object per agent `{id, name, color, queries24h, conversations, agentMsgs, avgLatencyMs}`, sorted by agent messages (desc).
+`trend7d`: exactly 7 day buckets `{date: "YYYY-MM-DD", conversations, agentMsgs}` (oldest → today), 0-filled for empty days.
