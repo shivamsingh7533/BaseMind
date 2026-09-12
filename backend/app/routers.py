@@ -355,7 +355,7 @@ async def create_conversation(
     conv = Conversation(user_id=user.id, visitor=payload.visitor, agent_id=payload.agent_id)
     db.add(conv)
     await db.commit()
-    await db.refresh(conv)
+    await db.refresh(conv, attribute_names=["messages"])
     await invalidate_user_cache(user.id)
     return serialize_conversation(conv)
 
@@ -410,7 +410,7 @@ async def update_conversation(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(conv, field, value)
     await db.commit()
-    await db.refresh(conv)
+    await db.refresh(conv, attribute_names=["messages"])
     await invalidate_user_cache(user.id)
     return serialize_conversation(conv)
 

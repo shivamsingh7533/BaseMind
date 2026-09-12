@@ -77,6 +77,7 @@ def serialize_document(doc) -> dict:
         "type": doc.type,
         "detail": doc.detail,
         "status": doc.status,
+        "storageKey": doc.storage_key,
     }
 
 

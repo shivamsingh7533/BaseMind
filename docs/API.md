@@ -34,7 +34,7 @@ JSON metadata-only document (used by tests/tools).
 `multipart/form-data`, field `file`. Max 10 MB. Formats: PDF, TXT, CSV, MD.
 Pipeline: extract text (pypdf/plain) → chunk (1200 chars, 150 overlap) → embed via Gemini (`gemini-embedding-001`, 768-dim) → store rows in `document_chunks`.
 When Backblaze B2 is configured, the raw file is also uploaded (object key stored in `Document.storage_key`); upload failures are skipped, indexing still succeeds.
-Response includes `detail` like `"indexed, N chunks"`.
+Response includes `detail` like `"indexed, N chunks"` and `storageKey` (B2 object key, or source URL for web links).
 
 ### `POST /api/documents/sync` → 201
 URL crawler ingestion. Body: `{ "url": "https://docs.example.com", "agent_id": "optional-uuid" }`.
