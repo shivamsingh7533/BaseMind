@@ -21,6 +21,9 @@
 | `CLERK_ISSUER` | `https://<instance>.clerk.accounts.dev` |
 | `ALLOWED_ORIGINS` | `https://base-mind.vercel.app` |
 | `GEMINI_API_KEY` | AI Studio API key |
+| `B2_APPLICATION_KEY_ID` | Backblaze B2 app key ID (scoped, bucket `BaseMind`) |
+| `B2_APPLICATION_KEY` | Backblaze B2 application key |
+| `B2_BUCKET_NAME` | `BaseMind` |
 
 CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 
@@ -37,4 +40,4 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 4. Old tokens/cookies are invalid; users just log in again.
 
 ## Planned
-- Backblaze B2 bucket for large-file storage: add `B2_KEY_ID`, `B2_APP_KEY`, `B2_BUCKET` env vars; upload raw originals there, keep extracted text in Postgres.
+- Production Clerk instance with custom domain for a real launch (dev instance `secure-griffon-2008` suffices for evaluation).
