@@ -38,6 +38,19 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 3. Verify `GET /api/health` returns ok.
 4. Login and confirm `/api/dashboard` returns 200.
 
+## Soft-launch checklist (final regression)
+1. CI green on the pushed commit (both jobs).
+2. Full functional suite passes locally (temp `test_all.py`, **50/50**).
+3. Landing: `/` renders, both CTAs route to `/signup`, footer has Privacy/Terms links.
+4. Authenticated smoke on prod URLs:
+   - Dashboard loads 4 stats + onboarding checklist (fresh account).
+   - Agent Studio: create an agent.
+   - Knowledge Base: upload a file → row shows chunks; Actions (Open/Download/Delete) work.
+   - Chat: new conversation streams with sources; status Resolve/Halt; conversation delete removes the thread.
+   - Settings: Service Status shows DB + B2 Connected; "Delete workspace" typed-confirm wipes data.
+5. Discovery submission (manual, one-time): Google Search Console + Bing Webmaster — verify `base-mind.vercel.app`, submit `https://base-mind.vercel.app/sitemap.xml`, request indexing of `/`. Exact steps in `AI_DISCOVERABILITY_FRAMEWORKS.md`.
+6. Check Render + Vercel logs for request-log lines and any 5xx spikes.
+
 ## Swapping the Clerk dev instance
 1. Create new application at dashboard.clerk.com.
 2. Update publishable key in Vercel (+ local) → redeploy frontend.
