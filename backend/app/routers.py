@@ -12,7 +12,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import RedirectResponse, StreamingResponse
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -488,6 +488,41 @@ async def update_conversation(
     await db.refresh(conv, attribute_names=["messages"])
     await invalidate_user_cache(user.id)
     return serialize_conversation(conv)
+
+
+@router.get("/settings/status")
+async def settings_status(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    return {
+        "db_configured": SessionFactory is not None,
+        "b2_enabled": is_b2_enabled(),
+    }
+
+
+@router.delete("/me", status_code=204)
+async def delete_workspace(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    docs = (
+        await db.execute(
+            select(Document).where(Document.user_id == user.id)
+        )
+    ).scalars().all()
+    for doc in docs:
+        if doc.storage_key and is_b2_enabled():
+            try:
+                await delete_original(doc.storage_key)
+            except Exception:
+                pass
+    await db.execute(
+        delete(Conversation).where(Conversation.user_id == user.id)
+    )
+    await db.execute(delete(Document).where(Document.user_id == user.id))
+    await db.execute(delete(Agent).where(Agent.user_id == user.id))
+    await db.execute(delete(User).where(User.id == user.id))
+    await db.commit()
+    await invalidate_user_cache(user.id)
 
 
 @router.get("/dashboard")

@@ -28,6 +28,7 @@ interface AppDataState {
     token?: string | null,
     force?: boolean
   ) => Promise<Conversation[]>;
+  reset: () => void;
 }
 
 export const useAppData = create<AppDataState>((set, get) => ({
@@ -98,4 +99,7 @@ export const useAppData = create<AppDataState>((set, get) => ({
     }
     return Promise.resolve(get().conversations as Conversation[]);
   },
+
+  reset: () =>
+    set({ dashboard: null, agents: null, documents: null, conversations: null, _ts: {} }),
 }));

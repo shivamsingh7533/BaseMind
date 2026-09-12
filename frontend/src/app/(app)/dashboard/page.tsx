@@ -11,6 +11,7 @@ import {
   FileUp,
   Wallet,
   CirclePlus,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,13 +52,27 @@ function shortDay(iso: string) {
 export default function DashboardPage() {
   const { getToken } = useAuth();
   const data = useAppData((s) => s.dashboard);
+  const agents = useAppData((s) => s.agents);
+  const documents = useAppData((s) => s.documents);
   const fetchDashboard = useAppData((s) => s.fetchDashboard);
+  const fetchAgents = useAppData((s) => s.fetchAgents);
+  const fetchDocuments = useAppData((s) => s.fetchDocuments);
 
   useEffect(() => {
     getToken()
-      .then((t) => fetchDashboard(t))
+      .then((t) => {
+        if (!t) return;
+        void fetchDashboard(t);
+        void fetchAgents(t);
+        void fetchDocuments(t);
+      })
       .catch(() => {});
-  }, [getToken, fetchDashboard]);
+  }, [getToken, fetchDashboard, fetchAgents, fetchDocuments]);
+
+  const hasAgents = agents !== null && agents.length > 0;
+  const hasDocs = documents !== null && documents.length > 0;
+  const showOnboarding = agents !== null && !hasAgents;
+  const onboardingDone = (hasAgents ? 1 : 0) + (hasDocs ? 1 : 0);
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
@@ -121,6 +136,82 @@ export default function DashboardPage() {
             ))
             )}
           </div>
+
+          {showOnboarding ? (
+            <Card className="mt-6 border-primary/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-heading text-primary">
+                  <Bot className="size-5" />
+                  Get started with BaseMind
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-start gap-3 py-2">
+                    {hasAgents ? (
+                      <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
+                    ) : (
+                      <CirclePlus className="mt-0.5 size-5 shrink-0 text-primary" />
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {hasAgents ? "Agent created" : "Create your first agent"}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Open{" "}
+                        <Link href="/agents" className="text-primary hover:underline">
+                          Agent Studio
+                        </Link>{" "}
+                        to give it a name, color, and instructions.
+                      </p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex items-start gap-3 py-2">
+                    {hasDocs ? (
+                      <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
+                    ) : (
+                      <FileUp className="mt-0.5 size-5 shrink-0 text-primary" />
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {hasDocs
+                          ? "Knowledge added"
+                          : "Add knowledge your agent can answer from"}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Upload a file or sync a URL in{" "}
+                        <Link
+                          href="/knowledge-base"
+                          className="text-primary hover:underline"
+                        >
+                          Knowledge Base
+                        </Link>
+                        .
+                      </p>
+                    </div>
+                  </div>
+                  {hasAgents && hasDocs ? (
+                    <>
+                      <Separator />
+                      <div className="flex items-center justify-between gap-3 py-2">
+                        <p className="font-medium">Try a conversation</p>
+                        <Button asChild size="sm">
+                          <Link href="/chat">Open Chat</Link>
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+                <div className="mt-4 space-y-1.5">
+                  <Progress value={(onboardingDone / 2) * 100} />
+                  <p className="text-xs text-muted-foreground">
+                    {onboardingDone} of 2 setup steps done
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <Card>

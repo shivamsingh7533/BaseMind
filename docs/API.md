@@ -94,3 +94,10 @@ Aggregated stats + recent activity for the dashboard page.
 `activity` (max 8, newest first): `doc-*` (`sync` icon, `warning` if failed), `agent-*` (`agent`), `conv-*` (`agent`, preview text); each `{id, icon, highlight, text, time}`.
 `perAgent`: one object per agent `{id, name, color, queries24h, conversations, agentMsgs, resolved, avgLatencyMs}`, sorted by agent messages (desc).
 `trend7d`: exactly 7 day buckets `{date: "YYYY-MM-DD", conversations, agentMsgs}` (oldest → today), 0-filled for empty days.
+
+## Workspace
+### `GET /api/settings/status`
+Auth: bearer token. Returns `{db_configured, b2_enabled}` booleans for the Settings page service-status card.
+
+### `DELETE /api/me`
+Auth: bearer token. 204. **Delete workspace**: purges every agent, document (+ its Backblaze B2 original best-effort), conversation, and the `users` row for the caller. Idempotent: a fresh `users` row is upserted on the next login (Clerk account itself is untouched). Messages/document_chunks cascade via FK (`ondelete=CASCADE`).
