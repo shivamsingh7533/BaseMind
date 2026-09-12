@@ -14,6 +14,7 @@
 | Hot/cold blob storage | Backblaze B2 via `b2sdk` (lazy, optional) | Enabled for private bucket `BaseMind`; stores raw originals, key `{owner_id}/{uuid}-{file}`; off when `B2_*` env vars unset |
 | Web hosting | Vercel | `base-mind.vercel.app`, Analytics enabled |
 | API hosting | Render free tier | `basemind-api.onrender.com`; sleeps after ~15 min idle |
+| CI | GitHub Actions (`.github/workflows/ci.yml`) | push/PR to `main`: backend `compileall` + `import app.main` boot (no DB creds in CI), frontend `npm ci` + lint + build |
 | Toasts/UX | sonner | exact-reason error messages everywhere |
 
 ## Planned

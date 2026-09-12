@@ -27,6 +27,11 @@
 
 CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 
+## CI
+`main` push / PR runs `.github/workflows/ci.yml`: backend `compileall` + `import app.main` boot (never touches the DB — keys stay out of CI), frontend `npm ci` + `npm run lint` + `npm run build`. Green CI required before deploy reviews.
+
+`render.yaml` declares the B2 service env (`B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`, all `sync: false`) plus `restartPolicy: web`; the actual secret values stay in the Render dashboard.
+
 ## Deploy checklist
 1. Push to `main` → both platforms rebuild.
 2. Wake the API: first request after idle may take ~30–60 s (free tier sleep).
