@@ -59,6 +59,7 @@ export interface ChatMessage {
   code?: CodeBlock;
   time: string;
   latencyNote?: string;
+  sources?: { source: string; docId?: string }[];
 }
 
 export type ConversationStatus = "resolved" | "active" | "halted";
@@ -123,6 +124,65 @@ export const getConversations = (token?: string | null) =>
     headers: authHeader(token),
   });
 
+export const getConversation = (
+  token?: string | null,
+  conversationId?: string | null
+) =>
+  request<Conversation | null>(
+    `/api/conversations/${conversationId}`,
+    null,
+    { headers: authHeader(token) }
+  );
+
+export async function updateConversationStatus(
+  token: string | null | undefined,
+  conversationId: string,
+  status: ConversationStatus
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/conversations/${conversationId}`, {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify({ status }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface DocumentPreview {
+  id: string;
+  name: string;
+  type: string;
+  detail: string;
+  preview: string;
+}
+
+export const getDocumentPreview = (
+  token?: string | null,
+  documentId?: string | null
+) =>
+  request<DocumentPreview | null>(
+    `/api/documents/${documentId}/preview`,
+    null,
+    { headers: authHeader(token) }
+  );
+
+export const getDocumentDownloadUrl = (
+  token?: string | null,
+  documentId?: string | null
+) =>
+  request<{ url: string } | null>(
+    `/api/documents/${documentId}/download-url`,
+    null,
+    { headers: authHeader(token) }
+  ).then((r) => r?.url ?? null);
+
 export async function setAgentStatus(
   token: string | null | undefined,
   agentId: string,
@@ -161,7 +221,10 @@ export async function deleteAgent(
 }
 
 export type ChatEvent =
-  | { type: "sources"; sources: { source: string }[] }
+  | {
+      type: "sources";
+      sources: { source: string; docId?: string }[];
+    }
   | { type: "token"; token: string }
   | { type: "error"; error: string }
   | { type: "done"; messageId: string | null };
@@ -290,7 +353,8 @@ export async function createAgent(
 
 export async function createConversation(
   token?: string | null,
-  agentId?: string | null
+  agentId?: string | null,
+  visitor?: string
 ): Promise<string | null> {
   try {
     const res = await fetch(`${API_URL}/api/conversations`, {
@@ -301,7 +365,7 @@ export async function createConversation(
         ...authHeader(token),
       },
       body: JSON.stringify({
-        visitor: "Studio Test",
+        visitor: visitor ?? "Studio Test",
         ...(agentId ? { agent_id: agentId } : {}),
       }),
     });

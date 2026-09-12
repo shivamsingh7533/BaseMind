@@ -338,11 +338,28 @@ async def download_document(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    url = await _resolve_download(db, document_id, user)
+    return RedirectResponse(url, 302)
+
+
+@router.get("/documents/{document_id}/download-url")
+async def download_document_url(
+    document_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    url = await _resolve_download(db, document_id, user)
+    return {"url": url}
+
+
+async def _resolve_download(
+    db: AsyncSession, document_id: str, user: User
+) -> str:
     doc = await _get_owned(db, Document, document_id, user)
     if doc.type == "Web Link":
         if not doc.storage_key:
             raise HTTPException(status_code=404, detail="Original URL not stored")
-        return RedirectResponse(doc.storage_key, 302)
+        return doc.storage_key
     if not doc.storage_key:
         raise HTTPException(
             status_code=404,
@@ -358,7 +375,31 @@ async def download_document(
         raise HTTPException(
             status_code=404, detail="File no longer in storage"
         )
-    return RedirectResponse(url, 302)
+    return url
+
+
+@router.get("/documents/{document_id}/preview")
+async def document_preview(
+    document_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await _get_owned(db, Document, document_id, user)
+    result = await db.execute(
+        select(DocumentChunk.content)
+        .where(DocumentChunk.document_id == doc.id)
+        .order_by(DocumentChunk.chunk_index)
+    )
+    preview = "\n\n".join(r[0] for r in result.all())
+    if len(preview) > 2000:
+        preview = preview[:2000] + "\n…"
+    return {
+        "id": doc.id,
+        "name": doc.name,
+        "type": doc.type,
+        "detail": doc.detail,
+        "preview": preview,
+    }
 
 
 @router.get("/conversations")

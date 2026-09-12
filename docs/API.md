@@ -49,6 +49,13 @@ Download or open the original source. Auth required.
 - Errors: `404` not owned / not found / no `storageKey` ("Original file not stored (B2 was off when this was uploaded)") / B2 object gone ("File no longer in storage"), `503 "Storage not configured"` (B2 env vars missing), `502 "Failed to fetch file from storage"`.
 - `DELETE /api/documents/{id}` now also best-effort deletes the matching B2 object.
 
+### `GET /api/documents/{id}/download-url`
+Same lookup as `/download` but returns the target as JSON instead of a redirect, for browser JS that must open a signed URL in a new tab (a 302 can't be followed with an auth header): `{ "url": "https://f002.backblazeb2.com/..." }`. Same `404`/`503`/`502` errors.
+
+### `GET /api/documents/{id}/preview`
+Auth required. Returns the first ~2 KB of readable text from the document's chunks:
+`{ "id", "name", "type", "detail", "preview" }` (`preview` is `""` if the doc has no chunks, e.g. a metadata-only row). Cross-account → `404`.
+
 ## Conversations
 ### `GET /api/conversations`
 List conversations for the user.
@@ -60,6 +67,9 @@ List conversations for the user.
 
 ### `GET /api/conversations/{id}`
 Full conversation with messages.
+
+### `PATCH /api/conversations/{id}`
+Update a conversation. Body: `{ "status": "active" | "resolved" | "halted" }` (and/or `duration_seconds`). Used by the Chat page resolve/halt/reopen controls.
 
 ### `POST /api/conversations/{id}/messages` → 201
 Append a raw message: `{ "text": "...", "role": "user" }`.

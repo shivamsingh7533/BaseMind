@@ -23,6 +23,7 @@ const MARKETING_LINKS = [
 const APP_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/agents", label: "Agents" },
+  { href: "/chat", label: "Chat" },
   { href: "/knowledge-base", label: "Knowledge" },
   { href: "/logs", label: "Logs" },
 ];

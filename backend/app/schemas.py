@@ -52,7 +52,7 @@ class ConversationCreate(BaseModel):
 
 
 class ConversationUpdate(BaseModel):
-    status: Literal["active", "resolved"] | None = None
+    status: Literal["active", "resolved", "halted"] | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
 
 

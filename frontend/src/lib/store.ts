@@ -21,7 +21,10 @@ interface AppDataState {
   fetchDashboard: (token?: string | null) => Promise<DashboardData>;
   fetchAgents: (token?: string | null) => Promise<Agent[]>;
   fetchDocuments: (token?: string | null) => Promise<KnowledgeDoc[]>;
-  fetchConversations: (token?: string | null) => Promise<Conversation[]>;
+  fetchConversations: (
+    token?: string | null,
+    force?: boolean
+  ) => Promise<Conversation[]>;
 }
 
 export const useAppData = create<AppDataState>((set, get) => ({
@@ -72,18 +75,21 @@ export const useAppData = create<AppDataState>((set, get) => ({
     return get().documents as KnowledgeDoc[];
   },
 
-  fetchConversations: async (token) => {
+  fetchConversations: (token?: string | null, force?: boolean) => {
     const state = get();
     const fresh =
+      !force &&
       state.conversations !== null &&
       Date.now() - (state._ts.conversations ?? 0) < TTL_MS;
     if (!fresh) {
-      const data = await getConversations(token);
-      set((s) => ({
-        conversations: data,
-        _ts: { ...s._ts, conversations: Date.now() },
-      }));
+      return getConversations(token).then((data) => {
+        set((s) => ({
+          conversations: data,
+          _ts: { ...s._ts, conversations: Date.now() },
+        }));
+        return data;
+      });
     }
-    return get().conversations as Conversation[];
+    return Promise.resolve(get().conversations as Conversation[]);
   },
 }));
