@@ -1,7 +1,8 @@
 "use client";
 
-import { Bot, FileSearch } from "lucide-react";
+import { FileSearch } from "lucide-react";
 import type { ChatMessage } from "@/lib/api";
+import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
 
 export function renderRich(text: string) {
@@ -46,7 +47,7 @@ export function ChatBubble({
             : "bg-primary text-primary-foreground"
         )}
       >
-        {isUser ? userLabel : <Bot className="size-4" />}
+        {isUser ? userLabel : <LogoMark className="size-4" />}
       </span>
       <div className={cn("max-w-[85%] space-y-1.5", isUser && "text-right")}>
         <div

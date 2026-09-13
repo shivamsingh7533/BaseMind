@@ -27,7 +27,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   type ChatMessage,
-  type Conversation,
   type ConversationStatus,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";

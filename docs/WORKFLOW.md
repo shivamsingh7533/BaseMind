@@ -18,6 +18,7 @@
 | backend code | local uvicorn boot + endpoint curl |
 | auth changes | fake-token 401 detail test against live API |
 | RAG changes | upload → chunk count → chat cites source |
+| full sweep (Phases 1–5) | from `backend/`: `PYTHONPATH="D:\BaseMind\backend" .venv\Scripts\python.exe tests\test_all.py` (needs `DATABASE_URL` + `GEMINI_API_KEY` + `B2_*`; self-cleaning) |
 | deploy | `/api/health` → login → dashboard loads |
 
 ## Phase status
@@ -26,3 +27,4 @@
 - **Phase 3 — URL sync + analytics + B2**: done (URL crawler ingestion, real analytics deltas/activity/web-vs-file, B2 raw-original storage, npm start). Production Clerk instance with custom domain **pending (needs paid plan + domain)**.
 - **Phase 4 — all done**: chat sources carry `docId`; document `download` (302) / `download-url` (JSON) / `preview` (~2 KB) endpoints; `delete_document` B2 cleanup; `PATCH` status incl `halted`/`reopen`; **Chat page** (`/chat`) with history, live SSE, retry + follow-ups, sources view/download, resolve/halt; **Knowledge Base rows** now Open/Download + Delete; **Dashboard** adds Agent Performance table (convs/msgs/resolved/latency) + 7-day CSS trend bars; **CI** (`.github/workflows/ci.yml`) + `render.yaml` declares B2 env (`sync: false`) + `restartPolicy: web`.
 - **Phase 5 — all done**: **Privacy + Terms pages** (`/legal/privacy`, `/legal/terms`) linked in the landing footer + sitemap; landing CTAs → `/signup`. **Settings** real page: Profile card, Service Status (`GET /api/settings/status`), Danger Zone with typed-confirm **Delete workspace** (`DELETE /api/me`, purges data + B2 originals, idempotent). **Dashboard** onboarding checklist for new workspaces. **Conversations deletable** (`DELETE /api/conversations/{id}` + sidebar trash); **chat rate-limited** (20/5min → 429); request-logging middleware + exception logs. Soft-launch checklist + discovery submission steps in `DEPLOYMENT.md`. **Suite: 50/50 functional checks.**
+- **Branding — done**: BaseMind logo mark (`components/logo.tsx` — faceted head-cube, neural traces, teal→blue gradient `#14b8a6`→`#1e4ed8`) + lockup (wordmark + tagline "Knowledge Driven AI Agents"). Wired into navbar, login/signup, landing hero, chat agent avatar, SVG favicon (`icon.svg`), and OG/social image (`opengraph-image.tsx`). Functional suite moved into repo at `backend/tests/test_all.py`.
