@@ -29,6 +29,7 @@
 | `BREVO_SENDER_EMAIL` | verified sender, e.g. `hi@yourdomain.com` |
 | `BREVO_SENDER_NAME` | `BaseMind` |
 | `SENTRY_DSN` | Sentry project DSN (crash + performance) |
+| `OPERATOR_EMAILS` | comma-separated emails allowed to open the Ops/Admin dashboard (`GET /api/ops/status`, `/ops`). Empty = nobody (always 403) |
 
 Emails no-op safely without `BREVO_ENABLED`/`BREVO_API_KEY` (Clerk already covers
 verification/reset emails). Sentry initializes only when `SENTRY_DSN` is set; the
@@ -50,7 +51,7 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 
 ## Soft-launch checklist (final regression)
 1. CI green on the pushed commit (both jobs).
-2. Full functional suite passes locally (temp `test_all.py`, **56/56**).
+2. Full functional suite passes locally (temp `test_all.py`, **63/63**).
 3. Landing: `/` renders, both CTAs route to `/signup`, footer has Privacy/Terms links.
 4. Authenticated smoke on prod URLs:
    - Dashboard loads 4 stats + onboarding checklist (fresh account).
@@ -58,6 +59,7 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
    - Knowledge Base: upload a file → row shows chunks; Actions (Open/Download/Delete) work.
    - Chat: new conversation streams with sources; status Resolve/Halt; conversation delete removes the thread.
    - Settings: Service Status shows DB + B2 Connected; "Delete workspace" typed-confirm wipes data.
+   - Ops: `/ops` shows for OPERATOR_EMAILS members only and renders RAG engine pill, metrics, vector sync, alerts, activity feed.
 5. Discovery submission (manual, one-time): Google Search Console + Bing Webmaster — verify `base-mind.vercel.app`, submit `https://base-mind.vercel.app/sitemap.xml`, request indexing of `/`. Exact steps in `AI_DISCOVERABILITY_FRAMEWORKS.md`.
 6. Check Render + Vercel logs for request-log lines and any 5xx spikes.
 
@@ -102,3 +104,4 @@ _Status: ✓ complete (2026-09-13). Public surface re-verified: health/robots/si
 
 ## Planned
 - Production Clerk instance with custom domain for a real launch (dev instance `secure-griffon-2008` suffices for evaluation).
+- Credits/usage card on `/ops` (schema + tables exist; renders once Gap 1 Razorpay billing ships).

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     b2_application_key: str = ""
     b2_bucket_name: str = ""
     sentry_dsn: str = ""
+    operator_emails: str = ""
 
 
 @lru_cache

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { Show, SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/logo";
+import { fetchOpsStatus } from "@/lib/api";
 import {
   Sheet,
   SheetContent,
@@ -32,8 +33,28 @@ const APP_LINKS = [
 export function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { isSignedIn, getToken } = useAuth();
+  const [showOps, setShowOps] = useState(false);
 
-  const links = [...MARKETING_LINKS, ...APP_LINKS];
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let alive = true;
+    getToken()
+      .then((t) => fetchOpsStatus(t))
+      .then((ops) => {
+        if (alive && ops) setShowOps(true);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isSignedIn, getToken]);
+
+  const links = [
+    ...MARKETING_LINKS,
+    ...APP_LINKS,
+    ...(showOps ? [{ href: "/ops", label: "Ops" }] : []),
+  ];
 
   return (
     <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur">

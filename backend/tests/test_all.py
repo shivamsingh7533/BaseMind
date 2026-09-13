@@ -22,7 +22,7 @@ from sqlalchemy import delete, func, select
 
 from app import routers
 from app.db import SessionFactory, init_db
-from app.models import Agent, Conversation, Document, DocumentChunk, Message, User
+from app.models import Agent, Conversation, Document, DocumentChunk, EventLog, Message, User
 from app.schemas import (
     AgentCreate,
     AgentUpdate,
@@ -45,6 +45,7 @@ def check(name, ok, extra=""):
 
 async def main():
     os.environ["BREVO_ENABLED"] = "0"
+    os.environ["OPERATOR_EMAILS"] = "func-test@example.com"
     await init_db()
     async with SessionFactory() as db:
         user = User(clerk_id=TEST_CLERK, email="func-test@example.com", name="Func Test")
@@ -168,6 +169,78 @@ async def main():
                 str(dash["vector"]),
             )
 
+            # ---- Ops / Admin dashboard ----
+            from app.config import get_settings
+
+            os.environ["OPERATOR_EMAILS"] = "func-test@example.com"
+            get_settings.cache_clear()
+            await routers.update_conversation(conv["id"], ConversationUpdate(status="halted"), user, db)
+            ops = await routers.ops_status(user, db)
+            check(
+                "ops operator 200 + engine",
+                ops["engine"] == "3.4" and isinstance(ops["nominal"], bool) and bool(ops["generatedAt"]),
+            )
+            check(
+                "ops global metrics",
+                ops["metrics"]["users"] >= 1
+                and ops["metrics"]["activeAgents"] >= 1
+                and ops["metrics"]["queriesToday"] >= 1
+                and ops["metrics"]["totalQueries"] >= 1,
+                str(ops["metrics"]),
+            )
+            check(
+                "ops vector block",
+                ops["vector"]["embeddings"] >= 1
+                and ops["vector"]["dim"] == 768
+                and ops["vector"]["status"] in {"synced", "syncing", "attention"},
+                str(ops["vector"]),
+            )
+            check(
+                "ops halted alert derived",
+                any("halted" in a["text"].lower() or "rate limit" in a["text"].lower() for a in ops["alerts"]),
+                str(ops["alerts"]),
+            )
+            await routers.update_conversation(conv["id"], ConversationUpdate(status="active"), user, db)
+
+            try:
+                await routers.ops_status(user2, db)
+                check("ops non-operator blocked", False)
+            except HTTPException as e:
+                check("ops non-operator blocked", e.status_code == 403)
+
+            db.add(EventLog(user_id=user.id, event_type="chat_stream_error", severity="error", detail="synthetic stream fail"))
+            await db.commit()
+            ops2 = await routers.ops_status(user, db)
+            check(
+                "ops activity surfaces error event",
+                any(a["severity"] == "error" and "stream" in a["text"].lower() for a in ops2["activity"]),
+                str(ops2["activity"][:2]),
+            )
+
+            _orig_embed = routers.embed_texts
+
+            async def _embed_boom(chunks):
+                raise RuntimeError("embedding down (synthetic)")
+
+            routers.embed_texts = _embed_boom
+            try:
+                try:
+                    await routers._persist_document(
+                        db, user=user, name="boom.txt", doc_type="Text", text="some words to chunk and embed"
+                    )
+                    check("ingest_error logged", False)
+                except RuntimeError:
+                    n_ingest = (
+                        await db.execute(
+                            select(func.count())
+                            .select_from(EventLog)
+                            .where(EventLog.user_id == user.id, EventLog.event_type == "ingest_error")
+                        )
+                    ).scalar_one()
+                    check("ingest_error logged", n_ingest >= 1, f"{n_ingest} events")
+            finally:
+                routers.embed_texts = _orig_embed
+
             # ---- Download (4A2 signed URL) ----
             web_resp = await routers.download_document(sync["id"], user, db)
             check(
@@ -277,10 +350,7 @@ async def main():
             check("workspace-delete sees B2 object", bool(ws_doc.get("storageKey")))
 
             # ---- Emails (Brevo) ----
-            import os
-
             from app import email as email_mod
-            from app.models import EventLog
 
             _orig_brevo = email_mod._send_brevo
             _sent = []

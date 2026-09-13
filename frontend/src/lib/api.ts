@@ -526,3 +526,59 @@ export async function deleteWorkspace(
     return { ok: false, detail: "Network error" };
   }
 }
+
+export type OpsSeverity = "info" | "attention" | "error";
+
+export interface OpsMetrics {
+  users: number;
+  agents: number;
+  activeAgents: number;
+  totalQueries: number;
+  queriesToday: number;
+  queriesDeltaPct: number | null;
+  conversations: number;
+  conversationsToday: number;
+}
+
+export interface OpsAlert {
+  id: string;
+  severity: "attention" | "error";
+  icon: string;
+  text: string;
+  time: string;
+}
+
+export interface OpsActivityItem {
+  id: string;
+  kind: "event" | "agent" | "document" | "conversation";
+  severity: OpsSeverity;
+  icon: string;
+  highlight: string;
+  text: string;
+  time: string;
+  at: string;
+}
+
+export interface OpsStatus {
+  engine: string;
+  nominal: boolean;
+  generatedAt: string;
+  metrics: OpsMetrics;
+  vector: DashboardVector;
+  alerts: OpsAlert[];
+  activity: OpsActivityItem[];
+}
+
+export async function fetchOpsStatus(
+  token?: string | null
+): Promise<OpsStatus | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/status`, {
+      headers: authHeader(token),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as OpsStatus;
+  } catch {
+    return null;
+  }
+}

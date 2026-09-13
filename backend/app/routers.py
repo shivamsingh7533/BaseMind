@@ -30,7 +30,17 @@ from .auth import get_current_user
 from .cache import cache_get, cache_set, invalidate_user_cache
 from .db import SessionFactory, get_db
 from .email import dispatch_digest, dispatch_rate_limit, dispatch_welcome
-from .models import EMBEDDING_DIM, Agent, Conversation, Document, DocumentChunk, Message, User
+from .models import (
+    EMBEDDING_DIM,
+    Agent,
+    Conversation,
+    Document,
+    DocumentChunk,
+    EventLog,
+    Message,
+    User,
+)
+from .ops import build_ops_status, is_operator
 from .schemas import (
     AgentCreate,
     AgentUpdate,
@@ -199,10 +209,24 @@ async def _persist_document(
     agent_id: str | None = None,
     source: str | None = None,
 ) -> Document:
-    chunks = chunk_text(text)
-    if not chunks:
-        raise HTTPException(status_code=422, detail="No readable text found")
-    embeddings = await embed_texts(chunks)
+    try:
+        chunks = chunk_text(text)
+        if not chunks:
+            raise HTTPException(status_code=422, detail="No readable text found")
+        embeddings = await embed_texts(chunks)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.add(
+            EventLog(
+                user_id=user.id,
+                event_type="ingest_error",
+                severity="error",
+                detail=f"{name[:120]}: {exc}",
+            )
+        )
+        await db.commit()
+        raise
 
     doc = Document(
         user_id=user.id,
@@ -508,6 +532,13 @@ async def settings_status(user: User = Depends(get_current_user), db: AsyncSessi
         "db_configured": SessionFactory is not None,
         "b2_enabled": is_b2_enabled(),
     }
+
+
+@router.get("/ops/status")
+async def ops_status(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    return await build_ops_status(db)
 
 
 @router.delete("/me", status_code=204)
@@ -904,6 +935,8 @@ async def chat(
             hint_row = (await db.execute(select(Agent.name).where(Agent.id == agent_name_hint))).scalar_one_or_none()
             if hint_row:
                 await dispatch_rate_limit(user, hint_row)
+        db.add(EventLog(user_id=user.id, event_type="rate_limit", severity="error", detail="chat rate limit hit"))
+        await db.commit()
         raise HTTPException(
             status_code=429,
             detail=(
@@ -972,6 +1005,20 @@ async def chat(
                 yield "data: " + json.dumps({"type": "token", "token": token}) + "\n\n"
         except Exception as exc:
             log.exception("chat stream failed for conversation %s", conversation_id_value)
+            try:
+                if SessionFactory is not None:
+                    async with SessionFactory() as session:
+                        session.add(
+                            EventLog(
+                                user_id=user_id_value,
+                                event_type="chat_stream_error",
+                                severity="error",
+                                detail=str(exc)[:500],
+                            )
+                        )
+                        await session.commit()
+            except Exception:
+                log.exception("failed persisting chat_stream_error event")
             yield "data: " + json.dumps({"type": "error", "error": str(exc)}) + "\n\n"
             return
 

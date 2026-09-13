@@ -20,7 +20,7 @@ const FEATURES = [
   {
     icon: "upload",
     title: "Frictionless Upload",
-    body: "Drag and drop PDFs, connect Notion, or sync with Zendesk. We parse everything.",
+    body: "Drag and drop PDFs, TXT, or CSV. We parse everything.",
     chip: "docs.pdf",
   },
   {
@@ -48,7 +48,7 @@ const PLANS = [
     features: [
       "Unlimited Agents",
       "10,000 Messages/mo",
-      "Zendesk & Notion Sync",
+      "Cited Answers (RAG + Sources)",
     ],
     popular: true,
   },
@@ -153,7 +153,8 @@ function Pricing() {
   );
 }
 
-const EMBED_CODE = `<script>
+const EMBED_CODE = `<!-- Coming soon — embed script is not live yet -->
+<script>
   window.BaseMind = {
     agentId: "bm_a7x9f",
     theme: "light"
@@ -190,7 +191,7 @@ export default function LandingPage() {
           </Button>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          14-day free trial. No credit card required.
+          Free while in beta. No credit card required.
         </p>
       </section>
 
@@ -208,10 +209,13 @@ export default function LandingPage() {
             </div>
           ))}
           <div className="rounded-xl border p-6 md:hidden">
-            <h3 className="font-heading text-lg font-semibold">One-Line Embed</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-heading text-lg font-semibold">One-Line Embed</h3>
+              <Badge variant="outline">Coming soon</Badge>
+            </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Drop a single script tag into your app and instantly deploy your
-              custom agent.
+              Drop a single script tag into your app to deploy your custom
+              agent.
             </p>
           </div>
         </div>
@@ -223,12 +227,15 @@ export default function LandingPage() {
                 <span className="inline-flex size-9 items-center justify-center rounded-md bg-accent text-accent-foreground">
                   <FeatureIcon kind="precision" />
                 </span>
-                <h3 className="mt-4 font-heading text-lg font-semibold">
-                  One-Line Embed
-                </h3>
+                <div className="mt-4 flex items-center gap-2">
+                  <h3 className="font-heading text-lg font-semibold">
+                    One-Line Embed
+                  </h3>
+                  <Badge variant="outline">Coming soon</Badge>
+                </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Drop a single script tag into your app and instantly deploy
-                  your custom agent.
+                  Drop a single script tag into your app to deploy your custom
+                  agent.
                 </p>
               </div>
               <pre className="overflow-x-auto bg-zinc-950 p-6 font-mono text-xs leading-relaxed text-zinc-100">
