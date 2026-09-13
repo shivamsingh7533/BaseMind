@@ -30,6 +30,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
 import { fetchOpsStatus, type OpsSeverity, type OpsStatus } from "@/lib/api";
 
 function rel(iso: string) {
@@ -58,76 +59,69 @@ function ActivityIcon({
   return <Mail className="size-3.5" />;
 }
 
-export default function OpsPage() {
-  const { getToken, isSignedIn } = useAuth();
-  const [ops, setOps] = useState<OpsStatus | null>(null);
-  const [denied, setDenied] = useState(false);
+// ============================================================
+// Module-level panel components — defined once, outside OpsPage
+// so React never creates them during render.
+// ============================================================
 
-  useEffect(() => {
-    let alive = true;
-    const poll = async () => {
-      const t = await getToken();
-      if (!t || !alive) return;
-      const status = await fetchOpsStatus(t);
-      if (!alive) return;
-      if (status) {
-        setOps(status);
-        setDenied(false);
-      } else {
-        setDenied(true);
-      }
-    };
-    void poll();
-    const id = setInterval(() => void poll(), 60000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [getToken]);
+const TAB_OVERVIEW = "overview";
+const TAB_TENANTS = "tenants";
+const TAB_AGENTS = "agents";
+const TAB_DOCS = "docs";
+const TAB_TRENDS = "trends";
+const TAB_ERRORS = "errors";
+const TAB_PLANS = "plans";
+const TAB_ANNOUNCE = "announce";
 
-  if (denied)
-    return (
-      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
-        <Card className="rounded-2xl border-red-200 bg-red-50/50">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-red-500 text-white shadow">
-                <ShieldAlert className="size-5" />
-              </span>
-              <div>
-                <h2 className="font-heading text-lg font-semibold">Operator access only</h2>
-                <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                  Tera account is ops list me nahi hai. Render dashboard me{" "}
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-black/5">OPERATOR_EMAILS</code>{" "}
-                  me woh exact email daal jo tu is app me login karta hai (comma-separated),
-                  phir backend redeploy hone ka wait kar aur dobara{" "}
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-black/5">/ops</code> khol.
-                </p>
-                {!isSignedIn ? (
-                  <Button asChild size="sm" className="mt-3">
-                    <Link href="/login">Login karo</Link>
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+function TabsNavigation({
+  activeTab,
+  setActiveTab,
+}: {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+}) {
+  const tabs = [
+    { key: TAB_OVERVIEW, label: "Overview" },
+    { key: TAB_TENANTS, label: "Tenants" },
+    { key: TAB_AGENTS, label: "Agents" },
+    { key: TAB_DOCS, label: "Documents" },
+    { key: TAB_TRENDS, label: "Trends" },
+    { key: TAB_ERRORS, label: "Errors" },
+    { key: TAB_PLANS, label: "Plans" },
+    { key: TAB_ANNOUNCE, label: "Announce" },
+  ];
 
-  if (ops === null)
-    return (
-      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
-        <Skeleton className="h-[168px] rounded-[20px]" />
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Skeleton className="h-36 rounded-2xl" />
-          <Skeleton className="h-36 rounded-2xl" />
-          <Skeleton className="h-36 rounded-2xl" />
-          <Skeleton className="h-36 rounded-2xl" />
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-3 sm:p-4 border border-slate-200/50">
+        <div className="flex flex-wrap gap-1.5">
+          {tabs.map((tab) => (
+            <Button
+              key={tab.key}
+              variant="outline"
+              size="icon"
+              className={
+                `rounded-full px-4 py-2 text-sm font-medium ${
+                  activeTab === tab.key
+                    ? "bg-slate-900 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`
+              }
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </Button>
+          ))}
+          <Separator className="my-1" />
         </div>
       </div>
-    );
+    </div>
+  );
+}
 
+// ----- Overview Panel (needs ops prop) -----
+function OverviewPanel({ ops }: { ops: OpsStatus | null }) {
+  if (!ops) return null;
   const { metrics, vector, alerts } = ops;
   const hasError = alerts.some((a) => a.severity === "error");
   const isNominal = ops.nominal;
@@ -375,4 +369,264 @@ export default function OpsPage() {
       </div>
     </div>
   );
+}
+
+// ----- Tenants Panel (placeholder, no ops dependency) -----
+function TenantsPanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Tenants</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Tenant list abhi data fetch karna baqi hai. Baad me har workspace k agents, docs, convs count dikhega.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Phase 1: Tenants table endpoint (<code>GET /api/ops/tenants</code>) aayega jahan har user ka aggregate stats dikhega — owners, agents count, docs count, queries, plan mix, created date. Ek table ya search bar aayegi.</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Fetch trigger: operator me <code>OPERATOR_EMAILS</code> set karke backend redeploy karein, phir <code>/ops?tab=tenants</code> ya tabs se switch karein.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- Agents Panel (placeholder) -----
+function AgentsPanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Agents</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Agent leaderboard pending — backend endpoint <code>GET /api/ops/agents</code> aayega jahan har agent k queries_24h, active/paused split, aur avg latency over 30s flag dikhega.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Phase 1: Agent leaderboard top agents by queries_24h + active split.</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Fetch trigger: same — <code>OPERATOR_EMAILS</code> set karne baad backend redeploy, phir <code>/ops?tab=agents</code> par.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- Docs Panel (placeholder) -----
+function DocsPanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Documents</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Document pipeline stats abhi data fetch karna baqi hai. Baad me PDF/TXT/CSV/URL mix, processing queue, failed reasons, aur ingestion today count dikhega.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Phase 1: Documents endpoint (<code>GET /api/ops/documents</code>) total/processing/failed/ingested today.</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Fetch trigger: <code>OPERATOR_EMAILS</code> set karke redeploy, phir <code>/ops?tab=docs</code> par.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- Trends Panel (placeholder) -----
+function TrendsPanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Trends (14 days)</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Usage trend charts abhi render honge kyunki <code>recharts</code> installed hai lekin endpoint (<code>GET /api/ops/trends?days=14</code>) ab banana baqi hai. Charts: daily queries, conversations, new users, new agents.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Phase 1: <code>/api/ops/trends</code> daily query/conversation counts grouped by date.</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Charts: <code>recharts</code> area/line charts under the hood. Dono chart components alag banenge jab endpoint ready.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- Errors Panel (placeholder, uses event_logs data already) -----
+function ErrorsPanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Errors</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Error center ready hai kyunki <code>event_logs</code> table data use karta hai. <code>GET /api/ops/errors</code> breakdown event types count 24h+7d dikhega.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Active: event_logs se rate_limit / chat_stream_error / ingest_error / email failure counts.</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Fetch: existing ops status se event_logs already populated hai; errors section (Phase 2) dedicated endpoint aayega.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- Plans Panel (placeholder) -----
+function PlansPanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Plans</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          Plan mix chart abhi live hai kyunki <code>subscriptions</code> table data use karta hai. MRR real values <em>blocked</em> hain jab tak Razorpay keys (Gap 1) nahi aate. Yahan free vs paid users ka count dikhega.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Phase 0 (existing): subscriptions counts (plan, status) har user pe already available — dashboard panel me count dikh jayega.</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">MRR placeholder: jab tak <code>Razorpay keys</code> set nahi honge, is section me Awaiting payment setup dikhega.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----- Announce Panel (placeholder) -----
+function AnnouncePanel() {
+  return (
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
+        <h2 className="font-heading text-xl font-semibold text-white mb-4">Announce</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          System announcements abhi operators ko email karne ka infrastructure hai lekin dashboard par broadcast feature Phase 5 me add kiye jaenge. Ab currently sirf email trigger setup dikhaya jayega.
+        </p>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Phase 5: Admin se dashboard par system message broadcast karna (<code>POST /api/ops/announcements</code> + <code>GET /api/dashboard</code>).</p>
+          </div>
+          <div className="rounded-xl bg-slate-800 p-4">
+            <p className="text-sm text-slate-500">Fetch: operator_emails wale ko <code>dispatch_operator</code> se email jayega jab backend ready hoga.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Main OpsPage component
+// ============================================================
+
+export default function OpsPage() {
+  const { getToken, isSignedIn } = useAuth();
+  const [ops, setOps] = useState<OpsStatus | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [activeTab, setActiveTab] = useState(TAB_OVERVIEW);
+
+  useEffect(() => {
+    let alive = true;
+    const poll = async () => {
+      const t = await getToken();
+      if (!t || !alive) return;
+      const status = await fetchOpsStatus(t);
+      if (!alive) return;
+      if (status) {
+        setOps(status);
+        setDenied(false);
+      } else {
+        setDenied(true);
+      }
+    };
+    void poll();
+    const id = setInterval(() => void poll(), 60000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [getToken]);
+
+  if (denied)
+    return (
+      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+        <Card className="rounded-2xl border-red-200 bg-red-50/50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-red-500 text-white shadow">
+                <ShieldAlert className="size-5" />
+              </span>
+              <div>
+                <h2 className="font-heading text-lg font-semibold">Operator access only</h2>
+                <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                  Tera account is ops list me nahi hai. Render dashboard me{" "}
+                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-black/5">OPERATOR_EMAILS</code>{" "}
+                  me woh exact email daal jo tu is app me login karta hai (comma-separated),
+                  phir backend redeploy hone ka wait kar aur dobara{" "}
+                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-black/5">/ops</code> khol.
+                </p>
+                {!isSignedIn ? (
+                  <Button asChild size="sm" className="mt-3">
+                    <Link href="/login">Login karo</Link>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+
+  if (ops === null)
+    return (
+      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-64 rounded-lg" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-32 rounded-xl" />
+          </div>
+          <Skeleton className="h-24 rounded-xl" />
+        </div>
+      </div>
+    );
+
+  // Render the active tab panel — simple if/else avoids "created during render"
+  if (activeTab === TAB_OVERVIEW) {
+    return <OverviewPanel ops={ops} />;
+  }
+  if (activeTab === TAB_TENANTS) {
+    return <TenantsPanel />;
+  }
+  if (activeTab === TAB_AGENTS) {
+    return <AgentsPanel />;
+  }
+  if (activeTab === TAB_DOCS) {
+    return <DocsPanel />;
+  }
+  if (activeTab === TAB_TRENDS) {
+    return <TrendsPanel />;
+  }
+  if (activeTab === TAB_ERRORS) {
+    return <ErrorsPanel />;
+  }
+  if (activeTab === TAB_PLANS) {
+    return <PlansPanel />;
+  }
+  if (activeTab === TAB_ANNOUNCE) {
+    return <AnnouncePanel />;
+  }
+
+  // Fallback to overview
+  return <OverviewPanel ops={ops} />;
 }
