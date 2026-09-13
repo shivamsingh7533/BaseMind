@@ -14,6 +14,7 @@ cleaned up on teardown.
 
 import asyncio
 import io
+import os
 import uuid
 
 from fastapi import HTTPException, UploadFile
@@ -43,6 +44,7 @@ def check(name, ok, extra=""):
 
 
 async def main():
+    os.environ["BREVO_ENABLED"] = "0"
     await init_db()
     async with SessionFactory() as db:
         user = User(clerk_id=TEST_CLERK, email="func-test@example.com", name="Func Test")

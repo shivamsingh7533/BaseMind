@@ -13,6 +13,15 @@
       "type": "local",
       "command": ["npx", "-y", "@agentmemory/mcp"],
       "enabled": true
+    },
+    "basemind": {
+      "type": "local",
+      "command": ["backend/.venv/Scripts/python.exe", "mcp/basemind_mcp.py"],
+      "enabled": true,
+      "environment": {
+        "BASE_MIND_TOKEN": "{env:BASE_MIND_TOKEN}",
+        "BASE_MIND_API_URL": "{env:PROD_APP_URL}"
+      }
     }
   }
 }
