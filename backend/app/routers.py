@@ -29,7 +29,7 @@ from .ai import (
 from .auth import get_current_user
 from .cache import cache_get, cache_set, invalidate_user_cache
 from .db import SessionFactory, get_db
-from .models import Agent, Conversation, Document, DocumentChunk, Message, User
+from .models import EMBEDDING_DIM, Agent, Conversation, Document, DocumentChunk, Message, User
 from .schemas import (
     AgentCreate,
     AgentUpdate,
@@ -625,6 +625,42 @@ async def dashboard(
         )
     ).scalar_one()
 
+    embeddings_count = (
+        await db.execute(
+            select(func.count()).select_from(DocumentChunk).where(DocumentChunk.user_id == user.id)
+        )
+    ).scalar_one()
+    ready_docs = (
+        await db.execute(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.user_id == user.id, Document.status == "ready")
+        )
+    ).scalar_one()
+    pending_docs = (
+        await db.execute(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.user_id == user.id, Document.status == "processing")
+        )
+    ).scalar_one()
+    if embeddings_count == 0 and pending_docs == 0:
+        vector_status = "empty"
+    elif pending_docs > 0:
+        vector_status = "syncing"
+    elif failed_docs > 0:
+        vector_status = "attention"
+    else:
+        vector_status = "synced"
+    vector = {
+        "embeddings": embeddings_count,
+        "indexedDocs": ready_docs,
+        "pendingDocs": pending_docs,
+        "failedDocs": failed_docs,
+        "dim": EMBEDDING_DIM,
+        "status": vector_status,
+    }
+
     doc_types = (await db.execute(
         select(Document.type, func.count())
         .where(Document.user_id == user.id)
@@ -843,6 +879,7 @@ async def dashboard(
         "activity": activity[:8],
         "perAgent": per_agent,
         "trend7d": trend7d,
+        "vector": vector,
     }
     await cache_set(cache_key, payload)
     return payload

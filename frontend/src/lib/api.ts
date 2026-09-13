@@ -35,11 +35,23 @@ export interface TrendDay {
   agentMsgs: number;
 }
 
+export type VectorStatus = "empty" | "syncing" | "attention" | "synced";
+
+export interface DashboardVector {
+  embeddings: number;
+  indexedDocs: number;
+  pendingDocs: number;
+  failedDocs: number;
+  dim: number;
+  status: VectorStatus;
+}
+
 export interface DashboardData {
   stats: Stat[];
   activity: ActivityItem[];
   perAgent: PerAgent[];
   trend7d: TrendDay[];
+  vector: DashboardVector;
 }
 
 export type AgentStatus = "active" | "training" | "paused";

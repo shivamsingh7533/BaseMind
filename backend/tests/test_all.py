@@ -156,6 +156,11 @@ async def main():
             check("dashboard trend7d", len(dash["trend7d"]) == 7
                   and dash["trend7d"][-1]["conversations"] >= 1)
             check("dashboard perAgent has resolved field", "resolved" in dash["perAgent"][0])
+            check("dashboard vector block",
+                  dash["vector"]["embeddings"] >= 1
+                  and dash["vector"]["indexedDocs"] >= 1
+                  and dash["vector"]["dim"] == 768
+                  and dash["vector"]["status"] in {"synced", "syncing", "attention"}, str(dash["vector"]))
 
             # ---- Download (4A2 signed URL) ----
             web_resp = await routers.download_document(sync["id"], user, db)

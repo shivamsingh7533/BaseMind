@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
@@ -8,6 +8,7 @@ import {
   Bot,
   CloudSync,
   TriangleAlert,
+  Database,
   FileUp,
   Wallet,
   CirclePlus,
@@ -25,12 +26,67 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useAppData } from "@/lib/store";
+import type { DashboardVector, VectorStatus } from "@/lib/api";
 
 const ICONS = {
   agent: Bot,
   sync: CloudSync,
   warning: TriangleAlert,
 };
+
+const VECTOR_BADGE: Record<VectorStatus, ReactNode> = {
+  synced: (
+    <Badge variant="secondary" className="gap-1 text-success">
+      <CheckCircle2 className="size-3" /> Synced
+    </Badge>
+  ),
+  syncing: (
+    <Badge variant="secondary" className="gap-1 text-amber-600">
+      <CloudSync className="size-3" /> Syncing
+    </Badge>
+  ),
+  attention: (
+    <Badge variant="secondary" className="gap-1 text-destructive">
+      <TriangleAlert className="size-3" /> Attention
+    </Badge>
+  ),
+  empty: (
+    <Badge variant="outline" className="gap-1 text-muted-foreground">
+      <Database className="size-3" /> Empty
+    </Badge>
+  ),
+};
+
+function VectorCard({ vector }: { vector: DashboardVector }) {
+  const total = vector.indexedDocs + vector.pendingDocs + vector.failedDocs;
+  const pct = total > 0 ? Math.round((vector.indexedDocs / total) * 100) : 0;
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-muted-foreground">Vector DB</p>
+          {VECTOR_BADGE[vector.status]}
+        </div>
+        <p className="mt-1 font-heading text-3xl font-bold tracking-tight">
+          {vector.embeddings.toLocaleString()}
+        </p>
+        {vector.status === "empty" ? (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Database className="size-3.5" /> Upload knowledge to start indexing
+          </p>
+        ) : (
+          <div className="mt-3 space-y-1.5">
+            <Progress value={pct} />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Database className="size-3.5" />
+              {vector.indexedDocs} files indexed · {vector.dim}d
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
@@ -135,6 +191,7 @@ export default function DashboardPage() {
               </Card>
             ))
             )}
+            <VectorCard vector={data.vector} />
           </div>
 
           {showOnboarding ? (
