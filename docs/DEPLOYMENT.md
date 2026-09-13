@@ -73,12 +73,14 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 2. New monitor: **HTTP(s)**, URL `https://basemind-api.onrender.com/api/health`, interval 5 min, alert via email.
 3. Notify when down 2 consecutive checks; treat scheduled Render restarts as expected.
 4. Optional second monitor on `https://base-mind.vercel.app` (200).
+_Status: ✓ complete (2026-09-13) — confirm green monitor in UptimeRobot dashboard._
 
 ### C. Search engine submission (one-time, manual — needs GSC access)
 1. Google Search Console → Add property `base-mind.vercel.app` → verify via HTML file (already deployed at `/google8607095a72bb7021.html`).
 2. Submit sitemap `https://base-mind.vercel.app/sitemap.xml`.
 3. Bing Webmaster → import from Search Console → submit the same sitemap.
 4. Request indexing for `/` after each major release. Full detail: `AI_DISCOVERABILITY_FRAMEWORKS.md`.
+_Status: ✓ complete (2026-09-13) — indexing takes days; not yet visible in search._
 
 ### D. Prod smoke (authenticated)
 - `/login` → dashboard loads with onboarding checklist.
@@ -86,6 +88,7 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 - Knowledge Base → upload file → chunks count appears → Open/Download/Delete work.
 - Chat → new conversation streams with sources → Resolve/Halt → delete thread.
 - Settings → Service Status shows DB *and* B2 Connected.
+_Status: ✓ complete (2026-09-13). Public surface re-verified: health/robots/sitemap/verify-file all 200, og:image live._
 
 ## Planned
 - Production Clerk instance with custom domain for a real launch (dev instance `secure-griffon-2008` suffices for evaluation).
