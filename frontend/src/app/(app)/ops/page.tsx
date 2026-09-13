@@ -13,6 +13,7 @@ import {
   FileUp,
   Mail,
   MessageSquare,
+  ShieldAlert,
   TrendingUp,
   TriangleAlert,
 } from "lucide-react";
@@ -73,8 +74,9 @@ function VectorBadge({ status }: { status: OpsStatus["vector"]["status"] }) {
 }
 
 export default function OpsPage() {
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
   const [ops, setOps] = useState<OpsStatus | null>(null);
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -82,7 +84,13 @@ export default function OpsPage() {
       const t = await getToken();
       if (!t || !alive) return;
       const status = await fetchOpsStatus(t);
-      if (status) setOps(status);
+      if (!alive) return;
+      if (status) {
+        setOps(status);
+        setDenied(false);
+      } else {
+        setDenied(true);
+      }
     };
     void poll();
     const id = setInterval(() => void poll(), 60000);
@@ -91,6 +99,35 @@ export default function OpsPage() {
       clearInterval(id);
     };
   }, [getToken]);
+
+  if (denied)
+    return (
+      <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
+        <Card className="border-destructive/30">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                <ShieldAlert className="size-5" />
+              </span>
+              <div>
+                <h2 className="font-heading text-lg font-semibold">Operator access only</h2>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  Tera account is ops list me nahi hai. Render dashboard me{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">OPERATOR_EMAILS</code>{" "}
+                  me woh exact email daal jo tu is app me login karta hai (comma-separated, case-insensitive),
+                  phir backend redeploy hone ka wait kar aur dobara <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">/ops</code> khol.
+                </p>
+                {!isSignedIn ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Tu signed-out hai — pehle <Link href="/login" className="text-primary hover:underline">login</Link> kar.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
 
   if (ops === null)
     return (
