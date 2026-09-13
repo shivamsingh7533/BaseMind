@@ -1,9 +1,8 @@
+import jwt as pyjwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-import jwt as pyjwt
 
 from .config import get_settings
 from .db import get_db
@@ -34,7 +33,7 @@ def verify_clerk_token(token: str) -> dict:
         raise HTTPException(
             status_code=401,
             detail=f"Cannot fetch signing key from CLERK_JWKS_URL: {exc}",
-        )
+        ) from None
     try:
         return pyjwt.decode(
             token,
@@ -57,18 +56,18 @@ def verify_clerk_token(token: str) -> dict:
                 f"'{actual}' but CLERK_ISSUER='{settings.clerk_issuer or '(not set)'}'. "
                 "Fix the env var to match your Clerk instance."
             ),
-        )
+        ) from None
     except pyjwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired — refresh the page")
+        raise HTTPException(status_code=401, detail="Token expired — refresh the page") from None
     except pyjwt.ImmatureSignatureError:
-        raise HTTPException(status_code=401, detail="Token not yet valid — refresh the page")
+        raise HTTPException(status_code=401, detail="Token not yet valid — refresh the page") from None
     except pyjwt.InvalidSignatureError:
         raise HTTPException(
             status_code=401,
             detail="Signature invalid — token is from a different Clerk instance than CLERK_JWKS_URL",
-        )
+        ) from None
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from None
 
 
 async def upsert_user(db: AsyncSession, claims: dict) -> User:

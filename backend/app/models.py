@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
 
 from .db import Base
 
@@ -15,7 +15,7 @@ def _uuid() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class User(Base):
@@ -101,9 +101,7 @@ class DocumentChunk(Base):
     __tablename__ = "document_chunks"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
-    document_id: Mapped[str] = mapped_column(
-        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -120,4 +118,16 @@ class Subscription(Base):
     status: Mapped[str] = mapped_column(Text, default="active")
     stripe_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class EventLog(Base):
+    __tablename__ = "event_logs"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    user_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(Text, default="info")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    ref_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

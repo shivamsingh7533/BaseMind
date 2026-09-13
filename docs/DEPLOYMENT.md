@@ -24,6 +24,16 @@
 | `B2_APPLICATION_KEY_ID` | Backblaze B2 app key ID (scoped, bucket `BaseMind`) |
 | `B2_APPLICATION_KEY` | Backblaze B2 application key |
 | `B2_BUCKET_NAME` | `BaseMind` |
+| `BREVO_ENABLED` | `1` (app-level transactional emails — welcome, daily digest, rate-limit alert) |
+| `BREVO_API_KEY` | Brevo SMTP API key (free tier: 300 emails/day, no card) |
+| `BREVO_SENDER_EMAIL` | verified sender, e.g. `hi@yourdomain.com` |
+| `BREVO_SENDER_NAME` | `BaseMind` |
+| `SENTRY_DSN` | Sentry project DSN (crash + performance) |
+
+Emails no-op safely without `BREVO_ENABLED`/`BREVO_API_KEY` (Clerk already covers
+verification/reset emails). Sentry initializes only when `SENTRY_DSN` is set; the
+frontend reads `SENTRY_DSN` (server) / `NEXT_PUBLIC_SENTRY_DSN` (client) and only
+wraps `next.config.ts` when `SENTRY_DSN` is present, so local builds never need Sentry keys.
 
 CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 
@@ -40,7 +50,7 @@ CORS also allows any `https://*.vercel.app` via regex (preview deploys).
 
 ## Soft-launch checklist (final regression)
 1. CI green on the pushed commit (both jobs).
-2. Full functional suite passes locally (temp `test_all.py`, **50/50**).
+2. Full functional suite passes locally (temp `test_all.py`, **56/56**).
 3. Landing: `/` renders, both CTAs route to `/signup`, footer has Privacy/Terms links.
 4. Authenticated smoke on prod URLs:
    - Dashboard loads 4 stats + onboarding checklist (fresh account).

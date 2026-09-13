@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   env: {
@@ -7,4 +8,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default process.env.SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG ?? "basemind",
+      project: process.env.SENTRY_PROJECT ?? "basemind-web",
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+    })
+  : nextConfig;

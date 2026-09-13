@@ -15,6 +15,17 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
+_sentry_dsn = get_settings().sentry_dsn
+if _sentry_dsn:
+    import sentry_sdk  # noqa: E402
+
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.05,
+    )
+    log.info("Sentry enabled")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

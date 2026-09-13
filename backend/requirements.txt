@@ -11,3 +11,5 @@ pgvector>=0.3
 pypdf>=4.0
 python-multipart>=0.0.9
 b2sdk>=2.0
+brevo-python>=5
+sentry-sdk>=2

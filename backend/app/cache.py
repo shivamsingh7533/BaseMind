@@ -1,3 +1,5 @@
+import contextlib
+
 from .config import get_settings
 
 _client = None
@@ -33,10 +35,8 @@ async def cache_set(key: str, value, ttl_seconds: int = 120) -> None:
     redis = _get_redis()
     if redis is None:
         return
-    try:
+    with contextlib.suppress(Exception):
         await redis.set(key, value, ex=ttl_seconds)
-    except Exception:
-        pass
 
 
 async def invalidate_user_cache(user_id: str) -> None:

@@ -23,9 +23,7 @@ def get_blob_api():
 
         info = InMemoryAccountInfo()
         api = B2Api(info)
-        api.authorize_account(
-            "production", s.b2_application_key_id, s.b2_application_key
-        )
+        api.authorize_account("production", s.b2_application_key_id, s.b2_application_key)
         _blob_api = api
     return _blob_api
 

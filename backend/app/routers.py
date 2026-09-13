@@ -1,8 +1,8 @@
-import asyncio
+import contextlib
 import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import (
@@ -29,6 +29,7 @@ from .ai import (
 from .auth import get_current_user
 from .cache import cache_get, cache_set, invalidate_user_cache
 from .db import SessionFactory, get_db
+from .email import dispatch_digest, dispatch_rate_limit, dispatch_welcome
 from .models import EMBEDDING_DIM, Agent, Conversation, Document, DocumentChunk, Message, User
 from .schemas import (
     AgentCreate,
@@ -65,24 +66,20 @@ def _allow_chat(user_id: str) -> bool:
     _chat_hits[user_id] = hits
     return True
 
+
 router = APIRouter(prefix="/api")
 
 
 async def _get_owned(db: AsyncSession, model, obj_id: str, user: User):
-    result = await db.execute(
-        select(model).where(model.id == obj_id, model.user_id == user.id)
-    )
+    result = await db.execute(select(model).where(model.id == obj_id, model.user_id == user.id))
     obj = result.scalar_one_or_none()
     if obj is None:
-        exists = await db.execute(
-            select(model.id).where(model.id == obj_id)
-        )
+        exists = await db.execute(select(model.id).where(model.id == obj_id))
         if exists.scalar_one_or_none() is not None:
             raise HTTPException(
                 status_code=404,
                 detail=(
-                    f"{model.__name__} belongs to a different account "
-                    "(you may have signed in with another method)"
+                    f"{model.__name__} belongs to a different account (you may have signed in with another method)"
                 ),
             )
         raise HTTPException(
@@ -98,9 +95,7 @@ async def list_agents(user: User = Depends(get_current_user), db: AsyncSession =
     cached = await cache_get(cache_key)
     if cached is not None:
         return cached
-    result = await db.execute(
-        select(Agent).where(Agent.user_id == user.id).order_by(Agent.created_at.desc())
-    )
+    result = await db.execute(select(Agent).where(Agent.user_id == user.id).order_by(Agent.created_at.desc()))
     payload = [serialize_agent(a) for a in result.scalars()]
     await cache_set(cache_key, payload)
     return payload
@@ -121,10 +116,13 @@ async def create_agent(
         status="active",
         train_progress=100,
     )
+    existing = (await db.execute(select(func.count()).select_from(Agent).where(Agent.user_id == user.id))).scalar_one()
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
     await invalidate_user_cache(user.id)
+    if existing == 0:
+        await dispatch_welcome(user)
     return serialize_agent(agent)
 
 
@@ -157,16 +155,12 @@ async def delete_agent(
 
 
 @router.get("/documents")
-async def list_documents(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+async def list_documents(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     cache_key = f"docs:{user.id}"
     cached = await cache_get(cache_key)
     if cached is not None:
         return cached
-    result = await db.execute(
-        select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc())
-    )
+    result = await db.execute(select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc()))
     payload = [serialize_document(d) for d in result.scalars()]
     await cache_set(cache_key, payload)
     return payload
@@ -222,7 +216,7 @@ async def _persist_document(
     db.add(doc)
     await db.flush()
 
-    for index, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+    for index, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=False)):
         db.add(
             DocumentChunk(
                 document_id=doc.id,
@@ -260,7 +254,9 @@ async def upload_document(
         source = await upload_original(user.id, file.filename or "upload.txt", raw)
     except Exception:
         log.warning(
-            "B2 upload_original failed for user %s file %r", user.id, file.filename,
+            "B2 upload_original failed for user %s file %r",
+            user.id,
+            file.filename,
             exc_info=True,
         )
 
@@ -285,34 +281,28 @@ async def sync_url(
 ):
     parsed = httpx.URL(payload.url)
     if parsed.scheme not in ("http", "https") or not parsed.host:
-        raise HTTPException(
-            status_code=422, detail="Invalid URL — must be a full http(s) link"
-        )
+        raise HTTPException(status_code=422, detail="Invalid URL — must be a full http(s) link")
     if payload.agent_id:
         await _get_owned(db, Agent, payload.agent_id, user)
 
     raw = b""
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
-            async with client.stream("GET", str(parsed)) as res:
-                if res.status_code != 200:
-                    raise HTTPException(
-                        status_code=422, detail=f"Page returned HTTP {res.status_code}"
-                    )
-                async for block in res.aiter_bytes():
-                    raw += block
-                    if len(raw) > MAX_SYNC_BYTES:
-                        raise HTTPException(
-                            status_code=413, detail="Page too large (max 2MB)"
-                        )
+        async with (
+            httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client,
+            client.stream("GET", str(parsed)) as res,
+        ):
+            if res.status_code != 200:
+                raise HTTPException(status_code=422, detail=f"Page returned HTTP {res.status_code}")
+            async for block in res.aiter_bytes():
+                raw += block
+                if len(raw) > MAX_SYNC_BYTES:
+                    raise HTTPException(status_code=413, detail="Page too large (max 2MB)")
     except HTTPException:
         raise
     except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=504, detail=f"Timed out reaching {parsed.host}"
-        )
+        raise HTTPException(status_code=504, detail=f"Timed out reaching {parsed.host}") from None
     except httpx.HTTPError:
-        raise HTTPException(status_code=422, detail=f"Couldn't reach {parsed.host}")
+        raise HTTPException(status_code=422, detail=f"Couldn't reach {parsed.host}") from None
     if not raw:
         raise HTTPException(status_code=422, detail="Empty response from site")
 
@@ -320,9 +310,7 @@ async def sync_url(
     title = page_title(html) or parsed.host or payload.url
     text = extract_html(html)
     if not text:
-        raise HTTPException(
-            status_code=422, detail="No readable text found at that URL"
-        )
+        raise HTTPException(status_code=422, detail="No readable text found at that URL")
 
     doc = await _persist_document(
         db,
@@ -345,10 +333,8 @@ async def delete_document(
 ):
     doc = await _get_owned(db, Document, document_id, user)
     if doc.storage_key and is_b2_enabled():
-        try:
+        with contextlib.suppress(Exception):
             await delete_original(doc.storage_key)
-        except Exception:
-            pass
     await db.delete(doc)
     await db.commit()
     await invalidate_user_cache(user.id)
@@ -374,9 +360,7 @@ async def download_document_url(
     return {"url": url}
 
 
-async def _resolve_download(
-    db: AsyncSession, document_id: str, user: User
-) -> str:
+async def _resolve_download(db: AsyncSession, document_id: str, user: User) -> str:
     doc = await _get_owned(db, Document, document_id, user)
     if doc.type == "Web Link":
         if not doc.storage_key:
@@ -392,11 +376,9 @@ async def _resolve_download(
     try:
         url = await download_url(doc.storage_key)
     except Exception:
-        raise HTTPException(status_code=502, detail="Failed to fetch file from storage")
+        raise HTTPException(status_code=502, detail="Failed to fetch file from storage") from None
     if url is None:
-        raise HTTPException(
-            status_code=404, detail="File no longer in storage"
-        )
+        raise HTTPException(status_code=404, detail="File no longer in storage")
     return url
 
 
@@ -408,9 +390,7 @@ async def document_preview(
 ):
     doc = await _get_owned(db, Document, document_id, user)
     result = await db.execute(
-        select(DocumentChunk.content)
-        .where(DocumentChunk.document_id == doc.id)
-        .order_by(DocumentChunk.chunk_index)
+        select(DocumentChunk.content).where(DocumentChunk.document_id == doc.id).order_by(DocumentChunk.chunk_index)
     )
     preview = "\n\n".join(r[0] for r in result.all())
     if len(preview) > 2000:
@@ -425,9 +405,7 @@ async def document_preview(
 
 
 @router.get("/conversations")
-async def list_conversations(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+async def list_conversations(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     cache_key = f"convs:{user.id}"
     cached = await cache_get(cache_key)
     if cached is not None:
@@ -525,9 +503,7 @@ async def delete_conversation(
 
 
 @router.get("/settings/status")
-async def settings_status(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+async def settings_status(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return {
         "db_configured": SessionFactory is not None,
         "b2_enabled": is_b2_enabled(),
@@ -535,23 +511,13 @@ async def settings_status(
 
 
 @router.delete("/me", status_code=204)
-async def delete_workspace(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
-    docs = (
-        await db.execute(
-            select(Document).where(Document.user_id == user.id)
-        )
-    ).scalars().all()
+async def delete_workspace(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    docs = (await db.execute(select(Document).where(Document.user_id == user.id))).scalars().all()
     for doc in docs:
         if doc.storage_key and is_b2_enabled():
-            try:
+            with contextlib.suppress(Exception):
                 await delete_original(doc.storage_key)
-            except Exception:
-                pass
-    await db.execute(
-        delete(Conversation).where(Conversation.user_id == user.id)
-    )
+    await db.execute(delete(Conversation).where(Conversation.user_id == user.id))
     await db.execute(delete(Document).where(Document.user_id == user.id))
     await db.execute(delete(Agent).where(Agent.user_id == user.id))
     await db.execute(delete(User).where(User.id == user.id))
@@ -560,9 +526,7 @@ async def delete_workspace(
 
 
 @router.get("/dashboard")
-async def dashboard(
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
+async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     cache_key = f"dash:{user.id}"
     cached = await cache_get(cache_key)
     if cached is not None:
@@ -575,12 +539,10 @@ async def dashboard(
         await db.execute(select(func.count()).select_from(Document).where(Document.user_id == user.id))
     ).scalar_one()
     convs_count = (
-        await db.execute(
-            select(func.count()).select_from(Conversation).where(Conversation.user_id == user.id)
-        )
+        await db.execute(select(func.count()).select_from(Conversation).where(Conversation.user_id == user.id))
     ).scalar_one()
 
-    day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     convs_today = (
         await db.execute(
             select(func.count())
@@ -590,9 +552,7 @@ async def dashboard(
     ).scalar_one()
     agents_today = (
         await db.execute(
-            select(func.count())
-            .select_from(Agent)
-            .where(Agent.user_id == user.id, Agent.created_at >= day_start)
+            select(func.count()).select_from(Agent).where(Agent.user_id == user.id, Agent.created_at >= day_start)
         )
     ).scalar_one()
     docs_today = (
@@ -609,32 +569,21 @@ async def dashboard(
     ).scalar_one()
 
     top_agent = (
-        await db.execute(
-            select(Agent)
-            .where(Agent.user_id == user.id)
-            .order_by(Agent.queries_24h.desc())
-            .limit(1)
-        )
+        await db.execute(select(Agent).where(Agent.user_id == user.id).order_by(Agent.queries_24h.desc()).limit(1))
     ).scalar_one_or_none()
 
     failed_docs = (
         await db.execute(
-            select(func.count())
-            .select_from(Document)
-            .where(Document.user_id == user.id, Document.status == "failed")
+            select(func.count()).select_from(Document).where(Document.user_id == user.id, Document.status == "failed")
         )
     ).scalar_one()
 
     embeddings_count = (
-        await db.execute(
-            select(func.count()).select_from(DocumentChunk).where(DocumentChunk.user_id == user.id)
-        )
+        await db.execute(select(func.count()).select_from(DocumentChunk).where(DocumentChunk.user_id == user.id))
     ).scalar_one()
     ready_docs = (
         await db.execute(
-            select(func.count())
-            .select_from(Document)
-            .where(Document.user_id == user.id, Document.status == "ready")
+            select(func.count()).select_from(Document).where(Document.user_id == user.id, Document.status == "ready")
         )
     ).scalar_one()
     pending_docs = (
@@ -661,76 +610,82 @@ async def dashboard(
         "status": vector_status,
     }
 
-    doc_types = (await db.execute(
-        select(Document.type, func.count())
-        .where(Document.user_id == user.id)
-        .group_by(Document.type)
-    )).all()
+    doc_types = (
+        await db.execute(select(Document.type, func.count()).where(Document.user_id == user.id).group_by(Document.type))
+    ).all()
     web_count = sum(n for t, n in doc_types if t and str(t).lower().startswith("web"))
     file_count = sum(n for t, n in doc_types) - web_count
 
     recent_docs = (
-        await db.execute(
-            select(Document)
-            .where(Document.user_id == user.id)
-            .order_by(Document.created_at.desc())
-            .limit(3)
+        (
+            await db.execute(
+                select(Document).where(Document.user_id == user.id).order_by(Document.created_at.desc()).limit(3)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     recent_agents = (
-        await db.execute(
-            select(Agent)
-            .where(Agent.user_id == user.id)
-            .order_by(Agent.created_at.desc())
-            .limit(2)
-        )
-    ).scalars().all()
+        (await db.execute(select(Agent).where(Agent.user_id == user.id).order_by(Agent.created_at.desc()).limit(2)))
+        .scalars()
+        .all()
+    )
     recent_convs = (
-        await db.execute(
-            select(Conversation)
-            .where(Conversation.user_id == user.id)
-            .order_by(Conversation.started_at.desc())
-            .limit(3)
+        (
+            await db.execute(
+                select(Conversation)
+                .where(Conversation.user_id == user.id)
+                .order_by(Conversation.started_at.desc())
+                .limit(3)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     activity: list[dict] = []
     for a in recent_docs:
         failed = a.status == "failed"
-        activity.append({
-            "id": f"doc-{a.id}",
-            "icon": "warning" if failed else "sync",
-            "highlight": a.name,
-            "text": "failed to index" if failed else "indexed as a knowledge source",
-            "time": _fmt_time(a.created_at),
-        })
+        activity.append(
+            {
+                "id": f"doc-{a.id}",
+                "icon": "warning" if failed else "sync",
+                "highlight": a.name,
+                "text": "failed to index" if failed else "indexed as a knowledge source",
+                "time": _fmt_time(a.created_at),
+            }
+        )
     for ag in recent_agents:
-        activity.append({
-            "id": f"agent-{ag.id}",
-            "icon": "agent",
-            "highlight": ag.name,
-            "text": "agent created",
-            "time": _fmt_time(ag.created_at),
-        })
+        activity.append(
+            {
+                "id": f"agent-{ag.id}",
+                "icon": "agent",
+                "highlight": ag.name,
+                "text": "agent created",
+                "time": _fmt_time(ag.created_at),
+            }
+        )
     for c in recent_convs:
         label = (c.preview or "").strip()[:48]
-        activity.append({
-            "id": f"conv-{c.id}",
-            "icon": "agent",
-            "highlight": label or "New conversation",
-            "text": "conversation started",
-            "time": _fmt_time(c.started_at),
-        })
+        activity.append(
+            {
+                "id": f"conv-{c.id}",
+                "icon": "agent",
+                "highlight": label or "New conversation",
+                "text": "conversation started",
+                "time": _fmt_time(c.started_at),
+            }
+        )
 
     resolution_value = "0%"
     resolution_sub = "needs live traffic"
     if convs_count:
         answered = (
             await db.execute(
-                select(func.count()).select_from(Message).where(
-                    Message.conversation_id.in_(
-                        select(Conversation.id).where(Conversation.user_id == user.id)
-                    ),
+                select(func.count())
+                .select_from(Message)
+                .where(
+                    Message.conversation_id.in_(select(Conversation.id).where(Conversation.user_id == user.id)),
                     Message.role == "agent",
                 )
             )
@@ -738,22 +693,18 @@ async def dashboard(
         resolution_value = f"{min(round(answered / convs_count * 100), 100)}%"
         resolution_sub = f"{answered} answered of {convs_count} conversations"
 
-    agents = (
-        await db.execute(select(Agent).where(Agent.user_id == user.id))
-    ).scalars().all()
-    conv_by_agent = {
-        agent_id: count
-        for agent_id, count in (
+    agents = (await db.execute(select(Agent).where(Agent.user_id == user.id))).scalars().all()
+    conv_by_agent = dict(
+        (
             await db.execute(
                 select(Conversation.agent_id, func.count())
                 .where(Conversation.user_id == user.id)
                 .group_by(Conversation.agent_id)
             )
         ).all()
-    }
-    msgs_by_agent = {
-        agent_id: count
-        for agent_id, count in (
+    )
+    msgs_by_agent = dict(
+        (
             await db.execute(
                 select(Conversation.agent_id, func.count())
                 .select_from(Message)
@@ -766,10 +717,9 @@ async def dashboard(
                 .group_by(Conversation.agent_id)
             )
         ).all()
-    }
-    resolved_by_agent = {
-        agent_id: count
-        for agent_id, count in (
+    )
+    resolved_by_agent = dict(
+        (
             await db.execute(
                 select(Conversation.agent_id, func.count())
                 .where(
@@ -780,7 +730,7 @@ async def dashboard(
                 .group_by(Conversation.agent_id)
             )
         ).all()
-    }
+    )
     per_agent = [
         {
             "id": ag.id,
@@ -798,9 +748,8 @@ async def dashboard(
 
     week_start = day_start - timedelta(days=6)
     conv_day = func.date_trunc(text("'day'"), Conversation.started_at)
-    conv_by_day = {
-        day: count
-        for day, count in (
+    conv_by_day = dict(
+        (
             await db.execute(
                 select(conv_day, func.count())
                 .where(
@@ -810,11 +759,10 @@ async def dashboard(
                 .group_by(conv_day)
             )
         ).all()
-    }
+    )
     msg_day = func.date_trunc(text("'day'"), Message.created_at)
-    msgs_by_day = {
-        day: count
-        for day, count in (
+    msgs_by_day = dict(
+        (
             await db.execute(
                 select(msg_day, func.count())
                 .select_from(Message)
@@ -827,7 +775,7 @@ async def dashboard(
                 .group_by(msg_day)
             )
         ).all()
-    }
+    )
     trend7d = [
         {
             "date": day.strftime("%Y-%m-%d"),
@@ -844,9 +792,7 @@ async def dashboard(
             "label": "Total Agents",
             "value": str(agents_count),
             "delta": f"+{agents_today}" if agents_today else None,
-            "sub": (
-                f"{active_agents} active · best: {top_agent.name}" if top_agent else f"{active_agents} active"
-            ),
+            "sub": (f"{active_agents} active · best: {top_agent.name}" if top_agent else f"{active_agents} active"),
             "progress": min(agents_count * 10, 100),
         },
         {
@@ -881,6 +827,62 @@ async def dashboard(
         "trend7d": trend7d,
         "vector": vector,
     }
+    since_24h = datetime.now(UTC) - timedelta(days=1)
+    q24 = dict(
+        (
+            await db.execute(
+                select(Conversation.agent_id, func.count())
+                .where(
+                    Conversation.user_id == user.id,
+                    Conversation.agent_id.isnot(None),
+                    Conversation.started_at >= since_24h,
+                )
+                .group_by(Conversation.agent_id)
+            )
+        ).all()
+    )
+    r24 = dict(
+        (
+            await db.execute(
+                select(Conversation.agent_id, func.count())
+                .where(
+                    Conversation.user_id == user.id,
+                    Conversation.agent_id.isnot(None),
+                    Conversation.status == "resolved",
+                    Conversation.started_at >= since_24h,
+                )
+                .group_by(Conversation.agent_id)
+            )
+        ).all()
+    )
+    h24 = dict(
+        (
+            await db.execute(
+                select(Conversation.agent_id, func.count())
+                .where(
+                    Conversation.user_id == user.id,
+                    Conversation.agent_id.isnot(None),
+                    Conversation.status == "halted",
+                    Conversation.started_at >= since_24h,
+                )
+                .group_by(Conversation.agent_id)
+            )
+        ).all()
+    )
+    await dispatch_digest(
+        user,
+        {
+            "agents": [
+                {
+                    "name": ag.name,
+                    "queries": q24.get(ag.id, 0),
+                    "resolved": r24.get(ag.id, 0),
+                    "halted": h24.get(ag.id, 0),
+                }
+                for ag in agents
+            ]
+        },
+    )
     await cache_set(cache_key, payload)
     return payload
 
@@ -895,6 +897,13 @@ async def chat(
     if payload.role != "user":
         raise HTTPException(status_code=422, detail="role must be 'user'")
     if not _allow_chat(user.id):
+        agent_name_hint = (
+            await db.execute(select(Conversation.agent_id).where(Conversation.id == conversation_id))
+        ).scalar_one_or_none()
+        if agent_name_hint:
+            hint_row = (await db.execute(select(Agent.name).where(Agent.id == agent_name_hint))).scalar_one_or_none()
+            if hint_row:
+                await dispatch_rate_limit(user, hint_row)
         raise HTTPException(
             status_code=429,
             detail=(
@@ -908,9 +917,7 @@ async def chat(
 
     extra_instructions = ""
     if agent_id:
-        agent_row = (
-            await db.execute(select(Agent).where(Agent.id == agent_id))
-        ).scalar_one_or_none()
+        agent_row = (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
         if agent_row:
             extra_instructions = agent_row.instructions or ""
 
@@ -927,25 +934,15 @@ async def chat(
         .limit(6)
     )
     recent = list(reversed(result.scalars().all()))
-    history = [
-        {"role": "model" if m.role == "agent" else "user", "content": m.content}
-        for m in recent
-    ]
+    history = [{"role": "model" if m.role == "agent" else "user", "content": m.content} for m in recent]
 
     query_embedding = (await embed_texts([payload.text]))[0]
 
-    search = select(DocumentChunk, Document.name).join(
-        Document, DocumentChunk.document_id == Document.id
-    )
+    search = select(DocumentChunk, Document.name).join(Document, DocumentChunk.document_id == Document.id)
     search = search.where(DocumentChunk.user_id == user.id)
     if agent_id:
-        search = search.where(
-            (DocumentChunk.agent_id == agent_id) | (DocumentChunk.agent_id.is_(None))
-        )
-    search = (
-        search.order_by(DocumentChunk.embedding.cosine_distance(query_embedding))
-        .limit(4)
-    )
+        search = search.where((DocumentChunk.agent_id == agent_id) | (DocumentChunk.agent_id.is_(None)))
+    search = search.order_by(DocumentChunk.embedding.cosine_distance(query_embedding)).limit(4)
     matches = (await db.execute(search)).all()
     contexts = [
         {
@@ -965,16 +962,12 @@ async def chat(
         sources_line = json.dumps(
             {
                 "type": "sources",
-                "sources": [
-                    {"docId": c["docId"], "source": c["source"]} for c in contexts
-                ],
+                "sources": [{"docId": c["docId"], "source": c["source"]} for c in contexts],
             }
         )
         yield f"data: {sources_line}\n\n"
         try:
-            async for token in stream_answer(
-                question, contexts, history, extra_instructions
-            ):
+            async for token in stream_answer(question, contexts, history, extra_instructions):
                 answer_parts.append(token)
                 yield "data: " + json.dumps({"type": "token", "token": token}) + "\n\n"
         except Exception as exc:

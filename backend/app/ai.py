@@ -1,5 +1,5 @@
 import io
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from fastapi import HTTPException
 
@@ -88,8 +88,23 @@ def extract_text(filename: str, raw: bytes) -> str:
 
 IGNORED_TAGS = {"script", "style", "noscript", "svg", "head", "iframe"}
 BLOCK_TAGS = {
-    "p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
-    "section", "article", "header", "footer", "nav", "blockquote",
+    "p",
+    "div",
+    "br",
+    "li",
+    "tr",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "nav",
+    "blockquote",
 }
 
 
@@ -150,10 +165,7 @@ async def stream_answer(
         )
 
     context_block = (
-        "\n\n".join(
-            f"[Source: {c['source']}, chunk {c['index']}]\n{c['content']}"
-            for c in contexts
-        )
+        "\n\n".join(f"[Source: {c['source']}, chunk {c['index']}]\n{c['content']}" for c in contexts)
         if contexts
         else "(knowledge base is empty)"
     )
@@ -161,17 +173,11 @@ async def stream_answer(
         *[{"role": m["role"], "parts": [{"text": m["content"]}]} for m in history],
         {
             "role": "user",
-            "parts": [
-                {
-                    "text": f"Knowledge base context:\n{context_block}\n\nCustomer question: {question}"
-                }
-            ],
+            "parts": [{"text": f"Knowledge base context:\n{context_block}\n\nCustomer question: {question}"}],
         },
     ]
     config = types.GenerateContentConfig(system_instruction=system_prompt)
-    stream = await client.aio.models.generate_content_stream(
-        model=CHAT_MODEL, contents=contents, config=config
-    )
+    stream = await client.aio.models.generate_content_stream(model=CHAT_MODEL, contents=contents, config=config)
     async for chunk in stream:
         if chunk.text:
             yield chunk.text

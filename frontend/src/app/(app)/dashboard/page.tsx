@@ -3,6 +3,16 @@
 import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
+import { format } from "date-fns";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   ArrowUp,
   Bot,
@@ -100,9 +110,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 }
 
 function shortDay(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
-    weekday: "short",
-  });
+  return format(new Date(`${iso}T00:00:00`), "EEE");
 }
 
 export default function DashboardPage() {
@@ -412,62 +420,114 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const totals = data.trend7d.map(
-                    (t) => t.conversations + t.agentMsgs
+                  const total = data.trend7d.reduce(
+                    (s, t) => s + t.conversations + t.agentMsgs,
+                    0
                   );
-                  const peak = Math.max(1, ...totals);
-                  const total = totals.reduce((s, n) => s + n, 0);
                   if (total === 0)
                     return (
                       <p className="py-6 text-center text-sm text-muted-foreground">
                         No conversations in the last 7 days.
                       </p>
                     );
+                  const chartData = data.trend7d.map((t) => ({
+                    date: shortDay(t.date),
+                    conversations: t.conversations,
+                    agentMsgs: t.agentMsgs,
+                  }));
                   return (
                     <div>
-                      <div className="flex items-end gap-2">
-                        {data.trend7d.map((t, i) => {
-                          const sum = t.conversations + t.agentMsgs;
-                          return (
-                            <div
-                              key={t.date}
-                              className="flex flex-1 flex-col items-center"
-                            >
-                              <span className="mb-1 text-[11px] font-medium text-muted-foreground">
-                                {sum}
-                              </span>
-                              <div className="flex h-32 w-full items-end gap-0.5">
-                                {sum === 0 ? (
-                                  <div className="h-1 w-full rounded bg-muted" />
-                                ) : (
-                                  <div className="flex h-full w-full flex-col justify-end gap-0.5">
-                                    <div
-                                      className="w-full rounded-t bg-chart-3/70"
-                                      style={{
-                                        height: `${(t.agentMsgs / peak) * 100}%`,
-                                      }}
-                                    />
-                                    <div
-                                      className="w-full rounded-b bg-primary"
-                                      style={{
-                                        height: `${(t.conversations / peak) * 100}%`,
-                                      }}
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                              <span
-                                className={`mt-1.5 text-[11px] ${
-                                  i === data.trend7d.length - 1
-                                    ? "font-semibold text-foreground"
-                                    : "text-muted-foreground"
-                                }`}
+                      <div className="h-40 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart
+                            data={chartData}
+                            margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                          >
+                            <defs>
+                              <linearGradient
+                                id="gradConvs"
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
                               >
-                                {shortDay(t.date)}
-                              </span>
-                            </div>
-                          );
-                        })}
+                                <stop
+                                  offset="0%"
+                                  stopColor="var(--primary)"
+                                  stopOpacity={0.18}
+                                />
+                                <stop
+                                  offset="100%"
+                                  stopColor="var(--primary)"
+                                  stopOpacity={0}
+                                />
+                              </linearGradient>
+                              <linearGradient
+                                id="gradMsgs"
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
+                              >
+                                <stop
+                                  offset="0%"
+                                  stopColor="var(--chart-3)"
+                                  stopOpacity={0.2}
+                                />
+                                <stop
+                                  offset="100%"
+                                  stopColor="var(--chart-3)"
+                                  stopOpacity={0}
+                                />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                              className="stroke-muted"
+                            />
+                            <XAxis
+                              dataKey="date"
+                              tickLine={false}
+                              axisLine={false}
+                              tick={{ fontSize: 11 }}
+                            />
+                            <YAxis
+                              allowDecimals={false}
+                              tickLine={false}
+                              axisLine={false}
+                              tick={{ fontSize: 11 }}
+                            />
+                            <Tooltip
+                              cursor={{ stroke: "var(--border)" }}
+                              contentStyle={{
+                                background: "hsl(var(--popover))",
+                                border: "1px solid hsl(var(--border))",
+                                borderRadius: "0.5rem",
+                                fontSize: 12,
+                              }}
+                              labelStyle={{ fontWeight: 600 }}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="conversations"
+                              stackId="1"
+                              stroke="var(--primary)"
+                              strokeWidth={2}
+                              fill="url(#gradConvs)"
+                              name="Conversations"
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="agentMsgs"
+                              stackId="1"
+                              stroke="var(--chart-3)"
+                              strokeWidth={2}
+                              fill="url(#gradMsgs)"
+                              name="Agent messages"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
                       </div>
                       <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1.5">
