@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LogoLockup } from "@/components/logo-lockup";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -163,7 +164,8 @@ const EMBED_CODE = `<script>
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
-      <section className="mx-auto max-w-6xl px-6 pb-20 pt-20 text-center">
+      <section className="mx-auto max-w-6xl px-6 pb-20 pt-16 text-center">
+        <LogoLockup withTagline className="mb-6" />
         <Badge variant="outline" className="mb-5 gap-1.5 border-primary/40 text-primary">
           <span className="relative flex size-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />

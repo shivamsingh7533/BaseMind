@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/logo";
 import {
   Sheet,
   SheetContent,
@@ -38,9 +39,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Bot className="size-4.5" />
-          </span>
+          <LogoMark className="size-8" />
           <span className="font-heading text-lg font-bold tracking-tight">
             BaseMind
           </span>
