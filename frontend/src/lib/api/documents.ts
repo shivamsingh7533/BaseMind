@@ -1,10 +1,9 @@
 import { toast } from "sonner";
-import { db } from "@/lib/seed-data";
 import { API_URL, authHeader, request } from "./client";
 import type { DocumentPreview, KnowledgeDoc } from "./types";
 
 export const getDocuments = (token?: string | null) =>
-  request<KnowledgeDoc[]>("/api/documents", db.documents, {
+  request<KnowledgeDoc[]>("/api/documents", {
     headers: authHeader(token),
   });
 
@@ -14,7 +13,6 @@ export const getDocumentPreview = (
 ) =>
   request<DocumentPreview | null>(
     `/api/documents/${documentId}/preview`,
-    null,
     { headers: authHeader(token) }
   );
 
@@ -24,7 +22,6 @@ export const getDocumentDownloadUrl = (
 ) =>
   request<{ url: string } | null>(
     `/api/documents/${documentId}/download-url`,
-    null,
     { headers: authHeader(token) }
   ).then((r) => r?.url ?? null);
 

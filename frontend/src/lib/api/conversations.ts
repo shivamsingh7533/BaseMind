@@ -1,9 +1,8 @@
-import { db } from "@/lib/seed-data";
 import { API_URL, authHeader, request } from "./client";
 import type { ChatEvent, Conversation, ConversationStatus } from "./types";
 
 export const getConversations = (token?: string | null) =>
-  request<Conversation[]>("/api/conversations", db.conversations, {
+  request<Conversation[]>("/api/conversations", {
     headers: authHeader(token),
   });
 
@@ -13,8 +12,9 @@ export const getConversation = (
 ) =>
   request<Conversation | null>(
     `/api/conversations/${conversationId}`,
-    null,
-    { headers: authHeader(token) }
+    {
+      headers: authHeader(token),
+    }
   );
 
 export async function updateConversationStatus(

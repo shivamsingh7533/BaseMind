@@ -1,10 +1,9 @@
 import { toast } from "sonner";
-import { db } from "@/lib/seed-data";
 import { API_URL, authHeader, request } from "./client";
 import type { Agent, AgentStatus } from "./types";
 
 export const getAgents = (token?: string | null) =>
-  request<Agent[]>("/api/agents", db.agents, { headers: authHeader(token) });
+  request<Agent[]>("/api/agents", { headers: authHeader(token) });
 
 export async function setAgentStatus(
   token: string | null | undefined,

@@ -9,6 +9,7 @@ import {
   type DashboardData,
   type KnowledgeDoc,
 } from "./api";
+import { handleApiError } from "./api/client";
 
 const TTL_MS = 30_000;
 
@@ -44,11 +45,16 @@ export const useAppData = create<AppDataState>((set, get) => ({
       state.dashboard !== null &&
       Date.now() - (state._ts.dashboard ?? 0) < TTL_MS;
     if (!fresh) {
-      const data = await getDashboard(token);
-      set((s) => ({
-        dashboard: data,
-        _ts: { ...s._ts, dashboard: Date.now() },
-      }));
+      try {
+        const data = await getDashboard(token);
+        set((s) => ({
+          dashboard: data,
+          _ts: { ...s._ts, dashboard: Date.now() },
+        }));
+      } catch (err) {
+        handleApiError(err, "Kya baat hai — dashboard load nahi hua");
+        set((s) => ({ dashboard: null, _ts: { ...s._ts, dashboard: Date.now() } }));
+      }
     }
     return get().dashboard as DashboardData;
   },
@@ -58,46 +64,63 @@ export const useAppData = create<AppDataState>((set, get) => ({
     const fresh =
       state.agents !== null && Date.now() - (state._ts.agents ?? 0) < TTL_MS;
     if (!fresh) {
-      const data = await getAgents(token);
-      set((s) => ({ agents: data, _ts: { ...s._ts, agents: Date.now() } }));
+      try {
+        const data = await getAgents(token);
+        set((s) => ({ agents: data, _ts: { ...s._ts, agents: Date.now() } }));
+      } catch (err) {
+        handleApiError(err, "Agents load nahi hue");
+        set((s) => ({ agents: null, _ts: { ...s._ts, agents: Date.now() } }));
+      }
     }
     return get().agents as Agent[];
   },
 
-  fetchDocuments: (token?: string | null, force?: boolean) => {
+  fetchDocuments: async (token?: string | null, force?: boolean) => {
     const state = get();
     const fresh =
       !force &&
       state.documents !== null &&
       Date.now() - (state._ts.documents ?? 0) < TTL_MS;
     if (!fresh) {
-      return getDocuments(token).then((data) => {
+      try {
+        const data = await getDocuments(token);
         set((s) => ({
           documents: data,
           _ts: { ...s._ts, documents: Date.now() },
         }));
-        return data;
-      });
+      } catch (err) {
+        handleApiError(err, "Documents load nahi hue");
+        set((s) => ({
+          documents: null,
+          _ts: { ...s._ts, documents: Date.now() },
+        }));
+      }
     }
-    return Promise.resolve(get().documents as KnowledgeDoc[]);
+    return get().documents as KnowledgeDoc[];
   },
 
-  fetchConversations: (token?: string | null, force?: boolean) => {
+  fetchConversations: async (token?: string | null, force?: boolean) => {
     const state = get();
     const fresh =
       !force &&
       state.conversations !== null &&
       Date.now() - (state._ts.conversations ?? 0) < TTL_MS;
     if (!fresh) {
-      return getConversations(token).then((data) => {
+      try {
+        const data = await getConversations(token);
         set((s) => ({
           conversations: data,
           _ts: { ...s._ts, conversations: Date.now() },
         }));
-        return data;
-      });
+      } catch (err) {
+        handleApiError(err, "Conversations load nahi hue");
+        set((s) => ({
+          conversations: null,
+          _ts: { ...s._ts, conversations: Date.now() },
+        }));
+      }
     }
-    return Promise.resolve(get().conversations as Conversation[]);
+    return get().conversations as Conversation[];
   },
 
   reset: () =>
