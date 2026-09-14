@@ -13,3 +13,4 @@ python-multipart>=0.0.9
 b2sdk>=2.0
 brevo-python>=5
 sentry-sdk>=2
+alembic>=1.13

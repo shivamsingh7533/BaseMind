@@ -31,6 +31,8 @@ const APP_LINKS = [
 ];
 
 const OPS_CACHE_KEY = "basemind_showOps";
+const OPS_CACHE_TTL_MS = 5 * 60 * 1000;
+const OPS_CACHE_TS_KEY = "basemind_showOps_ts";
 
 function subscribeOps(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -39,6 +41,16 @@ function subscribeOps(callback: () => void) {
 
 function getOpsSnapshot() {
   return window.localStorage.getItem(OPS_CACHE_KEY) === "1";
+}
+
+function opsCacheFresh() {
+  const ts = Number(window.localStorage.getItem(OPS_CACHE_TS_KEY) ?? "0");
+  return Date.now() - ts < OPS_CACHE_TTL_MS;
+}
+
+function setOpsCache(value: "1" | "0") {
+  window.localStorage.setItem(OPS_CACHE_KEY, value);
+  window.localStorage.setItem(OPS_CACHE_TS_KEY, String(Date.now()));
 }
 
 function getOpsServerSnapshot() {
@@ -54,20 +66,22 @@ export function Navbar() {
 
   useEffect(() => {
     if (!isSignedIn) return;
+    if (opsCacheFresh()) return;
     let alive = true;
     getToken()
       .then((t) => fetchOpsStatus(t))
       .then((ops) => {
-        if (alive && ops) {
-          setOpsConfirmed(true);
-          window.localStorage.setItem(OPS_CACHE_KEY, "1");
+        if (alive) {
+          const value = ops ? "1" : "0";
+          setOpsConfirmed(!!ops);
+          setOpsCache(value);
         }
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [isSignedIn, getToken]);
+  }, [isSignedIn, getToken, opsConfirmed]);
 
   const links = [
     ...MARKETING_LINKS,
@@ -94,6 +108,7 @@ export function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "transition-colors hover:text-foreground",
                   active && "text-foreground"
@@ -135,6 +150,13 @@ export function Navbar() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
+                  aria-current={
+                    item.href.startsWith("/#")
+                      ? undefined
+                      : pathname === item.href || pathname.startsWith(item.href + "/")
+                        ? "page"
+                        : undefined
+                  }
                   className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   {item.label}

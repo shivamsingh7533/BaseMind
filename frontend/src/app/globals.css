@@ -20,7 +20,7 @@
   --accent-foreground: oklch(0.457 0.086 184.3);
   --destructive: oklch(0.577 0.245 27.32);
   --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.723 0.192 149.58);
+  --success: oklch(0.577 0.182 150.3);
   --border: oklch(0.929 0.013 255.51);
   --input: oklch(0.929 0.013 255.51);
   --ring: oklch(0.6 0.11 184.7);
@@ -92,12 +92,16 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
   }
   h1, h2, h3, h4 {
     font-family: var(--font-heading);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }

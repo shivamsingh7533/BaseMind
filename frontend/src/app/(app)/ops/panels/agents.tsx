@@ -18,7 +18,7 @@ export function AgentsPanel({ agents }: { agents: OpsAgent[] | null }) {
       <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl font-semibold text-white">Agents</h2>
+            <h1 className="font-heading text-xl font-semibold text-white">Agents</h1>
             <p className="mt-1 text-sm text-slate-400">
               Top {rows.length} by queries in last 24h · {activeCount} active · {slowCount} slow
             </p>

@@ -197,6 +197,7 @@ export default function SettingsPage() {
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder="Type DELETE to confirm"
+            aria-label="Type DELETE to confirm"
             autoFocus
           />
           <DialogFooter>

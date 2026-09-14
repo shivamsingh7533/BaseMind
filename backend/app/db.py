@@ -1,8 +1,11 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import suppress
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import HTTPException
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -62,3 +65,40 @@ async def init_db() -> None:
             )
         with suppress(Exception):
             await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sources TEXT")
+
+    await run_migrations()
+
+
+async def run_migrations() -> None:
+    """Stamp the baseline if unversioned, then apply any pending Alembic revisions.
+
+    Existing deployments created their tables via create_all, so on first boot
+    after adopting Alembic we stamp `head` instead of replaying the baseline
+    DDL (which would collide with the existing tables).
+    """
+    if engine is None:
+        return
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy.sql import text
+
+    from . import models  # noqa: F401
+
+    root = Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "alembic"))
+
+    async with engine.connect() as conn:
+        has_version = await conn.run_sync(lambda c: inspect(c).has_table("alembic_version"))
+        versioned = set()
+        if has_version:
+            rows = (await conn.execute(text("SELECT version_num FROM alembic_version"))).all()
+            versioned = {r[0] for r in rows}
+
+    def _sync() -> None:
+        if not versioned:
+            command.stamp(cfg, "head")
+        else:
+            command.upgrade(cfg, "head")
+
+    await asyncio.to_thread(_sync)

@@ -18,7 +18,7 @@ export function ErrorsPanel({ errors }: { errors: OpsErrorsData | null }) {
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
-        <h2 className="font-heading text-xl font-semibold text-white">Errors</h2>
+        <h1 className="font-heading text-xl font-semibold text-white">Errors</h1>
         <p className="mt-1 text-sm text-slate-400">
           Event log breakdown from the last 24h vs last 7 days.
         </p>

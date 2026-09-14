@@ -188,9 +188,9 @@ export default function LandingPage() {
           {FEATURES.map((f) => (
             <div key={f.title} className="rounded-xl border p-6">
               <FeatureIcon kind={f.icon} />
-              <h3 className="mt-4 font-heading text-lg font-semibold">
+              <h2 className="mt-4 font-heading text-lg font-semibold">
                 {f.title}
-              </h3>
+              </h2>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 {f.body}
               </p>

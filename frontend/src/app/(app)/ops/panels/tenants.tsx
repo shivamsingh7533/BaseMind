@@ -29,7 +29,7 @@ export function TenantsPanel({ tenants }: { tenants: OpsTenant[] | null }) {
       <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-heading text-xl font-semibold text-white">Tenants</h2>
+            <h1 className="font-heading text-xl font-semibold text-white">Tenants</h1>
             <p className="mt-1 text-sm text-slate-400">
               {rows.length} workspace{rows.length === 1 ? "" : "s"} · live data from users, agents, documents & conversations
             </p>
@@ -40,6 +40,7 @@ export function TenantsPanel({ tenants }: { tenants: OpsTenant[] | null }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by email, name or plan…"
+              aria-label="Search tenants"
               className="bg-slate-800 border-slate-700 py-2 pl-9 text-white placeholder-slate-500 focus-visible:ring-teal-500"
             />
           </div>

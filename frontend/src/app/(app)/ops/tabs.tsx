@@ -31,10 +31,16 @@ export function TabsNavigation({
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="rounded-2xl bg-slate-950 p-3 sm:p-4 border border-slate-200/50">
-        <div className="flex flex-nowrap gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          role="tablist"
+          aria-label="Ops sections"
+          className="flex flex-nowrap gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {TABS.map((tab) => (
             <Button
               key={tab.key}
+              role="tab"
+              aria-selected={activeTab === tab.key}
               variant="outline"
               size="icon"
               className={

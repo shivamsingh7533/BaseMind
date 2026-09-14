@@ -35,6 +35,7 @@ export function Composer({
           }
         }}
         placeholder="Ask a question about your docs…"
+        aria-label="Message"
         rows={1}
         className="max-h-32 min-h-10 flex-1 resize-none"
         disabled={streaming}

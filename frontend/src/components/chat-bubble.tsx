@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { FileSearch } from "lucide-react";
 import type { ChatMessage } from "@/lib/api";
 import { LogoMark } from "@/components/logo";
@@ -27,7 +28,7 @@ export function renderRich(text: string) {
   });
 }
 
-export function ChatBubble({
+export const ChatBubble = memo(function ChatBubble({
   m,
   userLabel,
   onOpenSources,
@@ -94,4 +95,4 @@ export function ChatBubble({
       </div>
     </div>
   );
-}
+});

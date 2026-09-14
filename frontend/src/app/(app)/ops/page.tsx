@@ -77,24 +77,9 @@ export default function OpsPage() {
     const poll = async () => {
       const t = await getToken();
       if (!t || !alive) return;
-      const [
-        status,
-        groundingData,
-        announcementsData,
-        tenantsData,
-        agentsData,
-        documentsData,
-        trendsData,
-        errorsData,
-      ] = await Promise.all([
+      const [status, groundingData] = await Promise.all([
         fetchOpsStatus(t),
         fetchGroundingMetric(t),
-        fetchAnnouncements(t),
-        fetchOpsTenants(t),
-        fetchOpsAgents(t),
-        fetchOpsDocuments(t),
-        fetchOpsTrends(t),
-        fetchOpsErrors(t),
       ]);
       if (!alive) return;
       if (status) {
@@ -104,12 +89,30 @@ export default function OpsPage() {
         setDenied(true);
       }
       if (groundingData) setGrounding(groundingData);
-      if (announcementsData) setAnnouncements(announcementsData);
-      if (tenantsData) setTenants(tenantsData);
-      if (agentsData) setAgents(agentsData);
-      if (documentsData) setDocuments(documentsData);
-      if (trendsData) setTrends(trendsData);
-      if (errorsData) setErrors(errorsData);
+      if (activeTab === TAB_ANNOUNCE) {
+        const announcementsData = await fetchAnnouncements(t);
+        if (alive && announcementsData) setAnnouncements(announcementsData);
+      }
+      if (activeTab === TAB_TENANTS || activeTab === TAB_PLANS) {
+        const tenantsData = await fetchOpsTenants(t);
+        if (alive && tenantsData) setTenants(tenantsData);
+      }
+      if (activeTab === TAB_AGENTS) {
+        const agentsData = await fetchOpsAgents(t);
+        if (alive && agentsData) setAgents(agentsData);
+      }
+      if (activeTab === TAB_DOCS) {
+        const documentsData = await fetchOpsDocuments(t);
+        if (alive && documentsData) setDocuments(documentsData);
+      }
+      if (activeTab === TAB_TRENDS) {
+        const trendsData = await fetchOpsTrends(t);
+        if (alive && trendsData) setTrends(trendsData);
+      }
+      if (activeTab === TAB_ERRORS) {
+        const errorsData = await fetchOpsErrors(t);
+        if (alive && errorsData) setErrors(errorsData);
+      }
     };
     void poll();
     const id = setInterval(() => void poll(), 60000);
@@ -117,7 +120,7 @@ export default function OpsPage() {
       alive = false;
       clearInterval(id);
     };
-  }, [getToken]);
+  }, [getToken, activeTab]);
 
   if (denied)
     return (
@@ -129,7 +132,7 @@ export default function OpsPage() {
                 <ShieldAlert className="size-5" />
               </span>
               <div>
-                <h2 className="font-heading text-lg font-semibold">Operator access only</h2>
+                <h1 className="font-heading text-lg font-semibold">Operator access only</h1>
                 <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
                   Tera account is ops list me nahi hai. Render dashboard me{" "}
                   <code className="rounded bg-white px-1.5 py-0.5 font-mono text-xs ring-1 ring-black/5">OPERATOR_EMAILS</code>{" "}

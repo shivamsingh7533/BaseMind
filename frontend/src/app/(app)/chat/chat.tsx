@@ -51,6 +51,14 @@ export function Chat() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
+  const stickToBottomRef = useRef(true);
+
+  const handleThreadScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
 
   const visitorLabel = (
     user?.firstName ??
@@ -98,7 +106,10 @@ export function Chat() {
   }, [selectedId]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const el = scrollRef.current;
+    if (!el) return;
+    if (!stickToBottomRef.current) return;
+    el.scrollTo({ top: el.scrollHeight });
   }, [messages, streaming, loadingDetail]);
 
   const selectConversation = (id: string) => {
@@ -254,11 +265,11 @@ export function Chat() {
     }
   };
 
-  const openSources = (sources: SourceRef[]) => {
+  const openSources = useCallback((sources: SourceRef[]) => {
     setSourceDocs(sources);
     setPreview(null);
     setDialogOpen(true);
-  };
+  }, []);
 
   const viewSource = async (s: SourceRef) => {
     if (!s.docId) {
@@ -348,6 +359,7 @@ export function Chat() {
                 scrollRef={scrollRef}
                 onSend={(t) => void send(t)}
                 onOpenSources={openSources}
+                onScroll={handleThreadScroll}
               />
               <Composer
                 draft={draft}

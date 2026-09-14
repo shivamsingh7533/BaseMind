@@ -199,6 +199,7 @@ export default function LogsPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search sessions…"
+                aria-label="Search conversations"
                 className="pl-9"
               />
             </div>

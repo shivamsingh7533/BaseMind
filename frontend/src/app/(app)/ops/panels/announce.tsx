@@ -84,7 +84,7 @@ export function AnnouncePanel({
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
-        <h2 className="font-heading text-xl font-semibold text-white mb-6">Announcements</h2>
+        <h1 className="font-heading text-xl font-semibold text-white mb-6">Announcements</h1>
 
         {/* Create Form */}
         <Card className="mb-6 border-slate-700/50">
@@ -93,8 +93,9 @@ export function AnnouncePanel({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Title</label>
+              <label htmlFor="announce-title" className="text-sm font-medium text-white">Title</label>
               <input
+                id="announce-title"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -103,8 +104,9 @@ export function AnnouncePanel({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Body</label>
+              <label htmlFor="announce-body" className="text-sm font-medium text-white">Body</label>
               <textarea
+                id="announce-body"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="Announcement body (markdown supported)"
@@ -113,8 +115,9 @@ export function AnnouncePanel({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Severity</label>
+              <label htmlFor="announce-severity" className="text-sm font-medium text-white">Severity</label>
               <select
+                id="announce-severity"
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value as "info" | "attention" | "error")}
                 className="w-full rounded-lg bg-slate-800 border-slate-700 px-4 py-2 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"

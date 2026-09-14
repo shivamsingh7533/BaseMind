@@ -13,6 +13,7 @@ export function MessageThread({
   scrollRef,
   onSend,
   onOpenSources,
+  onScroll,
 }: {
   messages: ChatMessage[];
   streaming: boolean;
@@ -21,11 +22,12 @@ export function MessageThread({
   scrollRef: RefObject<HTMLDivElement | null>;
   onSend: (text?: string) => void;
   onOpenSources: (sources: SourceRef[]) => void;
+  onScroll: () => void;
 }) {
   return (
     <>
       <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="space-y-5 p-4">
+        <div ref={scrollRef} onScroll={onScroll} className="space-y-5 p-4">
           {messages.length === 0 && !streaming && (
             <p className="pt-6 text-center text-sm text-muted-foreground">
               No messages yet — ask something about your docs.

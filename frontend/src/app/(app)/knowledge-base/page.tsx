@@ -202,11 +202,12 @@ export default function KnowledgeBasePage() {
           </button>
 
           <div className="flex flex-col justify-center gap-2">
-            <label className="text-sm font-medium">Sync URL</label>
+            <label htmlFor="sync-url" className="text-sm font-medium">Sync URL</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  id="sync-url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://docs.example.com"

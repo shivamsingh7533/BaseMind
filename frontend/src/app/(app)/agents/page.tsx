@@ -545,9 +545,10 @@ export default function AgentsPage() {
               value={chatDraft}
               onChange={(e) => setChatDraft(e.target.value)}
               placeholder="Ask a question about your docs…"
+              aria-label="Ask a question about your docs"
               disabled={chatting}
             />
-            <Button type="submit" size="icon" disabled={chatting || !chatDraft.trim()}>
+            <Button type="submit" size="icon" aria-label="Send question" disabled={chatting || !chatDraft.trim()}>
               <Send className="size-4" />
             </Button>
           </form>
