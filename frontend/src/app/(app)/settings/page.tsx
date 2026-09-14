@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { deleteWorkspace, getSettingsStatus, type SettingsStatus } from "@/lib/api";
 import { useAppData } from "@/lib/store";
@@ -42,22 +43,16 @@ function StatusRow({
         <Icon className="size-4 text-muted-foreground" />
         {label}
       </span>
+      {value === null ? (
+        <Skeleton aria-label="Checking…" className="h-6 w-24" />
+      ) : (
       <Badge
         variant="outline"
-        className={
-          value === null
-            ? "text-muted-foreground"
-            : value
-              ? "text-success"
-              : "text-destructive"
-        }
+        className={value ? "text-success" : "text-destructive"}
       >
-        {value === null
-          ? "checking…"
-          : value
-            ? "Connected"
-            : "Not configured"}
+        {value ? "Connected" : "Not configured"}
       </Badge>
+      )}
     </div>
   );
 }

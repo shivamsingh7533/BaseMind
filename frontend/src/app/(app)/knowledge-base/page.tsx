@@ -241,7 +241,8 @@ export default function KnowledgeBasePage() {
           {!docs ? (
             <Skeleton className="h-36 w-full" />
           ) : (
-            <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+            <>
+            <div className="hidden -mx-6 overflow-x-auto px-6 sm:block sm:mx-0 sm:px-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -328,6 +329,72 @@ export default function KnowledgeBasePage() {
                 </TableBody>
               </Table>
             </div>
+            {docs.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground sm:hidden">
+                No knowledge sources yet — upload a file or sync a URL to train
+                your first agent.
+              </p>
+            ) : (
+              <div className="space-y-3 sm:hidden">
+                {docs.map((d) => (
+                  <div
+                    key={d.id}
+                    className="rounded-xl border p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <TypeIcon type={d.type} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{d.name}</p>
+                          <p className="text-xs text-muted-foreground">{d.type}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={STATUS[d.status].className}>
+                        {STATUS[d.status].label}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 truncate text-xs text-muted-foreground">
+                      {d.status === "failed" ? (
+                        <span className="inline-flex items-center gap-1 text-destructive">
+                          <TriangleAlert className="size-3" /> {d.detail}
+                        </span>
+                      ) : (
+                        d.detail
+                      )}
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                        disabled={d.status === "processing" || actionBusy === d.id}
+                        onClick={() => void openDoc(d)}
+                      >
+                        {actionBusy === d.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : d.type.startsWith("Web") ? (
+                          <ExternalLink className="size-3.5" />
+                        ) : (
+                          <Download className="size-3.5" />
+                        )}
+                        {d.type.startsWith("Web") ? "Open" : "Download"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-destructive"
+                        aria-label={`Delete ${d.name}`}
+                        disabled={actionBusy !== null}
+                        onClick={() => void removeDoc(d)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>

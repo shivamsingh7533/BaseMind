@@ -59,7 +59,7 @@ export default function AgentsPage() {
   const { getToken } = useAuth();
   const agents = useAppData((s) => s.agents);
   const fetchAgents = useAppData((s) => s.fetchAgents);
-  const [domains, setDomains] = useState<string[]>(["*.acmecorp.com"]);
+  const [domains, setDomains] = useState<string[]>([]);
   const [domainDraft, setDomainDraft] = useState("");
   const [botName, setBotName] = useState("Customer Success Bot");
   const [brandColor, setBrandColor] = useState("#0d9488");
@@ -213,7 +213,13 @@ export default function AgentsPage() {
             {live} Active
           </span>
         </h1>
-        <Button onClick={() => toast.info("Opens Agent Studio below")}>
+        <Button
+          onClick={() =>
+            document
+              .getElementById("agent-studio")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        >
           <CirclePlus className="size-4" /> New Agent
         </Button>
       </div>
@@ -313,7 +319,7 @@ export default function AgentsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
+      <Card id="agent-studio" className="mt-6">
         <CardHeader>
           <CardTitle className="font-heading">Agent Studio</CardTitle>
           <CardDescription>
@@ -424,7 +430,13 @@ export default function AgentsPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && domainDraft.trim()) {
                     e.preventDefault();
-                    setDomains((prev) => [...prev, domainDraft.trim()]);
+                    const d = domainDraft.trim().toLowerCase();
+                    if (domains.includes(d)) return;
+                    if (!/^(\*\.)?[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) {
+                      toast.error("Enter a valid domain like *.example.com");
+                      return;
+                    }
+                    setDomains((prev) => [...prev, d]);
                     setDomainDraft("");
                   }
                 }}

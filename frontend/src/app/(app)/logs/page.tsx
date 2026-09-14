@@ -138,6 +138,9 @@ export default function LogsPage() {
   const fetchConversations = useAppData((s) => s.fetchConversations);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | ConversationStatus>(
+    "all"
+  );
 
   useEffect(() => {
     getToken()
@@ -150,14 +153,36 @@ export default function LogsPage() {
     () =>
       conversations?.filter(
         (c) =>
-          c.user.toLowerCase().includes(query.toLowerCase()) ||
-          c.preview.toLowerCase().includes(query.toLowerCase())
+          (statusFilter === "all" || c.status === statusFilter) &&
+          (c.user.toLowerCase().includes(query.toLowerCase()) ||
+           c.preview.toLowerCase().includes(query.toLowerCase()))
       ) ?? [],
-    [conversations, query]
+    [conversations, query, statusFilter]
   );
 
   const selected =
     conversations?.find((c) => c.id === selectedId) ?? filtered[0] ?? null;
+
+  const exportTranscript = () => {
+    if (!selected) return;
+    const safe = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const rows = [
+      ["role", "message", "time", "latencyNote"].join(","),
+      ...selected.messages.map((m) =>
+        [safe(m.role), safe(m.text), safe(m.time), safe(m.latencyNote ?? "")].join(",")
+      ),
+    ];
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${selected.user}-transcript.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Transcript exported as CSV");
+  };
 
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
@@ -177,9 +202,38 @@ export default function LogsPage() {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="icon" aria-label="Filter">
-              <Filter className="size-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Filter by status"
+                  className={cn(
+                    statusFilter !== "all" &&
+                      "border-primary text-primary bg-primary/10"
+                  )}
+                >
+                  <Filter className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setStatusFilter("all")}>
+                  All statuses
+                </DropdownMenuItem>
+                {(Object.keys(STATUS) as ConversationStatus[]).map((s) => (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className="flex items-center gap-2"
+                  >
+                    <span
+                      className={cn("size-1.5 rounded-full", STATUS[s].dot)}
+                    />
+                    {STATUS[s].label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </CardContent>
           <ScrollArea className="flex-1">
             {!conversations ? (
@@ -271,9 +325,7 @@ export default function LogsPage() {
                     >
                       Copy session ID
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => toast.info("Export is mocked in this demo")}
-                    >
+                    <DropdownMenuItem onClick={exportTranscript}>
                       Export transcript
                     </DropdownMenuItem>
                   </DropdownMenuContent>

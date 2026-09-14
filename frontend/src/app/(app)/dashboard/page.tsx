@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
@@ -114,6 +114,8 @@ function shortDay(iso: string) {
   return format(new Date(`${iso}T00:00:00`), "EEE");
 }
 
+const DISMISS_KEY = "basemind_dismissed_anns";
+
 export default function DashboardPage() {
   const { getToken } = useAuth();
   const data = useAppData((s) => s.dashboard);
@@ -122,6 +124,22 @@ export default function DashboardPage() {
   const fetchDashboard = useAppData((s) => s.fetchDashboard);
   const fetchAgents = useAppData((s) => s.fetchAgents);
   const fetchDocuments = useAppData((s) => s.fetchDocuments);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem(DISMISS_KEY) ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+
+  const dismissAnn = (id: string) => {
+    const next = [...dismissedIds, id];
+    setDismissedIds(next);
+    try {
+      window.localStorage.setItem(DISMISS_KEY, JSON.stringify(next));
+    } catch {}
+  };
 
   useEffect(() => {
     getToken()
@@ -150,7 +168,9 @@ export default function DashboardPage() {
       {/* Announcement Banner */}
       {data?.announcements && data.announcements.length > 0 && (
         <div className="mb-6 space-y-2">
-          {data.announcements.map((ann) => (
+          {data.announcements
+            .filter((ann) => !dismissedIds.includes(ann.id))
+            .map((ann) => (
             <div
               key={ann.id}
               className={`flex items-start gap-3 p-4 rounded-xl border ${
@@ -168,7 +188,14 @@ export default function DashboardPage() {
                   Posted {format(new Date(ann.created_at), "MMM d, yyyy")}
                 </p>
               </div>
-              <X className="size-5 text-muted-foreground hover:text-foreground cursor-pointer mt-1 shrink-0" />
+              <button
+                type="button"
+                aria-label="Dismiss announcement"
+                onClick={() => dismissAnn(ann.id)}
+                className="mt-1 shrink-0 rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="size-5" />
+              </button>
             </div>
           ))}
         </div>
@@ -391,44 +418,48 @@ export default function DashboardPage() {
                   </p>
                 ) : (
                   <div>
-                    <div className="flex items-center gap-5 pb-2 text-[11px] font-medium text-muted-foreground">
-                      <span className="min-w-32 flex-1">Agent</span>
-                      <MiniStat label="Convs" value="—" />
-                      <MiniStat label="Msgs" value="—" />
-                      <MiniStat label="Resolved" value="—" />
-                      <MiniStat label="Q/24h" value="—" />
-                      <MiniStat label="Avg" value="—" />
-                    </div>
-                    {data.perAgent.map((a, i) => (
-                      <div key={a.id}>
-                        {i > 0 ? <Separator className="my-1" /> : null}
-                        <div className="flex items-center gap-5 py-2">
-                          <span className="flex min-w-32 flex-1 items-center gap-2.5">
-                            <span
-                              className="size-2.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: a.color }}
-                            />
-                            <span className="truncate text-sm font-semibold">
-                              {a.name}
-                            </span>
-                          </span>
-                          <MiniStat
-                            label="Convs"
-                            value={String(a.conversations)}
-                          />
-                          <MiniStat label="Msgs" value={String(a.agentMsgs)} />
-                          <MiniStat label="Resolved" value={String(a.resolved)} />
-                          <MiniStat
-                            label="Q/24h"
-                            value={a.queries24h.toLocaleString()}
-                          />
-                          <MiniStat
-                            label="Avg"
-                            value={`${a.avgLatencyMs}ms`}
-                          />
+                    <div className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+                      <div className="min-w-[560px]">
+                        <div className="flex items-center gap-5 pb-2 text-[11px] font-medium text-muted-foreground">
+                          <span className="min-w-32 flex-1">Agent</span>
+                          <MiniStat label="Convs" value="—" />
+                          <MiniStat label="Msgs" value="—" />
+                          <MiniStat label="Resolved" value="—" />
+                          <MiniStat label="Q/24h" value="—" />
+                          <MiniStat label="Avg" value="—" />
                         </div>
+                        {data.perAgent.map((a, i) => (
+                          <div key={a.id}>
+                            {i > 0 ? <Separator className="my-1" /> : null}
+                            <div className="flex items-center gap-5 py-2">
+                              <span className="flex min-w-32 flex-1 items-center gap-2.5">
+                                <span
+                                  className="size-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: a.color }}
+                                />
+                                <span className="truncate text-sm font-semibold">
+                                  {a.name}
+                                </span>
+                              </span>
+                              <MiniStat
+                                label="Convs"
+                                value={String(a.conversations)}
+                              />
+                              <MiniStat label="Msgs" value={String(a.agentMsgs)} />
+                              <MiniStat label="Resolved" value={String(a.resolved)} />
+                              <MiniStat
+                                label="Q/24h"
+                                value={a.queries24h.toLocaleString()}
+                              />
+                              <MiniStat
+                                label="Avg"
+                                value={`${a.avgLatencyMs}ms`}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
