@@ -54,3 +54,14 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Guarded alters for columns added after initial deploy (IF NOT EXISTS is idempotent).
+        try:
+            await conn.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_status TEXT DEFAULT 'active'"
+            )
+        except Exception:
+            pass
+        try:
+            await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sources TEXT")
+        except Exception:
+            pass

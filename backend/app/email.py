@@ -193,3 +193,27 @@ async def _dispatch(
             await send_email(db, user_id, event_type, to_email, subject, html)
 
     asyncio.get_running_loop().create_task(_run())
+
+
+async def dispatch_operator(
+    db: AsyncSession,
+    event_type: str,
+    subject: str,
+    html: str,
+) -> None:
+    """Send an operator alert email to all configured operator emails."""
+    operator_emails_str = os.getenv("OPERATOR_EMAILS", "")
+    if not operator_emails_str:
+        return
+    operator_emails = [e.strip() for e in operator_emails_str.split(",") if e.strip()]
+    if not operator_emails:
+        return
+    # Use the first operator email for cooldown tracking, or send to all
+    for operator_email in operator_emails:
+        await _dispatch(
+            event_type,
+            operator_email,
+            operator_email,
+            subject,
+            html,
+        )

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import {
   Activity,
   Bot,
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { fetchOpsStatus, type OpsSeverity, type OpsStatus } from "@/lib/api";
+import { fetchOpsStatus, fetchGroundingMetric, fetchAnnouncements, createAnnouncement, type OpsSeverity, type OpsStatus, type GroundingMetric, type Announcement } from "@/lib/api";
 
 function rel(iso: string) {
   if (!iso) return "";
@@ -120,13 +120,14 @@ function TabsNavigation({
 }
 
 // ----- Overview Panel (needs ops prop) -----
-function OverviewPanel({ ops }: { ops: OpsStatus | null }) {
+function OverviewPanel({ ops, grounding }: { ops: OpsStatus | null; grounding: GroundingMetric | null }) {
   if (!ops) return null;
   const { metrics, vector, alerts } = ops;
   const hasError = alerts.some((a) => a.severity === "error");
   const isNominal = ops.nominal;
   const totalDocs = vector.indexedDocs + vector.pendingDocs + vector.failedDocs;
   const vecPct = totalDocs > 0 ? Math.round((vector.indexedDocs / totalDocs) * 100) : 0;
+  const groundingPct = grounding?.groundingPct ?? 0;
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f8f9fb]">
@@ -174,8 +175,8 @@ function OverviewPanel({ ops }: { ops: OpsStatus | null }) {
           </div>
         </div>
 
-        {/* Metrics — 4 bento cards */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Metrics — 5 bento cards */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card className="rounded-2xl border-slate-200/70 shadow-sm">
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
@@ -242,6 +243,23 @@ function OverviewPanel({ ops }: { ops: OpsStatus | null }) {
               <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Vector Store</p>
               <p className="mt-1 font-heading text-[30px] font-bold leading-none tracking-tight">{vector.embeddings.toLocaleString()}</p>
               <p className="mt-1 text-xs text-muted-foreground">{vector.dim}d · {vecPct}% indexed</p>
+            </CardContent>
+          </Card>
+
+          {/* Grounding % card */}
+          <Card className="rounded-2xl border-slate-200/70 shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow">
+                  <Shield className="size-5" />
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                  {groundingPct}%
+                </span>
+              </div>
+              <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Grounding %</p>
+              <p className="mt-1 font-heading text-[30px] font-bold leading-none tracking-tight">{groundingPct}%</p>
+              <p className="mt-1 text-xs text-muted-foreground">{grounding?.messagesWithSources ?? 0} of {grounding?.totalMessages ?? 0} responses grounded</p>
             </CardContent>
           </Card>
         </div>
@@ -503,22 +521,121 @@ function PlansPanel() {
   );
 }
 
-// ----- Announce Panel (placeholder) -----
-function AnnouncePanel() {
+// ----- Announce Panel -----
+function AnnouncePanel({ announcements, onRefresh }: { announcements: Announcement[] | null; onRefresh: () => void }) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [severity, setSeverity] = useState<"info" | "attention" | "error">("info");
+  const [loading, setLoading] = useState(false);
+
+  const handleCreate = async () => {
+    if (!title.trim() || !body.trim()) return;
+    setLoading(true);
+    const res = await createAnnouncement({ title, body, severity });
+    if (res) {
+      setTitle("");
+      setBody("");
+      setSeverity("info");
+      onRefresh();
+    }
+    setLoading(false);
+  };
+
+  function renderList() {
+    if (!announcements || announcements.length === 0) {
+      return (
+        <div className="rounded-xl bg-slate-800/50 p-6 text-center">
+          <p className="text-slate-500">No announcements yet. Create one above!</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-4">
+        {announcements.map((ann) => (
+          <Card key={ann.id} className="border-slate-700/50">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading text-base font-semibold text-white">{ann.title}</h3>
+                    <Badge
+                      variant="secondary"
+                      className={`gap-1 ${
+                        ann.severity === "error"
+                          ? "bg-red-500/20 text-red-400"
+                          : ann.severity === "attention"
+                          ? "bg-amber-500/20 text-amber-400"
+                          : "bg-blue-500/20 text-blue-400"
+                      }`}
+                    >
+                      {ann.severity}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-400 whitespace-pre-wrap">{ann.body}</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Posted {format(new Date(ann.created_at), "MMM d, yyyy HH:mm")}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="rounded-2xl bg-slate-950 p-6 sm:p-7 border border-slate-200/50">
-        <h2 className="font-heading text-xl font-semibold text-white mb-4">Announce</h2>
-        <p className="text-slate-400 text-sm mb-6">
-          System announcements abhi operators ko email karne ka infrastructure hai lekin dashboard par broadcast feature Phase 5 me add kiye jaenge. Ab currently sirf email trigger setup dikhaya jayega.
-        </p>
+        <h2 className="font-heading text-xl font-semibold text-white mb-6">Announcements</h2>
+
+        {/* Create Form */}
+        <Card className="mb-6 border-slate-700/50">
+          <CardHeader>
+            <CardTitle className="font-heading text-base">Create Announcement</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white">Title</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Announcement title"
+                className="w-full rounded-lg bg-slate-800 border-slate-700 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white">Body</label>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Announcement body (markdown supported)"
+                rows={3}
+                className="w-full rounded-lg bg-slate-800 border-slate-700 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white">Severity</label>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value as "info" | "attention" | "error")}
+                className="w-full rounded-lg bg-slate-800 border-slate-700 px-4 py-2 text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="info">Info</option>
+                <option value="attention">Attention</option>
+                <option value="error">Error</option>
+              </select>
+            </div>
+            <Button onClick={handleCreate} disabled={loading || !title.trim() || !body.trim()}>
+              {loading ? "Creating..." : "Post Announcement"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* List */}
         <div className="space-y-4">
-          <div className="rounded-xl bg-slate-800 p-4">
-            <p className="text-sm text-slate-500">Phase 5: Admin se dashboard par system message broadcast karna (<code>POST /api/ops/announcements</code> + <code>GET /api/dashboard</code>).</p>
-          </div>
-          <div className="rounded-xl bg-slate-800 p-4">
-            <p className="text-sm text-slate-500">Fetch: operator_emails wale ko <code>dispatch_operator</code> se email jayega jab backend ready hoga.</p>
-          </div>
+          {renderList()}
         </div>
       </div>
     </div>
@@ -532,21 +649,44 @@ function AnnouncePanel() {
 export default function OpsPage() {
   const { getToken, isSignedIn } = useAuth();
   const [ops, setOps] = useState<OpsStatus | null>(null);
+  const [grounding, setGrounding] = useState<GroundingMetric | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [denied, setDenied] = useState(false);
   const [activeTab, setActiveTab] = useState(TAB_OVERVIEW);
+
+  const fetchAnnouncementsData = async (token: string) => {
+    const data = await fetchAnnouncements(token);
+    if (data) setAnnouncements(data);
+  };
+
+  const refreshAnnouncements = () => {
+    getToken().then((t) => {
+      if (t) fetchAnnouncementsData(t);
+    });
+  };
 
   useEffect(() => {
     let alive = true;
     const poll = async () => {
       const t = await getToken();
       if (!t || !alive) return;
-      const status = await fetchOpsStatus(t);
+      const [status, groundingData, announcementsData] = await Promise.all([
+        fetchOpsStatus(t),
+        fetchGroundingMetric(t),
+        fetchAnnouncements(t),
+      ]);
       if (!alive) return;
       if (status) {
         setOps(status);
         setDenied(false);
       } else {
         setDenied(true);
+      }
+      if (groundingData) {
+        setGrounding(groundingData);
+      }
+      if (announcementsData) {
+        setAnnouncements(announcementsData);
       }
     };
     void poll();
@@ -603,7 +743,7 @@ export default function OpsPage() {
 
   // Render the active tab panel — simple if/else avoids "created during render"
   if (activeTab === TAB_OVERVIEW) {
-    return <OverviewPanel ops={ops} />;
+    return <OverviewPanel ops={ops} grounding={grounding} />;
   }
   if (activeTab === TAB_TENANTS) {
     return <TenantsPanel />;
@@ -624,9 +764,9 @@ export default function OpsPage() {
     return <PlansPanel />;
   }
   if (activeTab === TAB_ANNOUNCE) {
-    return <AnnouncePanel />;
+    return <AnnouncePanel announcements={announcements} onRefresh={refreshAnnouncements} />;
   }
 
   // Fallback to overview
-  return <OverviewPanel ops={ops} />;
+  return <OverviewPanel ops={ops} grounding={grounding} />;
 }

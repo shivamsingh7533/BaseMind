@@ -28,6 +28,7 @@ export const db: {
       dim: 768,
       status: "empty",
     },
+    announcements: [],
   },
   agents: [],
   documents: [],

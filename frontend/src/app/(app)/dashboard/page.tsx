@@ -23,6 +23,7 @@ import {
   Wallet,
   CirclePlus,
   CheckCircle2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +37,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useAppData } from "@/lib/store";
-import type { DashboardVector, VectorStatus } from "@/lib/api";
+import type { DashboardVector, VectorStatus, Announcement } from "@/lib/api";
 
 const ICONS = {
   agent: Bot,
@@ -145,6 +146,33 @@ export default function DashboardPage() {
           Dashboard
         </h1>
       </div>
+
+      {/* Announcement Banner */}
+      {data?.announcements && data.announcements.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {data.announcements.map((ann) => (
+            <div
+              key={ann.id}
+              className={`flex items-start gap-3 p-4 rounded-xl border ${
+                ann.severity === "error"
+                  ? "bg-red-50 border-red-200"
+                  : ann.severity === "attention"
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-blue-50 border-blue-200"
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <h3 className="font-heading text-sm font-semibold text-foreground">{ann.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{ann.body}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Posted {format(new Date(ann.created_at), "MMM d, yyyy")}
+                </p>
+              </div>
+              <X className="size-5 text-muted-foreground hover:text-foreground cursor-pointer mt-1 shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {!data ? (
         <div className="grid gap-4 sm:grid-cols-3">

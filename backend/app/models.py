@@ -25,6 +25,7 @@ class User(Base):
     clerk_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    platform_status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     agents: Mapped[list["Agent"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
@@ -92,6 +93,7 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    sources: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
@@ -131,3 +133,25 @@ class EventLog(Base):
     detail: Mapped[str] = mapped_column(Text, default="")
     ref_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(Text, default="info")
+    created_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AnnouncementRead(Base):
+    __tablename__ = "announcement_reads"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    announcement_id: Mapped[str] = mapped_column(
+        ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

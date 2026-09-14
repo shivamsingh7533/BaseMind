@@ -52,6 +52,7 @@ export interface DashboardData {
   perAgent: PerAgent[];
   trend7d: TrendDay[];
   vector: DashboardVector;
+  announcements: Announcement[];
 }
 
 export type AgentStatus = "active" | "training" | "paused";
@@ -578,6 +579,74 @@ export async function fetchOpsStatus(
     });
     if (!res.ok) return null;
     return (await res.json()) as OpsStatus;
+  } catch {
+    return null;
+  }
+}
+
+export interface GroundingMetric {
+  totalMessages: number;
+  messagesWithSources: number;
+  groundingPct: number;
+}
+
+export async function fetchGroundingMetric(
+  token?: string | null
+): Promise<GroundingMetric | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/grounding`, {
+      headers: authHeader(token),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as GroundingMetric;
+  } catch {
+    return null;
+  }
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  severity: "info" | "attention" | "error";
+  created_at: string;
+}
+
+export interface AnnouncementCreate {
+  title: string;
+  body: string;
+  severity: "info" | "attention" | "error";
+}
+
+export async function fetchAnnouncements(
+  token?: string | null
+): Promise<Announcement[] | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/announcements`, {
+      headers: authHeader(token),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Announcement[];
+  } catch {
+    return null;
+  }
+}
+
+export async function createAnnouncement(
+  data: AnnouncementCreate,
+  token?: string | null
+): Promise<{ status: string; id: string } | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/announcements`, {
+      method: "POST",
+      headers: {
+        ...authHeader(token),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { status: string; id: string };
   } catch {
     return null;
   }

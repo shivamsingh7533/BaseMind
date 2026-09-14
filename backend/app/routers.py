@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -40,7 +41,7 @@ from .models import (
     Message,
     User,
 )
-from .ops import build_ops_status, is_operator
+from .ops import build_ops_status, is_operator, _tenants, _agents_leaderboard, _documents_pipeline, _trends_daily, _errors_center, _conversations_audit, _grounding_metric
 from .schemas import (
     AgentCreate,
     AgentUpdate,
@@ -541,6 +542,74 @@ async def ops_status(user: User = Depends(get_current_user), db: AsyncSession = 
     return await build_ops_status(db)
 
 
+@router.get("/ops/grounding")
+async def op_grounding(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    return await _grounding_metric(db)
+
+@router.post("/ops/alert")
+async def op_alert(
+    payload: dict,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    from .email import dispatch_operator
+    subject = payload.get("subject", "Operator Alert")
+    html = payload.get("html", "")
+    if not html:
+        html = f"<p>Operator alert: {subject}</p>"
+    await dispatch_operator(db, "operator_alert", subject, html)
+    return {"status": "alert sent"}
+
+@router.post("/ops/announcements")
+async def op_announcements(
+    payload: dict,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    from .models import Announcement, AnnouncementRead
+    from sqlalchemy import select
+    title = payload.get("title", "")
+    body = payload.get("body", "")
+    severity = payload.get("severity", "info")
+    announcement = Announcement(title=title, body=body, severity=severity, created_by=user.id)
+    db.add(announcement)
+    await db.commit()
+    await db.refresh(announcement)
+    # Mark all users as read initially
+    users = (await db.execute(select(User.id))).scalars().all()
+    for user_id in users:
+        db.add(AnnouncementRead(announcement_id=announcement.id, user_id=user_id))
+    await db.commit()
+    return {"status": "announcement created", "id": announcement.id}
+
+
+@router.get("/ops/announcements")
+async def op_announcements_list(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    from .models import Announcement
+    from sqlalchemy import select
+    announcements = (await db.execute(
+        select(Announcement).order_by(Announcement.created_at.desc()).limit(50)
+    )).scalars().all()
+    return [
+        {
+            "id": a.id,
+            "title": a.title,
+            "body": a.body,
+            "severity": a.severity,
+            "created_by": a.created_by,
+            "created_at": a.created_at.isoformat() if a.created_at else "",
+        }
+        for a in announcements
+    ]
+
 @router.delete("/me", status_code=204)
 async def delete_workspace(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     docs = (await db.execute(select(Document).where(Document.user_id == user.id))).scalars().all()
@@ -851,12 +920,37 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
             "progress": int(resolution_value[:-1]) if resolution_value != "0%" else 0,
         },
     ]
+    # Fetch unread announcements for this user
+    unread_announcements = (
+        await db.execute(
+            select(Announcement)
+            .join(AnnouncementRead, AnnouncementRead.announcement_id == Announcement.id)
+            .where(
+                AnnouncementRead.user_id == user.id,
+                AnnouncementRead.read_at.is_(None),
+            )
+            .order_by(Announcement.created_at.desc())
+            .limit(5)
+        )
+    ).scalars().all()
+    announcements = [
+        {
+            "id": a.id,
+            "title": a.title,
+            "body": a.body,
+            "severity": a.severity,
+            "created_at": a.created_at.isoformat() if a.created_at else "",
+        }
+        for a in unread_announcements
+    ]
+
     payload = {
         "stats": stats,
         "activity": activity[:8],
         "perAgent": per_agent,
         "trend7d": trend7d,
         "vector": vector,
+        "announcements": announcements,
     }
     since_24h = datetime.now(UTC) - timedelta(days=1)
     q24 = dict(
@@ -922,6 +1016,7 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
 async def chat(
     conversation_id: str,
     payload: MessageIn,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1023,20 +1118,30 @@ async def chat(
             return
 
         full_answer = "".join(answer_parts)
+        sources_json = json.dumps(
+            {
+                "type": "sources",
+                "sources": [{"docId": c["docId"], "source": c["source"]} for c in contexts],
+            }
+        )
         assistant_id = None
-        try:
-            async with SessionFactory() as session:
-                assistant = Message(
-                    conversation_id=conversation_id_value,
-                    role="agent",
-                    content=full_answer,
-                )
-                session.add(assistant)
-                await session.commit()
-                await session.refresh(assistant)
-                assistant_id = assistant.id
-        except Exception:
-            log.exception("failed persisting assistant message for conversation %s", conversation_id_value)
+        async def persist_assistant():
+            nonlocal assistant_id
+            try:
+                async with SessionFactory() as session:
+                    assistant = Message(
+                        conversation_id=conversation_id_value,
+                        role="agent",
+                        content=full_answer,
+                        sources=sources_json,
+                    )
+                    session.add(assistant)
+                    await session.commit()
+                    await session.refresh(assistant)
+                    assistant_id = assistant.id
+            except Exception:
+                log.exception("failed persisting assistant message for conversation %s", conversation_id_value)
+        background_tasks.add_task(persist_assistant)
 
         await invalidate_user_cache(user_id_value)
 
