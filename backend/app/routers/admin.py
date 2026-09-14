@@ -1,4 +1,5 @@
 import contextlib
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -95,6 +96,38 @@ async def op_announcements_list(user: User = Depends(get_current_user), db: Asyn
         }
         for a in announcements
     ]
+
+
+@router.patch("/announcements/{announcement_id}/read")
+async def mark_announcement_read(
+    announcement_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    announcement = (await db.execute(select(Announcement).where(Announcement.id == announcement_id))).scalar_one_or_none()
+    if announcement is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    read_row = (
+        await db.execute(
+            select(AnnouncementRead).where(
+                AnnouncementRead.announcement_id == announcement_id,
+                AnnouncementRead.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if read_row is None:
+        db.add(
+            AnnouncementRead(
+                announcement_id=announcement_id,
+                user_id=user.id,
+                read_at=datetime.now(UTC),
+            )
+        )
+    else:
+        read_row.read_at = datetime.now(UTC)
+    await db.commit()
+    await invalidate_user_cache(user.id)
+    return {"status": "read"}
 
 
 @router.get("/ops/tenants")

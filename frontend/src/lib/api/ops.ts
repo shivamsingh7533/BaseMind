@@ -73,6 +73,24 @@ export async function createAnnouncement(
   }
 }
 
+export async function markAnnouncementRead(
+  token: string | null | undefined,
+  announcementId: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${API_URL}/api/announcements/${announcementId}/read`,
+      {
+        method: "PATCH",
+        headers: authHeader(token),
+      }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const fetchOpsTenants = async (token?: string | null) =>
   request<OpsTenant[]>("/api/ops/tenants", {
     headers: authHeader(token),

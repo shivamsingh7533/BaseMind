@@ -123,6 +123,10 @@ async def main():
 
             conv_detail = await routers.conversation_detail(conv["id"], user, db)
             check("conversation_detail", conv_detail["id"] == conv["id"])
+            check(
+                "conversation detail camel startedAt",
+                "startedAt" in conv_detail and "started_at" not in conv_detail,
+            )
 
             await routers.add_message(conv["id"], MessageIn(role="user", text="hello"), user, db)
             conv2 = await routers.update_conversation(conv["id"], ConversationUpdate(status="resolved"), user, db)
@@ -175,6 +179,40 @@ async def main():
                 and dash["vector"]["dim"] == 768
                 and dash["vector"]["status"] in {"synced", "syncing", "attention"},
                 str(dash["vector"]),
+            )
+
+            from app.config import get_settings
+
+            os.environ["OPERATOR_EMAILS"] = "func-test@example.com"
+            get_settings.cache_clear()
+            about = await routers.op_announcements(
+                {"title": "Planned Maintenance", "body": "Downtime window tonight", "severity": "info"}, user, db
+            )
+            check("op_announcements creates unread row", bool(about["id"]))
+            user2_dash = await routers.dashboard(user2, db)
+            check(
+                "announcement unread contract",
+                any(a["id"] == about["id"] for a in user2_dash["announcements"]),
+                str(user2_dash["announcements"]),
+            )
+            from app.cache import invalidate_user_cache
+
+            await invalidate_user_cache(user.id)
+            user2_dash2 = await routers.dashboard(user, db)
+            check(
+                "announcement visible to operator",
+                any(a["id"] == about["id"] for a in user2_dash2["announcements"]),
+            )
+            await routers.mark_announcement_read(about["id"], user2, db)
+            user2_dash3 = await routers.dashboard(user2, db)
+            check(
+                "announcement read -> absent",
+                all(a["id"] != about["id"] for a in user2_dash3["announcements"]),
+            )
+            user_dash = await routers.dashboard(user, db)
+            check(
+                "announcement unread persists per-user",
+                any(a["id"] == about["id"] for a in user_dash["announcements"]),
             )
 
             # ---- Ops / Admin dashboard ----

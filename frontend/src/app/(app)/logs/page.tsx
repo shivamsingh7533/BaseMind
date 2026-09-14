@@ -145,7 +145,7 @@ export default function LogsPage() {
   useEffect(() => {
     getToken()
       .then((t) => fetchConversations(t))
-      .then((c) => setSelectedId((prev) => prev ?? c[0]?.id ?? null))
+      .then((c) => setSelectedId((prev) => prev ?? c?.[0]?.id ?? null))
       .catch(() => {});
   }, [getToken, fetchConversations]);
 

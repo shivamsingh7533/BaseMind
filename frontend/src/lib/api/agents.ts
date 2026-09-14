@@ -1,9 +1,13 @@
 import { toast } from "sonner";
 import { API_URL, authHeader, request } from "./client";
+import { AgentSchema } from "./schemas";
 import type { Agent, AgentStatus } from "./types";
 
 export const getAgents = (token?: string | null) =>
-  request<Agent[]>("/api/agents", { headers: authHeader(token) });
+  request<Agent[]>("/api/agents", {
+    headers: authHeader(token),
+    schema: AgentSchema.array(),
+  });
 
 export async function setAgentStatus(
   token: string | null | undefined,

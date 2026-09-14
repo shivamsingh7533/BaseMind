@@ -1,9 +1,11 @@
 import { API_URL, authHeader, request } from "./client";
+import { ConversationSchema } from "./schemas";
 import type { ChatEvent, Conversation, ConversationStatus } from "./types";
 
 export const getConversations = (token?: string | null) =>
   request<Conversation[]>("/api/conversations", {
     headers: authHeader(token),
+    schema: ConversationSchema.array(),
   });
 
 export const getConversation = (
@@ -14,6 +16,7 @@ export const getConversation = (
     `/api/conversations/${conversationId}`,
     {
       headers: authHeader(token),
+      schema: ConversationSchema.nullable(),
     }
   );
 

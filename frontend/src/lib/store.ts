@@ -13,22 +13,24 @@ import { handleApiError } from "./api/client";
 
 const TTL_MS = 30_000;
 
+const inFlight: Record<string, Promise<unknown> | undefined> = {};
+
 interface AppDataState {
   dashboard: DashboardData | null;
   agents: Agent[] | null;
   documents: KnowledgeDoc[] | null;
   conversations: Conversation[] | null;
   _ts: Record<string, number>;
-  fetchDashboard: (token?: string | null) => Promise<DashboardData>;
-  fetchAgents: (token?: string | null) => Promise<Agent[]>;
+  fetchDashboard: (token?: string | null) => Promise<DashboardData | null>;
+  fetchAgents: (token?: string | null) => Promise<Agent[] | null>;
   fetchDocuments: (
     token?: string | null,
     force?: boolean
-  ) => Promise<KnowledgeDoc[]>;
+  ) => Promise<KnowledgeDoc[] | null>;
   fetchConversations: (
     token?: string | null,
     force?: boolean
-  ) => Promise<Conversation[]>;
+  ) => Promise<Conversation[] | null>;
   reset: () => void;
 }
 
@@ -44,35 +46,49 @@ export const useAppData = create<AppDataState>((set, get) => ({
     const fresh =
       state.dashboard !== null &&
       Date.now() - (state._ts.dashboard ?? 0) < TTL_MS;
-    if (!fresh) {
+    if (fresh) return state.dashboard;
+    if (inFlight.dashboard) return inFlight.dashboard as Promise<DashboardData | null>;
+    const p = (async () => {
       try {
         const data = await getDashboard(token);
         set((s) => ({
           dashboard: data,
           _ts: { ...s._ts, dashboard: Date.now() },
         }));
+        return data;
       } catch (err) {
         handleApiError(err, "Kya baat hai — dashboard load nahi hua");
         set((s) => ({ dashboard: null, _ts: { ...s._ts, dashboard: Date.now() } }));
+        return null;
+      } finally {
+        delete inFlight.dashboard;
       }
-    }
-    return get().dashboard as DashboardData;
+    })();
+    inFlight.dashboard = p;
+    return p;
   },
 
   fetchAgents: async (token) => {
     const state = get();
     const fresh =
       state.agents !== null && Date.now() - (state._ts.agents ?? 0) < TTL_MS;
-    if (!fresh) {
+    if (fresh) return state.agents;
+    if (inFlight.agents) return inFlight.agents as Promise<Agent[] | null>;
+    const p = (async () => {
       try {
         const data = await getAgents(token);
         set((s) => ({ agents: data, _ts: { ...s._ts, agents: Date.now() } }));
+        return data;
       } catch (err) {
         handleApiError(err, "Agents load nahi hue");
         set((s) => ({ agents: null, _ts: { ...s._ts, agents: Date.now() } }));
+        return null;
+      } finally {
+        delete inFlight.agents;
       }
-    }
-    return get().agents as Agent[];
+    })();
+    inFlight.agents = p;
+    return p;
   },
 
   fetchDocuments: async (token?: string | null, force?: boolean) => {
@@ -81,22 +97,30 @@ export const useAppData = create<AppDataState>((set, get) => ({
       !force &&
       state.documents !== null &&
       Date.now() - (state._ts.documents ?? 0) < TTL_MS;
-    if (!fresh) {
+    if (fresh) return state.documents;
+    if (inFlight.documents)
+      return inFlight.documents as Promise<KnowledgeDoc[] | null>;
+    const p = (async () => {
       try {
         const data = await getDocuments(token);
         set((s) => ({
           documents: data,
           _ts: { ...s._ts, documents: Date.now() },
         }));
+        return data;
       } catch (err) {
         handleApiError(err, "Documents load nahi hue");
         set((s) => ({
           documents: null,
           _ts: { ...s._ts, documents: Date.now() },
         }));
+        return null;
+      } finally {
+        delete inFlight.documents;
       }
-    }
-    return get().documents as KnowledgeDoc[];
+    })();
+    inFlight.documents = p;
+    return p;
   },
 
   fetchConversations: async (token?: string | null, force?: boolean) => {
@@ -105,22 +129,30 @@ export const useAppData = create<AppDataState>((set, get) => ({
       !force &&
       state.conversations !== null &&
       Date.now() - (state._ts.conversations ?? 0) < TTL_MS;
-    if (!fresh) {
+    if (fresh) return state.conversations;
+    if (inFlight.conversations)
+      return inFlight.conversations as Promise<Conversation[] | null>;
+    const p = (async () => {
       try {
         const data = await getConversations(token);
         set((s) => ({
           conversations: data,
           _ts: { ...s._ts, conversations: Date.now() },
         }));
+        return data;
       } catch (err) {
         handleApiError(err, "Conversations load nahi hue");
         set((s) => ({
           conversations: null,
           _ts: { ...s._ts, conversations: Date.now() },
         }));
+        return null;
+      } finally {
+        delete inFlight.conversations;
       }
-    }
-    return get().conversations as Conversation[];
+    })();
+    inFlight.conversations = p;
+    return p;
   },
 
   reset: () =>

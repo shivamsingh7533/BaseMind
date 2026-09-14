@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { toast } from "sonner";
 
 const API_URL =
@@ -13,27 +14,47 @@ export class ApiError extends Error {
 }
 
 function messageFrom(err: unknown): string {
-  if (err instanceof ApiError) return `HTTP ${err.status}`;
   if (err instanceof Error) return err.message;
   return "Unknown error";
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit & { schema?: z.ZodType<T> } = {}
 ): Promise<T> {
+  const { schema, ...fetchOpts } = options;
   const res = await fetch(`${API_URL}${path}`, {
     cache: "no-store",
-    ...options,
+    ...fetchOpts,
     headers: {
       Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers ?? {}),
+      ...(fetchOpts.body ? { "Content-Type": "application/json" } : {}),
+      ...(fetchOpts.headers ?? {}),
     },
   });
   if (res.status === 204) return undefined as T;
-  if (!res.ok) throw new ApiError(res.status);
-  return (await res.json()) as T;
+  if (!res.ok) {
+    let detail: string | undefined;
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      /* keep status text */
+    }
+    throw new ApiError(res.status, detail ?? res.statusText);
+  }
+  const json = await res.json();
+  if (!schema) return json as T;
+  try {
+    return schema.parse(json);
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      throw new ApiError(
+        502,
+        err.issues[0]?.message ?? "Invalid server response"
+      );
+    throw err;
+  }
 }
 
 function authHeader(token?: string | null): Record<string, string> {

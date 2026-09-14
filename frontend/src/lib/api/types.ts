@@ -2,7 +2,7 @@ export interface Stat {
   id: string;
   label: string;
   value: string;
-  delta?: string;
+  delta?: string | null;
   sub?: string;
   progress?: number;
 }

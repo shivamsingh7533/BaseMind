@@ -1,10 +1,12 @@
 import { toast } from "sonner";
 import { API_URL, authHeader, request } from "./client";
+import { KnowledgeDocSchema } from "./schemas";
 import type { DocumentPreview, KnowledgeDoc } from "./types";
 
 export const getDocuments = (token?: string | null) =>
   request<KnowledgeDoc[]>("/api/documents", {
     headers: authHeader(token),
+    schema: KnowledgeDocSchema.array(),
   });
 
 export const getDocumentPreview = (

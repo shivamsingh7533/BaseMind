@@ -65,7 +65,7 @@ export function Chat() {
   useEffect(() => {
     getToken()
       .then(async (t) => {
-        const convos = await fetchConversations(t);
+        const convos = (await fetchConversations(t)) ?? [];
         const wanted = searchParams.get("id");
         const initial =
           wanted && convos.some((c) => c.id === wanted)

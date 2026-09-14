@@ -36,6 +36,7 @@ __all__ = [
     "list_agents",
     "list_conversations",
     "list_documents",
+    "mark_announcement_read",
     "op_agents",
     "op_alert",
     "op_announcements",
@@ -57,6 +58,7 @@ __all__ = [
 
 from .admin import (  # noqa: E402
     delete_workspace,
+    mark_announcement_read,
     op_agents,
     op_alert,
     op_announcements,

@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -37,6 +38,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useAppData } from "@/lib/store";
+import { markAnnouncementRead } from "@/lib/api";
 import type { DashboardVector, VectorStatus } from "@/lib/api";
 
 const ICONS = {
@@ -133,12 +135,16 @@ export default function DashboardPage() {
     }
   });
 
-  const dismissAnn = (id: string) => {
+  const dismissAnn = async (id: string) => {
     const next = [...dismissedIds, id];
     setDismissedIds(next);
     try {
       window.localStorage.setItem(DISMISS_KEY, JSON.stringify(next));
     } catch {}
+    const token = await getToken().catch(() => null);
+    if (!token) return;
+    const ok = await markAnnouncementRead(token, id);
+    if (!ok) toast.error("Could not mark announcement as read");
   };
 
   useEffect(() => {
