@@ -1,9 +1,14 @@
-import { API_URL, authHeader } from "./client";
+import { API_URL, authHeader, request } from "./client";
 import type {
   Announcement,
   AnnouncementCreate,
   GroundingMetric,
+  OpsAgent,
+  OpsDocumentsStats,
+  OpsErrorsData,
   OpsStatus,
+  OpsTenant,
+  OpsTrendPoint,
 } from "./types";
 
 export async function fetchOpsStatus(
@@ -67,3 +72,28 @@ export async function createAnnouncement(
     return null;
   }
 }
+
+export const fetchOpsTenants = async (token?: string | null) =>
+  request<OpsTenant[]>("/api/ops/tenants", {
+    headers: authHeader(token),
+  }).catch(() => null);
+
+export const fetchOpsAgents = async (token?: string | null) =>
+  request<OpsAgent[]>("/api/ops/agents", {
+    headers: authHeader(token),
+  }).catch(() => null);
+
+export const fetchOpsDocuments = async (token?: string | null) =>
+  request<OpsDocumentsStats>("/api/ops/documents", {
+    headers: authHeader(token),
+  }).catch(() => null);
+
+export const fetchOpsTrends = async (token?: string | null) =>
+  request<OpsTrendPoint[]>("/api/ops/trends", {
+    headers: authHeader(token),
+  }).catch(() => null);
+
+export const fetchOpsErrors = async (token?: string | null) =>
+  request<OpsErrorsData>("/api/ops/errors", {
+    headers: authHeader(token),
+  }).catch(() => null);

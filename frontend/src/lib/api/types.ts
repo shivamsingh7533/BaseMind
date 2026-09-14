@@ -189,3 +189,59 @@ export interface AnnouncementCreate {
   body: string;
   severity: "info" | "attention" | "error";
 }
+
+export interface OpsTenant {
+  email: string;
+  name: string;
+  plan: string;
+  agents: number;
+  documents: number;
+  docTypeCounts: Record<string, number>;
+  pendingDocs: number;
+  failedDocs: number;
+  conversations: number;
+  queriesToday: number;
+  createdAt: string;
+}
+
+export interface OpsAgent {
+  id: string;
+  name: string;
+  ownerEmail: string | null;
+  queries24h: number;
+  status: string;
+  active: boolean;
+  avgLatencyMs: number;
+  isSlow: boolean;
+}
+
+export interface OpsDocumentsStats {
+  totalDocs: number;
+  readyDocs: number;
+  pendingDocs: number;
+  failedDocs: number;
+  embeddings: number;
+  typeCounts: Record<string, number>;
+}
+
+export interface OpsTrendPoint {
+  date: string;
+  queries: number;
+  conversations: number;
+  newUsers: number;
+  newAgents: number;
+}
+
+export interface OpsErrorRecent {
+  id: string;
+  event_type: string;
+  severity: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface OpsErrorsData {
+  counts24h: Record<string, number>;
+  counts7d: Record<string, number>;
+  recent: OpsErrorRecent[];
+}

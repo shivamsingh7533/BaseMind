@@ -14,9 +14,19 @@ import {
   fetchOpsStatus,
   fetchGroundingMetric,
   fetchAnnouncements,
+  fetchOpsTenants,
+  fetchOpsAgents,
+  fetchOpsDocuments,
+  fetchOpsTrends,
+  fetchOpsErrors,
   type OpsStatus,
   type GroundingMetric,
   type Announcement,
+  type OpsTenant,
+  type OpsAgent,
+  type OpsDocumentsStats,
+  type OpsTrendPoint,
+  type OpsErrorsData,
 } from "@/lib/api";
 import {
   TAB_OVERVIEW,
@@ -43,6 +53,11 @@ export default function OpsPage() {
   const [ops, setOps] = useState<OpsStatus | null>(null);
   const [grounding, setGrounding] = useState<GroundingMetric | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
+  const [tenants, setTenants] = useState<OpsTenant[] | null>(null);
+  const [agents, setAgents] = useState<OpsAgent[] | null>(null);
+  const [documents, setDocuments] = useState<OpsDocumentsStats | null>(null);
+  const [trends, setTrends] = useState<OpsTrendPoint[] | null>(null);
+  const [errors, setErrors] = useState<OpsErrorsData | null>(null);
   const [denied, setDenied] = useState(false);
   const [activeTab, setActiveTab] = useState(TAB_OVERVIEW);
 
@@ -62,10 +77,24 @@ export default function OpsPage() {
     const poll = async () => {
       const t = await getToken();
       if (!t || !alive) return;
-      const [status, groundingData, announcementsData] = await Promise.all([
+      const [
+        status,
+        groundingData,
+        announcementsData,
+        tenantsData,
+        agentsData,
+        documentsData,
+        trendsData,
+        errorsData,
+      ] = await Promise.all([
         fetchOpsStatus(t),
         fetchGroundingMetric(t),
         fetchAnnouncements(t),
+        fetchOpsTenants(t),
+        fetchOpsAgents(t),
+        fetchOpsDocuments(t),
+        fetchOpsTrends(t),
+        fetchOpsErrors(t),
       ]);
       if (!alive) return;
       if (status) {
@@ -74,12 +103,13 @@ export default function OpsPage() {
       } else {
         setDenied(true);
       }
-      if (groundingData) {
-        setGrounding(groundingData);
-      }
-      if (announcementsData) {
-        setAnnouncements(announcementsData);
-      }
+      if (groundingData) setGrounding(groundingData);
+      if (announcementsData) setAnnouncements(announcementsData);
+      if (tenantsData) setTenants(tenantsData);
+      if (agentsData) setAgents(agentsData);
+      if (documentsData) setDocuments(documentsData);
+      if (trendsData) setTrends(trendsData);
+      if (errorsData) setErrors(errorsData);
     };
     void poll();
     const id = setInterval(() => void poll(), 60000);
@@ -139,17 +169,17 @@ export default function OpsPage() {
       {activeTab === TAB_OVERVIEW ? (
         <OverviewPanel ops={ops} grounding={grounding} />
       ) : activeTab === TAB_TENANTS ? (
-        <TenantsPanel />
+        <TenantsPanel tenants={tenants} />
       ) : activeTab === TAB_AGENTS ? (
-        <AgentsPanel />
+        <AgentsPanel agents={agents} />
       ) : activeTab === TAB_DOCS ? (
-        <DocsPanel />
+        <DocsPanel documents={documents} />
       ) : activeTab === TAB_TRENDS ? (
-        <TrendsPanel />
+        <TrendsPanel trends={trends} />
       ) : activeTab === TAB_ERRORS ? (
-        <ErrorsPanel />
+        <ErrorsPanel errors={errors} />
       ) : activeTab === TAB_PLANS ? (
-        <PlansPanel />
+        <PlansPanel tenants={tenants} />
       ) : activeTab === TAB_ANNOUNCE ? (
         <AnnouncePanel announcements={announcements} onRefresh={refreshAnnouncements} />
       ) : (
