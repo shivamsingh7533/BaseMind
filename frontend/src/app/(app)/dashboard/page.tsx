@@ -155,10 +155,10 @@ export default function DashboardPage() {
               key={ann.id}
               className={`flex items-start gap-3 p-4 rounded-xl border ${
                 ann.severity === "error"
-                  ? "bg-red-50 border-red-200"
+                  ? "bg-destructive/10 border-destructive/20"
                   : ann.severity === "attention"
-                  ? "bg-amber-50 border-amber-200"
-                  : "bg-blue-50 border-blue-200"
+                  ? "bg-amber-500/10 border-amber-500/20"
+                  : "bg-primary/10 border-primary/20"
               }`}
             >
               <div className="flex-1 min-w-0">
@@ -465,7 +465,7 @@ export default function DashboardPage() {
                   }));
                   return (
                     <div>
-                      <div className="h-40 w-full">
+                      <div className="aspect-[16/9] min-h-[160px] w-full max-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart
                             data={chartData}

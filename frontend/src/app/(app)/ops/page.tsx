@@ -122,7 +122,7 @@ export default function OpsPage() {
   if (denied)
     return (
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
-        <Card className="rounded-2xl border-red-200 bg-red-50/50">
+        <Card className="rounded-2xl border-destructive/20 bg-destructive/10">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
               <span className="flex size-10 items-center justify-center rounded-xl bg-red-500 text-white shadow">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
@@ -30,11 +30,27 @@ const APP_LINKS = [
   { href: "/logs", label: "Logs" },
 ];
 
+const OPS_CACHE_KEY = "basemind_showOps";
+
+function subscribeOps(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getOpsSnapshot() {
+  return window.localStorage.getItem(OPS_CACHE_KEY) === "1";
+}
+
+function getOpsServerSnapshot() {
+  return false;
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { isSignedIn, getToken } = useAuth();
-  const [showOps, setShowOps] = useState(false);
+  const cachedOps = useSyncExternalStore(subscribeOps, getOpsSnapshot, getOpsServerSnapshot);
+  const [opsConfirmed, setOpsConfirmed] = useState(false);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -42,7 +58,10 @@ export function Navbar() {
     getToken()
       .then((t) => fetchOpsStatus(t))
       .then((ops) => {
-        if (alive && ops) setShowOps(true);
+        if (alive && ops) {
+          setOpsConfirmed(true);
+          window.localStorage.setItem(OPS_CACHE_KEY, "1");
+        }
       })
       .catch(() => {});
     return () => {
@@ -53,7 +72,7 @@ export function Navbar() {
   const links = [
     ...MARKETING_LINKS,
     ...APP_LINKS,
-    ...(showOps ? [{ href: "/ops", label: "Ops" }] : []),
+    ...(cachedOps || opsConfirmed ? [{ href: "/ops", label: "Ops" }] : []),
   ];
 
   return (
@@ -70,7 +89,7 @@ export function Navbar() {
           {links.map((item) => {
             const active =
               item.href.startsWith("/#") === false &&
-              pathname.startsWith(item.href);
+              (pathname === item.href || pathname.startsWith(item.href + "/"));
             return (
               <Link
                 key={item.href}
@@ -135,11 +154,13 @@ export function Navbar() {
                   <span className="text-sm font-medium">Account</span>
                 </Show>
               </div>
-              <Button asChild className="mt-1">
-                <Link href="/signup" onClick={() => setOpen(false)}>
-                  Start Free Trial
-                </Link>
-              </Button>
+              <Show when="signed-out">
+                <Button asChild className="mt-1">
+                  <Link href="/signup" onClick={() => setOpen(false)}>
+                    Start Free Trial
+                  </Link>
+                </Button>
+              </Show>
             </nav>
           </SheetContent>
         </Sheet>

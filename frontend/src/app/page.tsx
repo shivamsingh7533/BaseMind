@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, PlayCircle } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LogoLockup } from "@/components/logo-lockup";
 import { Badge } from "@/components/ui/badge";
@@ -153,15 +153,6 @@ function Pricing() {
   );
 }
 
-const EMBED_CODE = `<!-- Coming soon — embed script is not live yet -->
-<script>
-  window.BaseMind = {
-    agentId: "bm_a7x9f",
-    theme: "light"
-  };
-</script>
-<script src="https://cdn.basemind.ai/v1.js"></script>`;
-
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -186,9 +177,6 @@ export default function LandingPage() {
           <Button size="lg" asChild>
             <Link href="/signup">Start Free Trial</Link>
           </Button>
-          <Button size="lg" variant="ghost" className="gap-2">
-            <PlayCircle className="size-5" /> Watch Demo
-          </Button>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
           Free while in beta. No credit card required.
@@ -208,41 +196,6 @@ export default function LandingPage() {
               </p>
             </div>
           ))}
-          <div className="rounded-xl border p-6 md:hidden">
-            <div className="flex items-center gap-2">
-              <h3 className="font-heading text-lg font-semibold">One-Line Embed</h3>
-              <Badge variant="outline">Coming soon</Badge>
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Drop a single script tag into your app to deploy your custom
-              agent.
-            </p>
-          </div>
-        </div>
-
-        <div className="mx-auto mt-6 max-w-6xl px-6">
-          <div className="overflow-hidden rounded-xl border">
-            <div className="grid md:grid-cols-2">
-              <div className="bg-card p-6">
-                <span className="inline-flex size-9 items-center justify-center rounded-md bg-accent text-accent-foreground">
-                  <FeatureIcon kind="precision" />
-                </span>
-                <div className="mt-4 flex items-center gap-2">
-                  <h3 className="font-heading text-lg font-semibold">
-                    One-Line Embed
-                  </h3>
-                  <Badge variant="outline">Coming soon</Badge>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Drop a single script tag into your app to deploy your custom
-                  agent.
-                </p>
-              </div>
-              <pre className="overflow-x-auto bg-zinc-950 p-6 font-mono text-xs leading-relaxed text-zinc-100">
-                {EMBED_CODE}
-              </pre>
-            </div>
-          </div>
         </div>
       </section>
 

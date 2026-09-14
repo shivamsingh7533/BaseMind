@@ -19,7 +19,7 @@ export function ConversationList({
   onDelete: (id: string, name: string) => void;
 }) {
   return (
-    <Card className="flex h-[55vh] min-h-72 flex-col overflow-hidden lg:h-[calc(100vh-12rem)] lg:min-h-96">
+    <Card className="flex h-[55dvh] min-h-72 flex-col overflow-hidden lg:h-[calc(100dvh-12rem)] lg:min-h-96">
       <CardContent className="flex-1 overflow-y-auto p-2">
         {!conversations ? (
           <div className="space-y-2">

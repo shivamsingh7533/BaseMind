@@ -166,7 +166,7 @@ export default function LogsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <Card className="flex h-[55vh] min-h-72 flex-col overflow-hidden lg:h-[calc(100vh-11rem)] lg:min-h-96">
+        <Card className="flex h-[55dvh] min-h-72 flex-col overflow-hidden lg:h-[calc(100dvh-11rem)] lg:min-h-96">
           <CardContent className="flex gap-2 border-b p-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -241,7 +241,7 @@ export default function LogsPage() {
           </ScrollArea>
         </Card>
 
-        <Card className="flex h-[70vh] min-h-96 flex-col overflow-hidden lg:h-[calc(100vh-11rem)]">
+        <Card className="flex h-[70dvh] min-h-96 flex-col overflow-hidden lg:h-[calc(100dvh-11rem)]">
           {!selected ? (
             <CardContent className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
               Select a session to view the transcript.

@@ -489,7 +489,7 @@ export default function AgentsPage() {
         <CardContent>
           <div
             ref={chatScrollRef}
-            className="flex h-72 flex-col gap-3 overflow-y-auto rounded-lg border bg-muted/30 p-4"
+            className="flex h-72 max-h-[50dvh] flex-col gap-3 overflow-y-auto rounded-lg border bg-muted/30 p-4"
           >
             {chatMessages.length === 0 && (
               <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">

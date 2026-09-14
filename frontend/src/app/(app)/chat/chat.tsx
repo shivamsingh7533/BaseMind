@@ -315,7 +315,7 @@ export function Chat() {
           onDelete={(id, name) => void removeConversation(id, name)}
         />
 
-        <Card className="flex h-[70vh] min-h-96 flex-col overflow-hidden lg:h-[calc(100vh-12rem)]">
+        <Card className="flex h-[70dvh] min-h-96 flex-col overflow-hidden lg:h-[calc(100dvh-12rem)]">
           {loadingDetail ? (
             <div className="space-y-4 p-6">
               <Skeleton className="h-14 w-full" />
