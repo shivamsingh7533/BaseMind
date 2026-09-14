@@ -37,7 +37,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useAppData } from "@/lib/store";
-import type { DashboardVector, VectorStatus, Announcement } from "@/lib/api";
+import type { DashboardVector, VectorStatus } from "@/lib/api";
 
 const ICONS = {
   agent: Bot,

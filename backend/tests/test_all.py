@@ -17,7 +17,7 @@ import io
 import os
 import uuid
 
-from fastapi import HTTPException, UploadFile
+from fastapi import BackgroundTasks, HTTPException, UploadFile
 from sqlalchemy import delete, func, select
 
 from app import routers
@@ -129,11 +129,19 @@ async def main():
             check("update_conversation (resolve)", conv2["status"] == "resolved")
 
             # ---- Chat (SSE, real Gemini) ----
-            resp = await routers.chat(conv["id"], MessageIn(role="user", text="What is the refund policy?"), user, db)
+            bt = BackgroundTasks()
+            resp = await routers.chat(
+                conv["id"],
+                MessageIn(role="user", text="What is the refund policy?"),
+                bt,
+                user,
+                db,
+            )
             frames = []
             async for chunk in resp.body_iterator:
                 frames.append(chunk)
             body = "".join(frames)
+            await bt()  # persists the assistant message via background task
             check(
                 "chat streamed", '"type": "sources"' in body and "refund" in body.lower(), body.replace("\n", " ")[:160]
             )
@@ -178,7 +186,7 @@ async def main():
             ops = await routers.ops_status(user, db)
             check(
                 "ops operator 200 + engine",
-                ops["engine"] == "3.4" and isinstance(ops["nominal"], bool) and bool(ops["generatedAt"]),
+                ops["engine"] == "3.5" and isinstance(ops["nominal"], bool) and bool(ops["generatedAt"]),
             )
             check(
                 "ops global metrics",
@@ -217,12 +225,12 @@ async def main():
                 str(ops2["activity"][:2]),
             )
 
-            _orig_embed = routers.embed_texts
+            _orig_embed = routers.documents.embed_texts
 
             async def _embed_boom(chunks):
                 raise RuntimeError("embedding down (synthetic)")
 
-            routers.embed_texts = _embed_boom
+            routers.documents.embed_texts = _embed_boom
             try:
                 try:
                     await routers._persist_document(
@@ -239,7 +247,7 @@ async def main():
                     ).scalar_one()
                     check("ingest_error logged", n_ingest >= 1, f"{n_ingest} events")
             finally:
-                routers.embed_texts = _orig_embed
+                routers.documents.embed_texts = _orig_embed
 
             # ---- Download (4A2 signed URL) ----
             web_resp = await routers.download_document(sync["id"], user, db)
@@ -329,13 +337,13 @@ async def main():
             except HTTPException as e:
                 check("delete_conversation -> 404 on detail", e.status_code == 404)
 
-            old_max = routers.CHAT_RATE_MAX
-            routers.CHAT_RATE_MAX = 3
-            routers._chat_hits.pop(user.id, None)
-            tries = [routers._allow_chat(user.id) for _ in range(5)]
+            old_max = routers.deps.CHAT_RATE_MAX
+            routers.deps.CHAT_RATE_MAX = 3
+            routers.deps._chat_hits.pop(user.id, None)
+            tries = [routers.deps._allow_chat(user.id) for _ in range(5)]
             check("chat rate limit blocks overflow", tries == [True] * 3 + [False] * 2, str(tries))
-            routers.CHAT_RATE_MAX = old_max
-            routers._chat_hits.pop(user.id, None)
+            routers.deps.CHAT_RATE_MAX = old_max
+            routers.deps._chat_hits.pop(user.id, None)
 
             # ---- 5B: settings status + delete workspace (/api/me) ----
             stat = await routers.settings_status(user, db)
