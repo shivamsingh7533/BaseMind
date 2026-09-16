@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .db import get_db
-from .models import User
+from .models import Subscription, User
 
 _bearer = HTTPBearer(auto_error=False)
 _jwks_client: pyjwt.PyJWKClient | None = None
@@ -83,6 +83,8 @@ async def upsert_user(db: AsyncSession, claims: dict) -> User:
         db.add(user)
         await db.commit()
         await db.refresh(user)
+        db.add(Subscription(user_id=user.id, plan="free", status="active"))
+        await db.commit()
     elif claims.get("email") and not user.email:
         user.email = claims["email"]
         await db.commit()

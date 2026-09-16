@@ -2,12 +2,14 @@ from fastapi import APIRouter
 
 from .admin import router as _admin
 from .agents import router as _agents
+from .billing import router as _billing
 from .conversations import router as _conversations
 from .dashboard import router as _dashboard
 from .documents import router as _documents
 
 router = APIRouter()
 router.include_router(_agents)
+router.include_router(_billing)
 router.include_router(_conversations)
 router.include_router(_dashboard)
 router.include_router(_documents)
@@ -20,6 +22,10 @@ __all__ = [
     "_chat_hits",
     "_persist_document",
     "add_message",
+    "billing_cancel",
+    "billing_checkout",
+    "billing_status",
+    "billing_configured",
     "chat",
     "conversation_detail",
     "create_agent",
@@ -33,6 +39,7 @@ __all__ = [
     "document_preview",
     "download_document",
     "download_document_url",
+    "get_plan",
     "list_agents",
     "list_conversations",
     "list_documents",
@@ -49,6 +56,7 @@ __all__ = [
     "op_trends",
     "op_update_agent",
     "ops_status",
+    "razorpay_webhook",
     "settings_status",
     "sync_url",
     "update_agent",
@@ -74,6 +82,14 @@ from .admin import (  # noqa: E402
     settings_status,
 )
 from .agents import create_agent, delete_agent, list_agents, update_agent  # noqa: E401, E402
+from .billing import (  # noqa: E401, E402
+    billing_cancel,
+    billing_checkout,
+    billing_configured,
+    billing_status,
+    get_plan,
+    razorpay_webhook,
+)
 from .conversations import (  # noqa: E402
     add_message,
     chat,

@@ -119,6 +119,9 @@ class Subscription(Base):
     plan: Mapped[str] = mapped_column(Text, default="free")
     status: Mapped[str] = mapped_column(Text, default="active")
     stripe_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    razorpay_subscription_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
+    razorpay_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    razorpay_plan_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 

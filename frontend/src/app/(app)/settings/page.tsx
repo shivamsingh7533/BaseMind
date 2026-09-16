@@ -3,7 +3,13 @@
 import { useEffect, useState, type ElementType } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { Database, HardDrive, Loader2, TriangleAlert } from "lucide-react";
+import {
+  Database,
+  HardDrive,
+  Loader2,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,8 +31,22 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { deleteWorkspace, getSettingsStatus, type SettingsStatus } from "@/lib/api";
+import {
+  cancelSubscription,
+  createCheckout,
+  deleteWorkspace,
+  getBilling,
+  getSettingsStatus,
+  type BillingStatus,
+  type SettingsStatus,
+} from "@/lib/api";
 import { useAppData } from "@/lib/store";
+
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
 
 function StatusRow({
   icon: Icon,
@@ -46,15 +66,30 @@ function StatusRow({
       {value === null ? (
         <Skeleton aria-label="Checking…" className="h-6 w-24" />
       ) : (
-      <Badge
-        variant="outline"
-        className={value ? "text-success" : "text-destructive"}
-      >
-        {value ? "Connected" : "Not configured"}
-      </Badge>
+        <Badge
+          variant="outline"
+          className={value ? "text-success" : "text-destructive"}
+        >
+          {value ? "Connected" : "Not configured"}
+        </Badge>
       )}
     </div>
   );
+}
+
+function loadRazorpayCheckout(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
+    document.body.appendChild(script);
+  });
 }
 
 export default function SettingsPage() {
@@ -65,21 +100,91 @@ export default function SettingsPage() {
   const reset = useAppData((s) => s.reset);
 
   const [status, setStatus] = useState<SettingsStatus | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     getToken()
-      .then(getSettingsStatus)
-      .then((s) => {
-        if (!cancelled) setStatus(s);
+      .then((token) => {
+        void getSettingsStatus(token).then((s) => {
+          if (!cancelled) setStatus(s);
+        });
+        void getBilling(token).then((b) => {
+          if (!cancelled) setBilling(b);
+        });
       });
     return () => {
       cancelled = true;
     };
   }, [getToken]);
+
+  const refreshBilling = () => {
+    void getToken().then((token) => {
+      void getBilling(token).then((b) => {
+        if (b) setBilling(b);
+      });
+    });
+  };
+
+  const onUpgrade = async () => {
+    setUpgrading(true);
+    try {
+      const token = await getToken();
+      const checkout = await createCheckout(token);
+      if (!checkout) {
+        toast.error("Billing is not configured yet");
+        return;
+      }
+      await loadRazorpayCheckout();
+      const email =
+        user?.primaryEmailAddress?.emailAddress ??
+        user?.emailAddresses?.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ??
+        "";
+      const rzp = new window.Razorpay({
+        key: checkout.key_id,
+        subscription_id: checkout.subscription_id,
+        name: "BaseMind",
+        description: "Pro Plan — ₹499/month",
+        prefill: { email },
+        theme: { color: "#0d9488" },
+        handler: () => {
+          toast.success("Payment successful — starting your Pro plan");
+          refreshBilling();
+        },
+        modal: {
+          ondismiss: () => {
+            setUpgrading(false);
+            refreshBilling();
+          },
+        },
+      });
+      rzp.open();
+    } catch {
+      toast.error("Could not start checkout. Please try again.");
+      setUpgrading(false);
+    }
+  };
+
+  const onCancel = async () => {
+    setCancelling(true);
+    try {
+      const token = await getToken();
+      const res = await cancelSubscription(token);
+      if (!res.ok) {
+        toast.error(`Cancel failed: ${res.detail}`);
+        return;
+      }
+      toast.success("Subscription cancelled — back on the Free plan");
+      refreshBilling();
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const displayName =
     user?.fullName || user?.primaryEmailAddress?.emailAddress || "Workspace";
@@ -103,6 +208,8 @@ export default function SettingsPage() {
       setDeleting(false);
     }
   };
+
+  const isPro = billing?.plan === "pro";
 
   return (
     <div className="mx-auto max-w-5xl p-6 lg:p-8">
@@ -133,6 +240,77 @@ export default function SettingsPage() {
                 {user?.primaryEmailAddress?.emailAddress ??
                   "No email on this account"}
               </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-heading">
+              <Sparkles className="size-4 text-primary" />
+              Plan & Billing
+            </CardTitle>
+            <CardDescription>
+              Upgrade to Pro for unlimited agents and knowledge. Cancel anytime
+              from here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-4 rounded-xl bg-muted/50 p-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-heading text-lg font-semibold">
+                    {billing === null ? (
+                      <Skeleton className="h-6 w-24" />
+                    ) : (
+                      (isPro ? "Pro" : "Free")
+                    )}
+                  </p>
+                  {billing !== null && (
+                    <Badge
+                      variant={isPro ? "secondary" : "outline"}
+                      className={isPro ? "text-primary" : "text-muted-foreground"}
+                    >
+                      {billing.status}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {billing === null
+                    ? " "
+                    : isPro
+                      ? billing.current_period_end
+                        ? `Renews ${new Date(billing.current_period_end).toLocaleDateString()}`
+                        : "Pro benefits active"
+                      : "1 agent and 5 documents included"}
+                </p>
+              </div>
+              {billing !== null && billing.razorpay_configured && (
+                <>
+                  {isPro ? (
+                    <Button
+                      variant="outline"
+                      onClick={onCancel}
+                      disabled={cancelling}
+                    >
+                      {cancelling ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        "Cancel subscription"
+                      )}
+                    </Button>
+                  ) : (
+                    <Button onClick={onUpgrade} disabled={upgrading}>
+                      {upgrading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-4" />
+                      )}
+                      Upgrade to Pro — ₹499/mo
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

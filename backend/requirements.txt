@@ -17,3 +17,4 @@ alembic>=1.13
 structlog>=25
 prometheus-fastapi-instrumentator>=7
 tenacity>=8
+razorpay>=1.4.2

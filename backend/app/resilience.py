@@ -61,7 +61,7 @@ def _is_retryable(exc: BaseException) -> bool:
 def retrying(service: str, attempts: int = 3):
     return AsyncRetrying(
         stop=stop_after_attempt(attempts),
-        wait=wait_exponential(multiplier=1, min=1, max=8),
+        wait=wait_exponential(multiplier=2, min=2, max=30),
         retry=retry_if_exception(_is_retryable),
         before_sleep=before_sleep_log(log, logging.WARNING),
         reraise=True,

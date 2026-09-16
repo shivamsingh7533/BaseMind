@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     b2_bucket_name: str = ""
     sentry_dsn: str = ""
     operator_emails: str = ""
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+    razorpay_plan_id: str = ""
 
 
 @lru_cache

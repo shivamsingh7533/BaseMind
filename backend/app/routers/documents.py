@@ -3,7 +3,7 @@ import contextlib
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..ai import chunk_text, embed_texts, extract_html, extract_text, page_title
@@ -14,6 +14,7 @@ from ..models import Agent, Document, DocumentChunk, EventLog, User
 from ..resilience import DEFAULT_TIMEOUT
 from ..schemas import DocumentCreate, SyncUrlRequest, serialize_document
 from ..storage import delete_original, download_url, is_b2_enabled, upload_original
+from .billing import FREE_DOC_LIMIT, get_plan
 from .deps import (
     MAX_SYNC_BYTES,
     MAX_UPLOAD_BYTES,
@@ -41,12 +42,23 @@ async def list_documents(user: User = Depends(get_current_user), db: AsyncSessio
     return payload
 
 
+async def _enforce_doc_limit(db: AsyncSession, user: User) -> None:
+    if await get_plan(db, user.id) == "free":
+        result = await db.execute(select(func.count()).select_from(Document).where(Document.user_id == user.id))
+        if result.scalar_one() >= FREE_DOC_LIMIT:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Free plan allows {FREE_DOC_LIMIT} documents. Upgrade to Pro for unlimited knowledge.",
+            )
+
+
 @router.post("/documents", status_code=201)
 async def create_document(
     payload: DocumentCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _enforce_doc_limit(db, user)
     if payload.agent_id:
         await _get_owned(db, Agent, payload.agent_id, user)
     doc = Document(
@@ -131,6 +143,7 @@ async def upload_document(
 ):
     if not _allow_rate_limited("upload", user.id, UPLOAD_RATE_MAX, UPLOAD_RATE_WINDOW):
         raise HTTPException(status_code=429, detail="Rate limit: too many uploads, try again shortly")
+    await _enforce_doc_limit(db, user)
     raw = await file.read()
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 10MB)")
@@ -172,6 +185,7 @@ async def sync_url(
 ):
     if not _allow_rate_limited("sync", user.id, SYNC_RATE_MAX, SYNC_RATE_WINDOW):
         raise HTTPException(status_code=429, detail="Rate limit: too many syncs, try again shortly")
+    await _enforce_doc_limit(db, user)
     parsed = httpx.URL(payload.url)
     if parsed.scheme not in ("http", "https") or not parsed.host:
         raise HTTPException(status_code=422, detail="Invalid URL — must be a full http(s) link")

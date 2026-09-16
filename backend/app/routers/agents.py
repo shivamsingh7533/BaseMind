@@ -8,6 +8,7 @@ from ..db import get_db
 from ..email import dispatch_welcome
 from ..models import Agent, User
 from ..schemas import AgentCreate, AgentUpdate, serialize_agent
+from .billing import FREE_AGENT_LIMIT, get_plan
 from .deps import AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW, _allow_rate_limited, _get_owned
 
 router = APIRouter(prefix="/api")
@@ -45,6 +46,11 @@ async def create_agent(
         train_progress=100,
     )
     existing = (await db.execute(select(func.count()).select_from(Agent).where(Agent.user_id == user.id))).scalar_one()
+    if await get_plan(db, user.id) == "free" and existing >= FREE_AGENT_LIMIT:
+        raise _HTTPException(
+            status_code=402,
+            detail=f"Free plan allows {FREE_AGENT_LIMIT} agent. Upgrade to Pro for unlimited agents.",
+        )
     db.add(agent)
     await db.commit()
     await db.refresh(agent)

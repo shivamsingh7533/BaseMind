@@ -18,11 +18,21 @@ import os
 import uuid
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
+from starlette.requests import Request
 
 from app import routers
 from app.db import SessionFactory, init_db
-from app.models import Agent, Conversation, Document, DocumentChunk, EventLog, Message, User
+from app.models import (
+    Agent,
+    Conversation,
+    Document,
+    DocumentChunk,
+    EventLog,
+    Message,
+    Subscription,
+    User,
+)
 from app.schemas import (
     AgentCreate,
     AgentUpdate,
@@ -386,6 +396,84 @@ async def main():
             # ---- 5B: settings status + delete workspace (/api/me) ----
             stat = await routers.settings_status(user, db)
             check("settings_status", stat["db_configured"] is True and stat["b2_enabled"] is not None)
+
+            # ---- Razorpay billing + free plan gating ----
+            bill = await routers.billing_status(user, db)
+            check("billing_status returns free plan", bill["plan"] == "free" and bill["status"] == "active")
+            check("billing not configured in test env", bill["razorpay_configured"] is False)
+
+            limit_a = await routers.create_agent(AgentCreate(name="Limit Bot", instructions="x", color="#111111"), user, db)
+            check("free plan allows 1st agent", limit_a["name"] == "Limit Bot")
+            try:
+                await routers.create_agent(AgentCreate(name="Limit Bot 2", instructions="x", color="#111111"), user, db)
+                check("free plan blocks 2nd agent -> 402", False)
+            except HTTPException as e:
+                check("free plan blocks 2nd agent -> 402", e.status_code == 402 and "Upgrade to Pro" in e.detail)
+
+            try:
+                await routers.billing_checkout(user, db)
+                check("checkout without Razorpay keys -> 503", False)
+            except HTTPException as e:
+                check("checkout without Razorpay keys -> 503", e.status_code == 503)
+
+            cancel = await routers.billing_cancel(user, db)
+            check("cancel with no subscription is a no-op", cancel["plan"] == "free" and cancel["status"] == "active")
+
+            sub_row = (
+                (await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one_or_none()
+            )
+            sub_row.razorpay_subscription_id = "sub_test_cancel"
+            await db.commit()
+            cancel2 = await routers.billing_cancel(user, db)
+            check("cancel clears plan to free", cancel2["plan"] == "free" and cancel2["status"] == "cancelled")
+
+            async def _make_webhook_request(signature: str = "sig") -> Request:
+                body = b'{"event":"subscription.activated","payload":{"subscription":{"entity":{"id":"sub_test_conflict","current_end":4102444800}}}}'
+
+                async def receive():
+                    return {"type": "http.request", "body": body, "more_body": False}
+
+                scope = {
+                    "type": "http",
+                    "method": "POST",
+                    "path": "/api/webhooks/razorpay",
+                    "headers": [(b"x-razorpay-signature", signature.encode())],
+                    "query_string": b"",
+                    "server": ("testserver", 80),
+                    "client": ("testclient", 0),
+                    "scheme": "http",
+                    "root_path": "",
+                    "http_version": "1.1",
+                }
+                return Request(scope, receive)
+
+            try:
+                await routers.razorpay_webhook(await _make_webhook_request(), db)
+                check("webhook without secret -> 503", False)
+            except HTTPException as e:
+                check("webhook without secret -> 503", e.status_code == 503)
+
+            sub_row = (
+                (await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one_or_none()
+            )
+            check("billing_status created subscription row", sub_row is not None and sub_row.plan == "free")
+
+            await db.execute(update(Subscription).where(Subscription.user_id == user.id).values(plan="pro"))
+            await db.commit()
+            pro_agent = await routers.create_agent(
+                AgentCreate(name="Pro Bot", instructions="x", color="#222222"), user, db
+            )
+            check("pro plan allows 2nd agent", pro_agent["name"] == "Pro Bot")
+            await routers.delete_agent(pro_agent["id"], user, db)
+            await routers.delete_agent(limit_a["id"], user, db)
+            await db.execute(update(Subscription).where(Subscription.user_id == user.id).values(plan="free"))
+            await db.commit()
+
+            try:
+                await routers.billing_checkout(user, db)
+                check("checkout re-check -> 503", False)
+            except HTTPException as e:
+                check("checkout re-check -> 503", e.status_code == 503)
 
             ws_doc = await routers.upload_document(
                 UploadFile(filename="ws-cleanup.txt", file=io.BytesIO(b"temp data for workspace purge")),

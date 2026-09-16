@@ -193,13 +193,14 @@ async def stream_answer(
         },
     ]
     config = types.GenerateContentConfig(system_instruction=system_prompt)
-    stream = None
     try:
-        async for attempt in retrying("gemini", attempts=3):
+        async for attempt in retrying("gemini", attempts=5):
             with attempt:
-                stream = await client.aio.models.generate_content_stream(
+                async for chunk in await client.aio.models.generate_content_stream(
                     model=CHAT_MODEL, contents=contents, config=config
-                )
+                ):
+                    if chunk.text:
+                        yield chunk.text
                 _record_success("gemini")
                 break
     except HTTPException:
@@ -207,12 +208,3 @@ async def stream_answer(
     except Exception as exc:  # noqa: BLE001
         _record_failure("gemini")
         raise HTTPException(status_code=502, detail=f"Chat stream failed: {exc}") from exc
-    if stream is None:
-        return
-    try:
-        async for chunk in stream:
-            if chunk.text:
-                yield chunk.text
-    except Exception:  # noqa: BLE001
-        _record_failure("gemini")
-        raise

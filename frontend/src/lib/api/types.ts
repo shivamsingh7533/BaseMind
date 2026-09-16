@@ -128,6 +128,19 @@ export interface SettingsStatus {
   b2_enabled: boolean;
 }
 
+export interface BillingStatus {
+  plan: "free" | "pro";
+  status: string;
+  current_period_end: string | null;
+  razorpay_configured: boolean;
+}
+
+export interface CheckoutResponse {
+  url: string;
+  subscription_id: string;
+  key_id: string;
+}
+
 export type OpsSeverity = "info" | "attention" | "error";
 
 export interface OpsMetrics {
