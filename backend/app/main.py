@@ -1,21 +1,34 @@
 import logging
 import os
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from .config import get_settings
-from .db import init_db
+from .db import engine, init_db
 from .routers import router
 
-log = logging.getLogger("basemind.http")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+_use_json = bool(os.getenv("JSON_LOGS") or os.getenv("ENVIRONMENT") == "production")
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer() if _use_json else structlog.dev.ConsoleRenderer(colors=False),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+    cache_logger_on_first_use=True,
 )
+logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+log = structlog.get_logger("basemind.http")
 
 _sentry_dsn = get_settings().sentry_dsn
 if _sentry_dsn:
@@ -37,7 +50,7 @@ if _sentry_dsn:
         profiles_sample_rate=0.05,
         send_default_pii=True,
     )
-    log.info("Sentry enabled release=%s env=%s", _release, _env)
+    log.info("sentry_enabled", release=_release, env=_env)
 
 
 @asynccontextmanager
@@ -72,6 +85,12 @@ app.add_middleware(
 
 app.include_router(router)
 
+Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
 
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
@@ -98,12 +117,12 @@ async def request_context_middleware(request: Request, call_next):
     elapsed_ms = (time.perf_counter() - start) * 1000
     if not request.url.path.startswith("/api/conversations/") or not request.url.path.endswith("/chat"):
         log.info(
-            "%s %s -> %d (%.0fms) [rid=%s]",
-            request.method,
-            request.url.path,
-            response.status_code,
-            elapsed_ms,
-            request_id,
+            "request",
+            method=request.method,
+            path=request.url.path,
+            status=response.status_code,
+            duration_ms=round(elapsed_ms, 1),
+            request_id=request_id,
         )
     if _sentry_dsn:
         try:
@@ -116,5 +135,38 @@ async def request_context_middleware(request: Request, call_next):
 
 
 @app.get("/api/health")
-def health() -> dict:
-    return {"status": "ok", "service": "basemind-api"}
+async def health(request: Request) -> dict:
+    from sqlalchemy import text as _text
+
+    from .storage import is_b2_enabled as _is_b2
+
+    checks: dict = {}
+    start = time.perf_counter()
+    try:
+        if engine is None:
+            checks["db"] = {"status": "skipped", "reason": "DATABASE_URL not set"}
+        else:
+            async with engine.connect() as conn:
+                await conn.execute(_text("SELECT 1"))
+            checks["db"] = {
+                "status": "ok",
+                "latency_ms": round((time.perf_counter() - start) * 1000, 1),
+            }
+    except Exception as exc:  # noqa: BLE001
+        checks["db"] = {"status": "error", "error": str(exc)[:200]}
+
+    checks["b2"] = {"enabled": _is_b2()}
+    checks["sentry"] = {"enabled": bool(_sentry_dsn)}
+    checks["release"] = (
+        os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("VERCEL_GIT_COMMIT_SHA")
+        or os.getenv("GIT_COMMIT")
+        or None
+    )
+    status = "ok" if checks.get("db", {}).get("status") != "error" else "degraded"
+    return {
+        "status": status,
+        "service": "basemind-api",
+        "checks": checks,
+        "request_id": getattr(request.state, "request_id", None),
+    }
