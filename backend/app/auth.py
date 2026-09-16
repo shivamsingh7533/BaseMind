@@ -89,6 +89,29 @@ async def upsert_user(db: AsyncSession, claims: dict) -> User:
     return user
 
 
+def _set_sentry_user(user: "User | None", claims: dict | None = None) -> None:
+    try:
+        from .config import get_settings as _gs  # local import to avoid cycle
+
+        if not _gs().sentry_dsn:
+            return
+        import sentry_sdk  # noqa: E402
+
+        if user is not None:
+            sentry_sdk.set_user(
+                {
+                    "id": user.id,
+                    "email": getattr(user, "email", None),
+                    "username": getattr(user, "clerk_id", None),
+                }
+            )
+            sentry_sdk.set_tag("clerk_id", getattr(user, "clerk_id", "") or "")
+        elif claims is not None:
+            sentry_sdk.set_user({"id": claims.get("sub", ""), "email": claims.get("email")})
+    except Exception:
+        pass
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
@@ -96,4 +119,18 @@ async def get_current_user(
     if credentials is None or not credentials.credentials:
         raise HTTPException(status_code=401, detail="Missing bearer token")
     claims = verify_clerk_token(credentials.credentials)
-    return await upsert_user(db, claims)
+    user = await upsert_user(db, claims)
+    _set_sentry_user(user, claims)
+    try:
+        import sentry_sdk  # noqa: E402
+
+        sentry_sdk.set_tag("user_id", user.id)
+        sentry_sdk.add_breadcrumb(
+            category="auth",
+            message="authenticated",
+            level="info",
+            data={"clerk_id": claims.get("sub", ""), "user_id": user.id},
+        )
+    except Exception:
+        pass
+    return user

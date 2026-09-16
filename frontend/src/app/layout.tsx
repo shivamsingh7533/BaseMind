@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "@/components/ui/sonner";
 import { Navbar } from "@/components/navbar";
+import { SentryUserSync } from "@/components/sentry-user-sync";
 import "./globals.css";
 
 const inter = Inter({
@@ -116,6 +117,7 @@ export default function RootLayout({
           signInFallbackRedirectUrl="/dashboard"
           signUpFallbackRedirectUrl="/dashboard"
         >
+          <SentryUserSync />
           <Navbar />
           {children}
           <Toaster richColors position="top-right" />
