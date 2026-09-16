@@ -91,9 +91,20 @@ async def send_email(
     if not await _should_send(db, event_type, user_id):
         log.info("email_skip: %s user=%s (cooldown)", event_type, user_id)
         return False
+    from .resilience import _check_circuit, _record_failure, _record_success, retrying
+
     try:
-        await _send_brevo(to_email, subject, html)
+        _check_circuit("brevo")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("email_circuit_open: %s user=%s %s", event_type, user_id, exc)
+        return False
+    try:
+        async for attempt in retrying("brevo", attempts=3):
+            with attempt:
+                await _send_brevo(to_email, subject, html)
+        _record_success("brevo")
     except Exception:
+        _record_failure("brevo")
         log.exception("email_fail: %s user=%s", event_type, user_id)
         return False
     await _note_sent(db, event_type, user_id, subject)

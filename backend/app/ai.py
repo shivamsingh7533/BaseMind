@@ -41,15 +41,28 @@ def get_ai_client():
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    client = get_ai_client()
     from google.genai import types
 
-    result = await client.aio.models.embed_content(
-        model=EMBED_MODEL,
-        contents=texts,
-        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
-    )
-    return [item.values for item in result.embeddings]
+    from .resilience import _check_circuit, _record_failure, _record_success, retrying
+
+    _check_circuit("gemini")
+    client = get_ai_client()
+    try:
+        async for attempt in retrying("gemini", attempts=3):
+            with attempt:
+                result = await client.aio.models.embed_content(
+                    model=EMBED_MODEL,
+                    contents=texts,
+                    config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
+                )
+                _record_success("gemini")
+                return [item.values for item in result.embeddings]
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _record_failure("gemini")
+        raise HTTPException(status_code=502, detail=f"Embedding failed: {exc}") from exc
+    return []
 
 
 def chunk_text(text: str) -> list[str]:
@@ -154,9 +167,12 @@ async def stream_answer(
     history: list[dict],
     extra_instructions: str = "",
 ) -> AsyncIterator[str]:
-    client = get_ai_client()
     from google.genai import types
 
+    from .resilience import _check_circuit, _record_failure, _record_success, retrying
+
+    _check_circuit("gemini")
+    client = get_ai_client()
     system_prompt = SYSTEM_PROMPT
     if extra_instructions.strip():
         system_prompt += (
@@ -177,7 +193,26 @@ async def stream_answer(
         },
     ]
     config = types.GenerateContentConfig(system_instruction=system_prompt)
-    stream = await client.aio.models.generate_content_stream(model=CHAT_MODEL, contents=contents, config=config)
-    async for chunk in stream:
-        if chunk.text:
-            yield chunk.text
+    stream = None
+    try:
+        async for attempt in retrying("gemini", attempts=3):
+            with attempt:
+                stream = await client.aio.models.generate_content_stream(
+                    model=CHAT_MODEL, contents=contents, config=config
+                )
+                _record_success("gemini")
+                break
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _record_failure("gemini")
+        raise HTTPException(status_code=502, detail=f"Chat stream failed: {exc}") from exc
+    if stream is None:
+        return
+    try:
+        async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
+    except Exception:  # noqa: BLE001
+        _record_failure("gemini")
+        raise

@@ -22,6 +22,7 @@ from ..ops import (
     is_operator,
 )
 from ..storage import delete_original, is_b2_enabled
+from .deps import OPS_RATE_MAX, OPS_RATE_WINDOW, _allow_rate_limited
 
 router = APIRouter(prefix="/api")
 
@@ -64,6 +65,8 @@ async def op_announcements(
 ):
     if not is_operator(user):
         raise HTTPException(status_code=403, detail="Operator access only")
+    if not _allow_rate_limited("ops_announce", user.id, OPS_RATE_MAX, OPS_RATE_WINDOW):
+        raise HTTPException(status_code=429, detail="Rate limit: too many announcements, try again shortly")
     title = payload.get("title", "")
     body = payload.get("body", "")
     severity = payload.get("severity", "info")

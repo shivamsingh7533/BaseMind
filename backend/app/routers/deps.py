@@ -16,16 +16,33 @@ CHAT_RATE_WINDOW_SECONDS = 300.0
 CHAT_RATE_MAX = 20
 _chat_hits: dict[str, list[float]] = {}
 
+# Generic bucketed rate limiter for non-chat endpoints.
+_RATE_LIMITS: dict[str, dict[str, list[float]]] = {"chat": {}}
+_chat_hits = _RATE_LIMITS["chat"]
+UPLOAD_RATE_MAX = 10
+UPLOAD_RATE_WINDOW = 60.0
+SYNC_RATE_MAX = 10
+SYNC_RATE_WINDOW = 60.0
+AGENT_CREATE_RATE_MAX = 10
+AGENT_CREATE_WINDOW = 60.0
+OPS_RATE_MAX = 20
+OPS_RATE_WINDOW = 60.0
 
-def _allow_chat(user_id: str) -> bool:
+
+def _allow_rate_limited(bucket: str, user_id: str, max_hits: int, window: float) -> bool:
     now = time.time()
-    hits = [t for t in _chat_hits.get(user_id, []) if now - t < CHAT_RATE_WINDOW_SECONDS]
-    if len(hits) >= CHAT_RATE_MAX:
-        _chat_hits[user_id] = hits
+    bucket_store = _RATE_LIMITS.setdefault(bucket, {})
+    hits = [t for t in bucket_store.get(user_id, []) if now - t < window]
+    if len(hits) >= max_hits:
+        bucket_store[user_id] = hits
         return False
     hits.append(now)
-    _chat_hits[user_id] = hits
+    bucket_store[user_id] = hits
     return True
+
+
+def _allow_chat(user_id: str) -> bool:
+    return _allow_rate_limited("chat", user_id, CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS)
 
 
 async def _get_owned(db: AsyncSession, model, obj_id: str, user: User):

@@ -42,7 +42,19 @@ async def upload_original(owner_id: str, filename: str, data: bytes) -> str | No
     """Upload original bytes to B2. Returns the object key, or None if disabled."""
     if get_blob_api() is None:
         return None
-    return await asyncio.to_thread(_do_upload, owner_id, filename, data)
+    from .resilience import _check_circuit, _record_failure, _record_success, retrying
+
+    _check_circuit("b2")
+    try:
+        async for attempt in retrying("b2", attempts=3):
+            with attempt:
+                result = await asyncio.to_thread(_do_upload, owner_id, filename, data)
+                _record_success("b2")
+                return result
+    except Exception:
+        _record_failure("b2")
+        raise
+    return None
 
 
 def is_b2_enabled() -> bool:
@@ -65,7 +77,19 @@ async def download_url(key: str) -> str | None:
     """Signed download URL for a stored object, or None when the object is gone."""
     if get_blob_api() is None:
         return None
-    return await asyncio.to_thread(_download_url, key)
+    from .resilience import _check_circuit, _record_failure, _record_success, retrying
+
+    _check_circuit("b2")
+    try:
+        async for attempt in retrying("b2", attempts=3):
+            with attempt:
+                result = await asyncio.to_thread(_download_url, key)
+                _record_success("b2")
+                return result
+    except Exception:
+        _record_failure("b2")
+        raise
+    return None
 
 
 def _delete_object(key: str) -> None:
@@ -81,4 +105,15 @@ async def delete_original(key: str) -> None:
     """Best-effort delete of a stored object (no-op when B2 is disabled)."""
     if get_blob_api() is None:
         return
-    await asyncio.to_thread(_delete_object, key)
+    from .resilience import _check_circuit, _record_failure, _record_success, retrying
+
+    _check_circuit("b2")
+    try:
+        async for attempt in retrying("b2", attempts=3):
+            with attempt:
+                await asyncio.to_thread(_delete_object, key)
+                _record_success("b2")
+                return
+    except Exception:
+        _record_failure("b2")
+        raise

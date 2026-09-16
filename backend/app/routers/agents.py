@@ -8,7 +8,7 @@ from ..db import get_db
 from ..email import dispatch_welcome
 from ..models import Agent, User
 from ..schemas import AgentCreate, AgentUpdate, serialize_agent
-from .deps import _get_owned
+from .deps import AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW, _allow_rate_limited, _get_owned
 
 router = APIRouter(prefix="/api")
 
@@ -31,6 +31,10 @@ async def create_agent(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from fastapi import HTTPException as _HTTPException
+
+    if not _allow_rate_limited("agent_create", user.id, AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW):
+        raise _HTTPException(status_code=429, detail="Rate limit: too many agents, try again shortly")
     agent = Agent(
         user_id=user.id,
         name=payload.name,
