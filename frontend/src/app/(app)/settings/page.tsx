@@ -38,15 +38,24 @@ import {
   getBilling,
   getSettingsStatus,
   type BillingStatus,
-  type SettingsStatus,
+  type CheckoutResponse,
 } from "@/lib/api";
-import { useAppData } from "@/lib/store";
 
-declare global {
-  interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
-  }
+function loadRazorpayCheckout(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
+    document.body.appendChild(script);
+  });
 }
+import { useAppData } from "@/lib/store";
 
 function StatusRow({
   icon: Icon,
@@ -75,21 +84,6 @@ function StatusRow({
       )}
     </div>
   );
-}
-
-function loadRazorpayCheckout(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.Razorpay) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
-    document.body.appendChild(script);
-  });
 }
 
 export default function SettingsPage() {
@@ -137,27 +131,26 @@ export default function SettingsPage() {
       const token = await getToken();
       const checkout = await createCheckout(token);
       if (!checkout) {
-        toast.error("Billing is not configured yet");
+        toast.error("Could not start checkout. Please try again.");
         return;
       }
       await loadRazorpayCheckout();
-      const email =
-        user?.primaryEmailAddress?.emailAddress ??
-        user?.emailAddresses?.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ??
-        "";
       const rzp = new window.Razorpay({
         key: checkout.key_id,
-        subscription_id: checkout.subscription_id,
+        amount: 499 * 100, // ₹499 in paise
+        currency: "INR",
         name: "BaseMind",
         description: "Pro Plan — ₹499/month",
-        prefill: { email },
-        theme: { color: "#0d9488" },
-        handler: () => {
-          toast.success("Payment successful — starting your Pro plan");
+        prefill: {
+          name: user?.fullName || user?.primaryEmailAddress?.emailAddress || "",
+          email: user?.primaryEmailAddress?.emailAddress || "",
+        },
+        handler: function (response: any) {
+          toast.success("Payment successful — upgrading your plan");
           refreshBilling();
         },
         modal: {
-          ondismiss: () => {
+          ondismiss: function () {
             setUpgrading(false);
             refreshBilling();
           },
@@ -166,6 +159,7 @@ export default function SettingsPage() {
       rzp.open();
     } catch {
       toast.error("Could not start checkout. Please try again.");
+    } finally {
       setUpgrading(false);
     }
   };
@@ -279,38 +273,33 @@ export default function SettingsPage() {
                   {billing === null
                     ? " "
                     : isPro
-                      ? billing.current_period_end
-                        ? `Renews ${new Date(billing.current_period_end).toLocaleDateString()}`
-                        : "Pro benefits active"
+                      ? "Unlimited agents and knowledge"
                       : "1 agent and 5 documents included"}
                 </p>
               </div>
-              {billing !== null && billing.razorpay_configured && (
-                <>
-                  {isPro ? (
-                    <Button
-                      variant="outline"
-                      onClick={onCancel}
-                      disabled={cancelling}
-                    >
-                      {cancelling ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        "Cancel subscription"
-                      )}
-                    </Button>
-                  ) : (
-                    <Button onClick={onUpgrade} disabled={upgrading}>
-                      {upgrading ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="size-4" />
-                      )}
-                      Upgrade to Pro — ₹499/mo
-                    </Button>
-                  )}
-                </>
-              )}
+              {billing !== null &&
+                (isPro ? (
+                  <Button
+                    variant="outline"
+                    onClick={onCancel}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      "Cancel subscription"
+                    )}
+                  </Button>
+                ) : (
+                  <Button onClick={onUpgrade} disabled={upgrading}>
+                    {upgrading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-4" />
+                    )}
+                    Upgrade to Pro
+                  </Button>
+                ))}
             </div>
           </CardContent>
         </Card>

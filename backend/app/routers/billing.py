@@ -19,21 +19,24 @@ router = APIRouter(prefix="/api")
 FREE_AGENT_LIMIT = 1
 FREE_DOC_LIMIT = 5
 
-_pro_settings = None
+_pro_settings: dict | None = None
 _client = None
 
 
-def _get_client():
+def _get_settings() -> Any:
+    global _pro_settings
+    if _pro_settings is None:
+        _pro_settings = get_settings()
+    return _pro_settings
+
+
+def _get_client() -> Any:
     global _client, _pro_settings
-    settings = get_settings()
-    if _pro_settings is not settings:
-        _pro_settings = settings
-        _client = None
+    settings = _get_settings()
     if _client is None:
         if not settings.razorpay_key_id or not settings.razorpay_key_secret:
             return None
         import razorpay  # noqa: PLC0415
-
         _client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
     return _client
 
