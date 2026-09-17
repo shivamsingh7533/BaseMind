@@ -1,14 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LogoLockup } from "@/components/logo-lockup";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+import { createCheckout, getBilling, type BillingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+function loadRazorpayCheckout(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Razorpay checkout"));
+    document.body.appendChild(script);
+  });
+}
 
 const FEATURES = [
   {
@@ -43,8 +67,8 @@ const PLANS = [
   {
     name: "Pro",
     tagline: "For growing support teams.",
-    monthly: 49,
-    annual: 39,
+    monthly: 499,
+    annual: 4999,
     features: [
       "Unlimited Agents",
       "10,000 Messages/mo",
@@ -94,7 +118,124 @@ function FeatureIcon({ kind }: { kind: (typeof FEATURES)[number]["icon"] }) {
 }
 
 function Pricing() {
+  const { isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
+  const router = useRouter();
   const [annual, setAnnual] = useState(false);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [upgrading, setUpgrading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => (token ? getBilling(token) : null))
+      .then((b) => {
+        if (cancelled) return;
+        setBilling(b ?? null);
+        setChecking(false);
+      })
+      .catch(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken]);
+
+  const refreshBilling = () => {
+    void getToken().then((token) => {
+      void getBilling(token).then((b) => {
+        if (b) setBilling(b);
+      });
+    });
+  };
+
+  const startCheckout = async (cycle: "monthly" | "annual") => {
+    if (!isSignedIn) {
+      router.push("/signup");
+      return;
+    }
+    setUpgrading(true);
+    try {
+      const token = await getToken();
+      const checkout = await createCheckout(token, cycle);
+      if (!checkout) {
+        toast.error("Could not start checkout. Please try again.");
+        return;
+      }
+      await loadRazorpayCheckout();
+      const rzp = new window.Razorpay({
+        key: checkout.key_id,
+        amount: cycle === "annual" ? 4999 * 100 : 499 * 100,
+        currency: "INR",
+        name: "BaseMind",
+        description:
+          cycle === "annual" ? "Pro Plan — ₹4,999/year" : "Pro Plan — ₹499/month",
+        prefill: {
+          name: user?.fullName || user?.primaryEmailAddress?.emailAddress || "",
+          email: user?.primaryEmailAddress?.emailAddress || "",
+        },
+        handler: function () {
+          toast.success("Payment successful — upgrading your plan");
+          refreshBilling();
+        },
+        modal: {
+          ondismiss: function () {
+            setUpgrading(false);
+            refreshBilling();
+          },
+        },
+      });
+      rzp.open();
+    } catch {
+      setUpgrading(false);
+      toast.error("Could not start Razorpay checkout.");
+    }
+  };
+
+  const showPrice = (plan: (typeof PLANS)[number]) => {
+    if (plan.monthly === 0) return { amount: "₹0", unit: "/mo" };
+    if (annual) return { amount: `₹${plan.annual.toLocaleString("en-IN")}`, unit: "/yr" };
+    return { amount: `₹${plan.monthly}`, unit: "/mo" };
+  };
+
+  const renderCta = (plan: (typeof PLANS)[number]) => {
+    if (plan.name === "Starter") {
+      return (
+        <Button className="mt-5 w-full" variant="outline" asChild>
+          <Link href={isSignedIn ? "/dashboard" : "/signup"}>
+            {isSignedIn ? "Open App" : "Get Started"}
+          </Link>
+        </Button>
+      );
+    }
+    if (checking) {
+      return (
+        <Button className="mt-5 w-full" disabled>
+          <Loader2 className="mr-2 size-4 animate-spin" /> Checking…
+        </Button>
+      );
+    }
+    if (isSignedIn && billing?.plan === "pro") {
+      return (
+        <Button className="mt-5 w-full" variant="outline" asChild>
+          <Link href="/settings">You&apos;re on Pro</Link>
+        </Button>
+      );
+    }
+    return (
+      <Button
+        className="mt-5 w-full"
+        disabled={upgrading}
+        onClick={() => void startCheckout(annual ? "annual" : "monthly")}
+      >
+        {upgrading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+        {isSignedIn ? "Upgrade to Pro" : "Sign up & Upgrade"}
+      </Button>
+    );
+  };
+
   return (
     <Card className="mx-auto max-w-4xl">
       <CardHeader className="items-center space-y-4 text-center">
@@ -107,47 +248,49 @@ function Pricing() {
           <Switch checked={annual} onCheckedChange={setAnnual} />
           <span className={cn(annual && "text-primary")}>Annual</span>
           <Badge variant="secondary" className="text-success">
-            -20%
+            Save ₹997/yr
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-2">
-        {PLANS.map((plan) => (
-          <div
-            key={plan.name}
-            className={cn(
-              "relative rounded-xl border p-6",
-              plan.popular && "border-primary shadow-sm"
-            )}
-          >
-            {plan.popular ? (
-              <Badge className="absolute -top-2.5 right-4">Most Popular</Badge>
-            ) : null}
-            <h3 className="font-heading text-lg font-semibold">{plan.name}</h3>
-            <p className="text-sm text-muted-foreground">{plan.tagline}</p>
-            <p className="mt-4">
-              <span className="font-heading text-4xl font-bold">
-                ${annual ? plan.annual : plan.monthly}
-              </span>
-              <span className="text-sm text-muted-foreground">/mo</span>
-            </p>
-            <Button
-              className="mt-5 w-full"
-              variant={plan.popular ? "default" : "outline"}
-              asChild
+        {PLANS.map((plan) => {
+          const price = showPrice(plan);
+          return (
+            <div
+              key={plan.name}
+              className={cn(
+                "relative rounded-xl border p-6",
+                plan.popular && "border-primary shadow-sm"
+              )}
             >
-              <Link href="/signup">Get Started</Link>
-            </Button>
-            <ul className="mt-5 space-y-2.5">
-              {plan.features.map((f) => (
-                <li key={f} className="flex items-center gap-2 text-sm">
-                  <Check className="size-4 text-primary" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+              {plan.popular ? (
+                <Badge className="absolute -top-2.5 right-4">Most Popular</Badge>
+              ) : null}
+              <h3 className="font-heading text-lg font-semibold">{plan.name}</h3>
+              <p className="text-sm text-muted-foreground">{plan.tagline}</p>
+              <p className="mt-4">
+                <span className="font-heading text-4xl font-bold">
+                  {price.amount}
+                </span>
+                <span className="text-sm text-muted-foreground">{price.unit}</span>
+              </p>
+              {renderCta(plan)}
+              <ul className="mt-5 space-y-2.5">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm">
+                    <Check className="size-4 text-primary" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              {plan.popular && (
+                <p className="mt-4 text-center text-xs text-muted-foreground">
+                  Secure payments via Razorpay UPI, cards & netbanking.
+                </p>
+              )}
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
