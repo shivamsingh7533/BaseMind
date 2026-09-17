@@ -194,7 +194,7 @@ export default function SettingsPage() {
         setConfirmOpen(false);
         toast.success("Workspace deleted — all data purged");
         void signOut();
-        router.push("/");
+        router.push("/dashboard");
         return;
       }
       toast.error(`Delete failed: ${res.detail}`);
