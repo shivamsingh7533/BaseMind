@@ -29,7 +29,7 @@ if _settings.database_url:
         _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     _parts = urlsplit(_url)
-    _query = [(k, v) for k, v in parse_qsl(_parts.query) if k != "sslmode"]
+    _query = [(k, v) for k, v in parse_qsl(_parts.query) if k not in ("sslmode", "channel_binding")]
     _needs_ssl = "sslmode=" in _settings.database_url
     _url = urlunsplit((_parts.scheme, _parts.netloc, _parts.path, urlencode(_query), _parts.fragment))
 

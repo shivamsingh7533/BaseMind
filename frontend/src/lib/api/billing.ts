@@ -16,13 +16,17 @@ export async function getBilling(
 }
 
 export async function createCheckout(
-  token?: string | null
+  token?: string | null,
+  interval: "monthly" | "annual" = "monthly"
 ): Promise<CheckoutResponse | null> {
   try {
-    const res = await fetch(`${API_URL}/api/billing/checkout`, {
-      method: "POST",
-      headers: authHeader(token),
-    });
+    const res = await fetch(
+      `${API_URL}/api/billing/checkout?interval=${interval}`,
+      {
+        method: "POST",
+        headers: authHeader(token),
+      }
+    );
     if (!res.ok) return null;
     return (await res.json()) as CheckoutResponse;
   } catch {

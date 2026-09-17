@@ -57,6 +57,8 @@ __all__ = [
     "op_update_agent",
     "ops_status",
     "razorpay_webhook",
+    "admin_delete_user",
+    "admin_update_user",
     "settings_status",
     "sync_url",
     "update_agent",
@@ -65,6 +67,8 @@ __all__ = [
 ]
 
 from .admin import (  # noqa: E402
+    admin_delete_user,
+    admin_update_user,
     delete_workspace,
     mark_announcement_read,
     op_agents,

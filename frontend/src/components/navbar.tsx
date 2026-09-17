@@ -86,7 +86,7 @@ export function Navbar() {
   const links = [
     ...MARKETING_LINKS,
     ...APP_LINKS,
-    ...(cachedOps || opsConfirmed ? [{ href: "/ops", label: "Ops" }] : []),
+    ...(cachedOps || opsConfirmed ? [{ href: "/ops", label: "Ops" }, { href: "/admin", label: "Admin" }] : []),
   ];
 
   return (

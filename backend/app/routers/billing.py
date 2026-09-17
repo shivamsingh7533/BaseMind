@@ -74,21 +74,30 @@ async def billing_status(user: User = Depends(get_current_user), db: AsyncSessio
 
 
 @router.post("/billing/checkout", status_code=201)
-async def billing_checkout(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def billing_checkout(
+    interval: str = "monthly",
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     from ..cache import invalidate_user_cache
 
+    interval = interval if interval in ("monthly", "annual") else "monthly"
     if not billing_configured():
         raise HTTPException(status_code=503, detail="Billing not configured. Set RAZORPAY_* env vars.")
     client = _get_client()
     settings = get_settings()
 
+    plan_id = settings.razorpay_plan_id
+    if interval == "annual":
+        plan_id = settings.razorpay_annual_plan_id or settings.razorpay_plan_id
+
     try:
         subscription = client.subscription.create(
             {
-                "plan_id": settings.razorpay_plan_id,
+                "plan_id": plan_id,
                 "total_count": 0,
                 "customer_notify": 1,
-                "notes": {"user_id": user.id},
+                "notes": {"user_id": user.id, "interval": interval},
                 "notify_email": user.email or "",
                 "expire_by": int(_time.time()) + 60 * 30,
             }
@@ -99,12 +108,12 @@ async def billing_checkout(user: User = Depends(get_current_user), db: AsyncSess
     sub_id = subscription.get("id")
     sub = await _get_or_create_subscription(db, user.id)
     sub.razorpay_subscription_id = sub_id
-    sub.razorpay_plan_id = settings.razorpay_plan_id
+    sub.razorpay_plan_id = plan_id
     sub.status = "incomplete"
     db.add(EventLog(
         user_id=user.id,
         event_type="billing_checkout",
-        detail=f"checkout created for plan {settings.razorpay_plan_id}",
+        detail=f"checkout created for {interval} plan {plan_id}",
     ))
     await db.commit()
     await invalidate_user_cache(user.id)
@@ -112,6 +121,7 @@ async def billing_checkout(user: User = Depends(get_current_user), db: AsyncSess
         "url": subscription.get("short_url") or "",
         "subscription_id": sub_id,
         "key_id": settings.razorpay_key_id,
+        "interval": interval,
     }
 
 

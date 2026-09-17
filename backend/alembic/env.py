@@ -33,7 +33,7 @@ def _migration_url() -> str:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     parts = urlsplit(url)
-    query = [(k, v) for k, v in parse_qsl(parts.query) if k != "sslmode"]
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k not in ("sslmode", "channel_binding")]
     needs_ssl = "sslmode=" in raw
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 

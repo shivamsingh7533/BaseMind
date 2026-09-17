@@ -17,8 +17,7 @@ async def _tenants(db: AsyncSession) -> list[dict]:
             await db.execute(
                 select(func.count()).select_from(Agent).where(Agent.user_id == user.id)
             )
-            .scalar_one()
-        )
+        ).scalar_one()
         doc_rows = (
             await db.execute(
                 select(Document.type, func.count()).select_from(Document).where(Document.user_id == user.id).group_by(Document.type)
@@ -33,23 +32,20 @@ async def _tenants(db: AsyncSession) -> list[dict]:
                     Document.user_id == user.id, Document.status == "processing"
                 )
             )
-            .scalar_one()
-        )
+        ).scalar_one()
         failed_docs = (
             await db.execute(
                 select(func.count()).select_from(Document).where(
                     Document.user_id == user.id, Document.status == "failed"
                 )
             )
-            .scalar_one()
-        )
+        ).scalar_one()
 
         convs_count = (
             await db.execute(
                 select(func.count()).select_from(Conversation).where(Conversation.user_id == user.id)
             )
-            .scalar_one()
-        )
+        ).scalar_one()
 
         day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         queries_today = (
@@ -63,18 +59,26 @@ async def _tenants(db: AsyncSession) -> list[dict]:
                     Message.created_at >= day_start,
                 )
             )
-            .scalar_one()
-        )
+        ).scalar_one()
 
         sub = (
-            await db.execute(select(Subscription.plan).where(Subscription.user_id == user.id))
+            await db.execute(
+                select(Subscription)
+                .where(Subscription.user_id == user.id)
+            )
         ).scalar_one_or_none()
 
         result.append(
             {
+                "user_id": user.id,
                 "email": user.email or "unknown",
                 "name": user.name or "Unknown",
-                "plan": sub or "free",
+                "plan": sub.plan if sub else "free",
+                "subscription_status": sub.status if sub else "active",
+                "current_period_end": (
+                    sub.current_period_end.isoformat() if sub and sub.current_period_end else None
+                ),
+                "platform_status": user.platform_status or "active",
                 "agents": agents_count,
                 "documents": total_docs,
                 "docTypeCounts": doc_type_counts,

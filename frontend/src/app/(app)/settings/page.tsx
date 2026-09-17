@@ -38,9 +38,15 @@ import {
   getBilling,
   getSettingsStatus,
   type BillingStatus,
-  type CheckoutResponse,
 } from "@/lib/api";
+import { useAppData } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
 function loadRazorpayCheckout(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.Razorpay) {
@@ -55,7 +61,6 @@ function loadRazorpayCheckout(): Promise<void> {
     document.body.appendChild(script);
   });
 }
-import { useAppData } from "@/lib/store";
 
 function StatusRow({
   icon: Icon,
@@ -93,13 +98,14 @@ export default function SettingsPage() {
   const router = useRouter();
   const reset = useAppData((s) => s.reset);
 
-  const [status, setStatus] = useState<SettingsStatus | null>(null);
+  const [status, setStatus] = useState<any | null>(null) // eslint-disable-line @typescript-eslint/no-explicit-any
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [cycle, setCycle] = useState<"monthly" | "annual">("monthly");
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +135,7 @@ export default function SettingsPage() {
     setUpgrading(true);
     try {
       const token = await getToken();
-      const checkout = await createCheckout(token);
+      const checkout = await createCheckout(token, cycle);
       if (!checkout) {
         toast.error("Could not start checkout. Please try again.");
         return;
@@ -137,15 +143,16 @@ export default function SettingsPage() {
       await loadRazorpayCheckout();
       const rzp = new window.Razorpay({
         key: checkout.key_id,
-        amount: 499 * 100, // ₹499 in paise
+        amount: cycle === "annual" ? 4999 * 100 : 499 * 100,
         currency: "INR",
         name: "BaseMind",
-        description: "Pro Plan — ₹499/month",
+        description:
+          cycle === "annual" ? "Pro Plan — ₹4,999/year" : "Pro Plan — ₹499/month",
         prefill: {
           name: user?.fullName || user?.primaryEmailAddress?.emailAddress || "",
           email: user?.primaryEmailAddress?.emailAddress || "",
         },
-        handler: function (response: any) {
+        handler: function () {
           toast.success("Payment successful — upgrading your plan");
           refreshBilling();
         },
@@ -227,70 +234,104 @@ export default function SettingsPage() {
               {initials}
             </span>
             <div>
-              <p className="font-heading text-base font-semibold">
-                {displayName}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-heading text-base font-semibold">
+                  {displayName}
+                </p>
+                {isPro && (
+                  <Badge className="text-primary">Pro</Badge>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">
                 {user?.primaryEmailAddress?.emailAddress ??
                   "No email on this account"}
               </p>
+              {isPro && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-auto px-0 text-muted-foreground hover:text-destructive"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    "Cancel subscription"
+                  )}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-primary/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-heading">
-              <Sparkles className="size-4 text-primary" />
-              Plan & Billing
-            </CardTitle>
-            <CardDescription>
-              Upgrade to Pro for unlimited agents and knowledge. Cancel anytime
-              from here.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-center gap-4 rounded-xl bg-muted/50 p-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-heading text-lg font-semibold">
-                    {billing === null ? (
-                      <Skeleton className="h-6 w-24" />
-                    ) : (
-                      (isPro ? "Pro" : "Free")
+        {!isPro && (
+          <Card className="border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-heading">
+                <Sparkles className="size-4 text-primary" />
+                Plan & Billing
+              </CardTitle>
+              <CardDescription>
+                Upgrade to Pro for unlimited agents and knowledge. Cancel anytime
+                from here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-4 rounded-xl bg-muted/50 p-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-heading text-lg font-semibold">
+                      {billing === null ? (
+                        <Skeleton className="h-6 w-24" />
+                      ) : (
+                        "Free"
+                      )}
+                    </p>
+                    {billing !== null && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {billing.status}
+                      </Badge>
                     )}
-                  </p>
-                  {billing !== null && (
-                    <Badge
-                      variant={isPro ? "secondary" : "outline"}
-                      className={isPro ? "text-primary" : "text-muted-foreground"}
-                    >
-                      {billing.status}
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {billing === null
-                    ? " "
-                    : isPro
-                      ? "Unlimited agents and knowledge"
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {billing === null
+                      ? " "
                       : "1 agent and 5 documents included"}
-                </p>
-              </div>
-              {billing !== null &&
-                (isPro ? (
-                  <Button
-                    variant="outline"
-                    onClick={onCancel}
-                    disabled={cancelling}
-                  >
-                    {cancelling ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      "Cancel subscription"
-                    )}
-                  </Button>
-                ) : (
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-2.5">
+                  <div className="flex overflow-hidden rounded-lg border bg-background p-1 text-sm font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setCycle("monthly")}
+                      disabled={upgrading}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 transition-colors",
+                        cycle === "monthly"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Monthly · ₹499/mo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCycle("annual")}
+                      disabled={upgrading}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 transition-colors",
+                        cycle === "annual"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Annual · ₹4,999/yr
+                    </button>
+                  </div>
+                  {cycle === "annual" && (
+                    <p className="text-xs text-success">You save ₹997 (2 months free)</p>
+                  )}
                   <Button onClick={onUpgrade} disabled={upgrading}>
                     {upgrading ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -299,10 +340,11 @@ export default function SettingsPage() {
                     )}
                     Upgrade to Pro
                   </Button>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

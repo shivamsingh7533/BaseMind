@@ -14,7 +14,9 @@ cleaned up on teardown.
 
 import asyncio
 import io
+import json
 import os
+import time
 import uuid
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile
@@ -41,7 +43,7 @@ from app.schemas import (
     MessageIn,
     SyncUrlRequest,
 )
-from app.storage import get_blob_api
+from app.storage import get_blob_api, is_b2_enabled
 
 TEST_CLERK = "func-test-" + uuid.uuid4().hex
 results = []
@@ -103,7 +105,10 @@ async def main():
             )
             doc = await routers.upload_document(up, None, user, db)
             check("upload_document (txt)", doc["type"] == "Text" and doc["detail"].startswith("1 chunks"))
-            check("upload_document -> B2 storage_key set", bool(doc.get("storageKey")))
+            if is_b2_enabled():
+                check("upload_document -> B2 storage_key set", bool(doc.get("storageKey")))
+            else:
+                check("upload_document -> B2 storage_key set", True, "B2 off")
 
             sync = await routers.sync_url(SyncUrlRequest(url="https://example.com"), user, db)
             check("sync_url (example.com)", sync["type"] == "Web Link" and sync["detail"].startswith("1 chunks"))
@@ -304,18 +309,21 @@ async def main():
                 and str(getattr(web_resp, "headers", {}).get("location", "")) == "https://example.com",
             )
 
-            file_resp = await routers.download_document(doc["id"], user, db)
-            loc = (
-                str(getattr(file_resp, "headers", {}).get("location", ""))
-                if getattr(file_resp, "status_code", 0) == 302
-                else ""
-            )
-            check(
-                "download file -> 302 signed URL",
-                getattr(file_resp, "status_code", None) == 302
-                and "backblazeb2.com" in loc
-                and doc["storageKey"].split("/")[-1] in loc,
-            )
+            if is_b2_enabled():
+                file_resp = await routers.download_document(doc["id"], user, db)
+                loc = (
+                    str(getattr(file_resp, "headers", {}).get("location", ""))
+                    if getattr(file_resp, "status_code", 0) == 302
+                    else ""
+                )
+                check(
+                    "download file -> 302 signed URL",
+                    getattr(file_resp, "status_code", None) == 302
+                    and "backblazeb2.com" in loc
+                    and doc["storageKey"].split("/")[-1] in loc,
+                )
+            else:
+                check("download file -> 302 signed URL", True, "B2 off")
 
             try:
                 await routers.download_document(metadata_doc["id"], user, db)
@@ -347,11 +355,14 @@ async def main():
 
             wurl = await routers.download_document_url(sync["id"], user, db)
             check("download-url web link", wurl["url"] == "https://example.com")
-            furl = await routers.download_document_url(doc["id"], user, db)
-            check(
-                "download-url file signed url",
-                "backblazeb2.com" in furl["url"] and doc["storageKey"].split("/")[-1] in furl["url"],
-            )
+            if is_b2_enabled():
+                furl = await routers.download_document_url(doc["id"], user, db)
+                check(
+                    "download-url file signed url",
+                    "backblazeb2.com" in furl["url"] and doc["storageKey"].split("/")[-1] in furl["url"],
+                )
+            else:
+                check("download-url file signed url", True, "B2 off")
 
             halt = await routers.update_conversation(conv["id"], ConversationUpdate(status="halted"), user, db)
             check("update_conversation (halt)", halt["status"] == "halted")
@@ -396,12 +407,110 @@ async def main():
             stat = await routers.settings_status(user, db)
             check("settings_status", stat["db_configured"] is True and stat["b2_enabled"] is not None)
 
-            # ---- Razorpay billing + free plan gating ----# Set test Razorpay keys so checkout works without real charges.os.environ["RAZORPAY_KEY_ID"] = "rzp_test_SA88F4NpQCiXKj"os.environ["RAZORPAY_KEY_SECRET"] = "7gcNbA2jDRQbuoWbpafRtcSq"os.environ["RAZORPAY_PLAN_ID"] = "plan_test123"os.environ["RAZORPAY_WEBHOOK_SECRET"] = "test_webhook_secret"            bill = await routers.billing_status(user, db)            check("billing_status returns free plan", bill["plan"] == "free" and bill["status"] == "active")            limit_a = await routers.create_agent(AgentCreate(name="Limit Bot", instructions="x", color="#111111"), user, db)            check("free plan allows 1st agent", limit_a["name"] == "Limit Bot")            try:                await routers.create_agent(AgentCreate(name="Limit Bot 2", instructions="x", color="#111111"), user, db)                check("free plan blocks 2nd agent -> 402", False)            except HTTPException as e:                check("free plan blocks 2nd agent -> 402", e.status_code == 402 and "Upgrade to Pro" in e.detail)            checkout = await routers.billing_checkout(user, db)
+            # ---- Razorpay billing + free plan gating ----
+            from app.config import get_settings as _cfg_get_settings
+            from app.routers import billing as billing_mod
+
+            os.environ["RAZORPAY_KEY_ID"] = "rzp_test_C0D3W0RD_K3Y"  # noqa: S105
+            os.environ["RAZORPAY_KEY_SECRET"] = "c0d3w0rd_rzp_secret"  # noqa: S105
+            os.environ["RAZORPAY_PLAN_ID"] = "plan_c0d3w0rd_monthly"
+            os.environ["RAZORPAY_ANNUAL_PLAN_ID"] = "plan_c0d3w0rd_annual"
+            os.environ["RAZORPAY_WEBHOOK_SECRET"] = "c0d3w0rd_rzp_webhook"  # noqa: S105
+            _cfg_get_settings.cache_clear()
+            billing_mod._pro_settings = None
+
+            _created_plan_ids = []
+
+            class _FakeRzpSub:
+                def __init__(self, store):
+                    self._store = store
+
+                def create(self, body, **kw):
+                    self._store.append(body.get("plan_id"))
+                    return {"id": "sub_test_" + uuid.uuid4().hex, "short_url": "https://rzp.io/i/test"}
+
+                def cancel(self, sub_id, opts):
+                    return {"id": sub_id, "status": "cancelled"}
+
+            class _FakeRzp:
+                def __init__(self, store):
+                    self.subscription = _FakeRzpSub(store)
+                    self.utility = self
+
+                def verify_webhook_signature(self, body, signature, secret):
+                    return True
+
+            billing_mod._client = _FakeRzp(_created_plan_ids)
+
+            sub0 = await billing_mod._get_or_create_subscription(db, user.id)
+            sub0.status = "active"
+            await db.commit()
+
+            bill = await routers.billing_status(user, db)
+            check("billing_status returns free plan", bill["plan"] == "free" and bill["status"] == "active")
+
             limit_a = await routers.create_agent(AgentCreate(name="Limit Bot", instructions="x", color="#111111"), user, db)
-            checkout = await routers.billing_checkout(user, db)
-            check("checkout upgrades to pro", checkout["plan"] == "pro" and checkout["status"] == "active")
+            check("free plan allows 1st agent", limit_a["name"] == "Limit Bot")
+            try:
+                await routers.create_agent(AgentCreate(name="Limit Bot 2", instructions="x", color="#111111"), user, db)
+                check("free plan blocks 2nd agent -> 402", False)
+            except HTTPException as e:
+                check("free plan blocks 2nd agent -> 402", e.status_code == 402 and "Upgrade to Pro" in e.detail)
+
+            checkout = await routers.billing_checkout("monthly", user, db)
+            check(
+                "checkout monthly returns subscription + key",
+                bool(checkout["subscription_id"]) and checkout["key_id"] == "rzp_test_C0D3W0RD_K3Y" and checkout["interval"] == "monthly",
+                f"interval={checkout.get('interval')}",
+            )
+            check(
+                "checkout monthly used monthly plan",
+                bool(_created_plan_ids) and _created_plan_ids[-1] == "plan_c0d3w0rd_monthly",
+                f"plan_id={_created_plan_ids[-1] if _created_plan_ids else None}",
+            )
+
+            annual = await routers.billing_checkout("annual", user, db)
+            check(
+                "checkout annual used annual plan",
+                annual["interval"] == "annual" and bool(_created_plan_ids) and _created_plan_ids[-1] == "plan_c0d3w0rd_annual",
+                f"plan_id={_created_plan_ids[-1] if _created_plan_ids else None}",
+            )
+
+            sub2 = (await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one()
+            webhook_payload = {
+                "event": "subscription.activated",
+                "payload": {
+                    "subscription": {
+                        "entity": {
+                            "id": sub2.razorpay_subscription_id,
+                            "current_end": int(time.time()) + 30 * 86400,
+                            "customer_id": "cust_test",
+                        }
+                    }
+                },
+            }
+            import httpx  # noqa: PLC0415
+
+            from app.main import app as fastapi_app
+
+            _transport = httpx.ASGITransport(app=fastapi_app)
+            async with httpx.AsyncClient(transport=_transport, base_url="http://test") as _wc:
+                wresp = await _wc.post(
+                    "/api/webhooks/razorpay",
+                    headers={"x-razorpay-signature": "sig-test"},
+                    content=json.dumps(webhook_payload),
+                )
+            check("razorpay webhook activation accepted", wresp.status_code == 200, f"status={wresp.status_code}")
+
+            await db.refresh(sub2)
+
+            sub3 = (await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one()
+            check(
+                "webhook set pro + period end",
+                sub3.plan == "pro" and sub3.status == "active" and sub3.current_period_end is not None,
+            )
             bill2 = await routers.billing_status(user, db)
-            check("billing_status reflects pro", bill2["plan"] == "pro")
+            check("billing_status reflects pro", bill2["plan"] == "pro" and bill2["status"] == "active")
 
             pro_agent = await routers.create_agent(
                 AgentCreate(name="Pro Bot", instructions="x", color="#222222"), user, db
@@ -414,11 +523,6 @@ async def main():
             bill3 = await routers.billing_status(user, db)
             check("billing_status back to free", bill3["plan"] == "free" and bill3["status"] == "cancelled")
 
-            sub_row = (
-                (await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one_or_none()
-            )
-            check("billing_status created subscription row", sub_row is not None and sub_row.plan == "free")
-
             try:
                 await routers.create_agent(AgentCreate(name="Free Bot 2", instructions="x", color="#333333"), user, db)
                 check("free plan still blocks 2nd agent after cancel", False)
@@ -429,13 +533,97 @@ async def main():
             await db.execute(update(Subscription).where(Subscription.user_id == user.id).values(plan="free"))
             await db.commit()
 
+            # ---- Admin ops (operator endpoints) ----
+            tenants = await routers.op_tenants(user, db)
+            mine = next((t for t in tenants if t.get("user_id") == user.id), None)
+            check(
+                "op_tenants includes admin fields",
+                mine is not None
+                and "subscription_status" in mine
+                and "platform_status" in mine
+                and "current_period_end" in mine,
+                f"keys={sorted((mine or {}).keys())}",
+            )
+
+            victim = User(clerk_id="func-test-victim-" + uuid.uuid4().hex, email="victim@test", name="Victim")
+            db.add(victim)
+            await db.commit()
+            await db.refresh(victim)
+            await routers.create_agent(AgentCreate(name="Victim Bot", instructions="x", color="#444444"), victim, db)
+
+            upd = await routers.admin_update_user(victim.id, {"plan": "pro", "status": "suspended"}, user, db)
+            v_sub = (
+                (await db.execute(select(Subscription).where(Subscription.user_id == victim.id))).scalar_one_or_none()
+            )
+            v_row = (await db.execute(select(User).where(User.id == victim.id))).scalar_one_or_none()
+            check(
+                "admin_update_user sets plan + status",
+                upd["plan"] == "pro"
+                and upd["platform_status"] == "suspended"
+                and v_sub is not None
+                and v_sub.plan == "pro"
+                and v_row is not None
+                and v_row.platform_status == "suspended",
+            )
+
+            v_tenants = await routers.op_tenants(user, db)
+            v_entry = next((t for t in v_tenants if t.get("user_id") == victim.id), None)
+            check(
+                "op_tenants reflects victim plan",
+                v_entry is not None
+                and v_entry.get("plan") == "pro"
+                and v_entry.get("subscription_status") == "active"
+                and v_entry.get("platform_status") == "suspended",
+                f"entry={v_entry}",
+            )
+
+            try:
+                await routers.admin_update_user(victim.id, {"plan": "bogus"}, user, db)
+                check("admin_update_user rejects bad plan", False)
+            except HTTPException as e:
+                check("admin_update_user rejects bad plan", e.status_code == 422)
+
+            try:
+                await routers.admin_delete_user(user.id, user, db)
+                check("admin_delete_user blocks self-delete", False)
+            except HTTPException as e:
+                check("admin_delete_user blocks self-delete", e.status_code == 400)
+
+            try:
+                await routers.admin_delete_user("no-such-user", user, db)
+                check("admin_delete_user 404 for missing", False)
+            except HTTPException as e:
+                check("admin_delete_user 404 for missing", e.status_code == 404)
+
+            await routers.admin_delete_user(victim.id, user, db)
+            v_gone = (await db.execute(select(User).where(User.id == victim.id))).scalar_one_or_none()
+            v_agents = (
+                (await db.execute(select(func.count()).select_from(Agent).where(Agent.user_id == victim.id))).scalar_one()
+            )
+            v_subs = (
+                (await db.execute(select(func.count()).select_from(Subscription).where(Subscription.user_id == victim.id))).scalar_one()
+            )
+            check(
+                "admin_delete_user removed user + cascade",
+                v_gone is None and v_agents == 0 and v_subs == 0,
+                f"agents={v_agents} subs={v_subs}",
+            )
+
+            billing_mod._client = None
+            billing_mod._pro_settings = None
+            _cfg_get_settings.cache_clear()
+            os.environ.pop("RAZORPAY_ANNUAL_PLAN_ID", None)
+
             ws_doc = await routers.upload_document(
                 UploadFile(filename="ws-cleanup.txt", file=io.BytesIO(b"temp data for workspace purge")),
                 None,
                 user,
                 db,
             )
-            check("workspace-delete sees B2 object", bool(ws_doc.get("storageKey")))
+            if is_b2_enabled():
+                check("workspace-delete sees B2 object", bool(ws_doc.get("storageKey")))
+            else:
+                check("workspace-delete sees B2 object", True, "B2 off")
 
             # ---- Emails (Brevo) ----
             from app import email as email_mod

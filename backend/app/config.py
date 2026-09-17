@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
     razorpay_plan_id: str = ""
+    razorpay_annual_plan_id: str = ""
 
 
 @lru_cache

@@ -139,6 +139,7 @@ export interface CheckoutResponse {
   url: string;
   subscription_id: string;
   key_id: string;
+  interval: "monthly" | "annual";
 }
 
 export type OpsSeverity = "info" | "attention" | "error";
@@ -204,9 +205,13 @@ export interface AnnouncementCreate {
 }
 
 export interface OpsTenant {
+  user_id: string;
   email: string;
   name: string;
   plan: string;
+  subscription_status: string;
+  current_period_end: string | null;
+  platform_status: string;
   agents: number;
   documents: number;
   docTypeCounts: Record<string, number>;

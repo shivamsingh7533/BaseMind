@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import get_current_user
 from ..cache import cache_get, cache_set, invalidate_user_cache
 from ..db import get_db
-from ..email import dispatch_welcome
 from ..models import Agent, User
 from ..schemas import AgentCreate, AgentUpdate, serialize_agent
 from .billing import FREE_AGENT_LIMIT, get_plan
@@ -55,8 +54,6 @@ async def create_agent(
     await db.commit()
     await db.refresh(agent)
     await invalidate_user_cache(user.id)
-    if existing == 0:
-        await dispatch_welcome(user)
     return serialize_agent(agent)
 
 

@@ -9,7 +9,7 @@ from ..auth import get_current_user
 from ..cache import invalidate_user_cache
 from ..db import SessionFactory, get_db
 from ..email import dispatch_operator
-from ..models import Agent, Announcement, AnnouncementRead, Conversation, Document, User
+from ..models import Agent, Announcement, AnnouncementRead, Conversation, Document, EventLog, Subscription, User
 from ..ops import (
     _agents_leaderboard,
     _conversations_audit,
@@ -203,16 +203,91 @@ async def settings_status(user: User = Depends(get_current_user), db: AsyncSessi
     }
 
 
-@router.delete("/me", status_code=204)
-async def delete_workspace(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    docs = (await db.execute(select(Document).where(Document.user_id == user.id))).scalars().all()
+async def _delete_user(db: AsyncSession, user_id: str) -> None:
+    docs = (await db.execute(select(Document).where(Document.user_id == user_id))).scalars().all()
     for doc in docs:
         if doc.storage_key and is_b2_enabled():
             with contextlib.suppress(Exception):
                 await delete_original(doc.storage_key)
-    await db.execute(delete(Conversation).where(Conversation.user_id == user.id))
-    await db.execute(delete(Document).where(Document.user_id == user.id))
-    await db.execute(delete(Agent).where(Agent.user_id == user.id))
-    await db.execute(delete(User).where(User.id == user.id))
+    await db.execute(delete(Conversation).where(Conversation.user_id == user_id))
+    await db.execute(delete(Document).where(Document.user_id == user_id))
+    await db.execute(delete(Agent).where(Agent.user_id == user_id))
+    await db.execute(delete(User).where(User.id == user_id))
     await db.commit()
-    await invalidate_user_cache(user.id)
+    await invalidate_user_cache(user_id)
+
+
+@router.delete("/me", status_code=204)
+async def delete_workspace(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _delete_user(db, user.id)
+
+
+@router.delete("/ops/users/{user_id}", status_code=204)
+async def admin_delete_user(
+    user_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    target = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    deleted_email = target.email or target.clerk_id
+    await _delete_user(db, user_id)
+    db.add(EventLog(
+        user_id=user.id,
+        event_type="admin_delete_user",
+        severity="attention",
+        detail=f"deleted user {deleted_email}",
+    ))
+    await db.commit()
+
+
+@router.patch("/ops/users/{user_id}")
+async def admin_update_user(
+    user_id: str,
+    payload: dict,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_operator(user):
+        raise HTTPException(status_code=403, detail="Operator access only")
+    target = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    plan = payload.get("plan")
+    if plan is not None:
+        if plan not in ("free", "pro"):
+            raise HTTPException(status_code=422, detail="plan must be 'free' or 'pro'")
+        sub = (
+            await db.execute(select(Subscription).where(Subscription.user_id == user_id))
+        ).scalar_one_or_none()
+        if sub is None:
+            sub = Subscription(user_id=user_id, plan="free", status="active")
+            db.add(sub)
+        sub.plan = plan
+
+    platform_status = payload.get("status")
+    if platform_status is not None:
+        if platform_status not in ("active", "suspended"):
+            raise HTTPException(status_code=422, detail="status must be 'active' or 'suspended'")
+        target.platform_status = platform_status
+
+    if plan is not None or platform_status is not None:
+        db.add(EventLog(
+            user_id=user.id,
+            event_type="admin_update_user",
+            detail=f"set user {target.email or target.clerk_id} plan={plan} status={platform_status}",
+        ))
+        await db.commit()
+        await invalidate_user_cache(user_id)
+    return {
+        "user_id": target.id,
+        "email": target.email or "unknown",
+        "plan": plan,
+        "platform_status": platform_status,
+    }

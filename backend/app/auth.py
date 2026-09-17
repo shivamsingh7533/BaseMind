@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .db import get_db
+from .email import dispatch_welcome
 from .models import Subscription, User
 
 _bearer = HTTPBearer(auto_error=False)
@@ -85,6 +86,7 @@ async def upsert_user(db: AsyncSession, claims: dict) -> User:
         await db.refresh(user)
         db.add(Subscription(user_id=user.id, plan="free", status="active"))
         await db.commit()
+        await dispatch_welcome(user)
     elif claims.get("email") and not user.email:
         user.email = claims["email"]
         await db.commit()
