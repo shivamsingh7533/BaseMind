@@ -114,8 +114,8 @@ export default function RootLayout({
         <ClerkProvider
           signInUrl="/login"
           signUpUrl="/signup"
-          signInFallbackRedirectUrl="/dashboard"
-          signUpFallbackRedirectUrl="/dashboard"
+          signInFallbackRedirectUrl="/"
+          signUpFallbackRedirectUrl="/"
         >
           <SentryUserSync />
           <Navbar />
