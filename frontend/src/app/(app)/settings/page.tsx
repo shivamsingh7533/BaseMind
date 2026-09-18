@@ -330,7 +330,7 @@ export default function SettingsPage() {
                     </button>
                   </div>
                   {cycle === "annual" && (
-                    <p className="text-xs text-success">You save ₹997 (2 months free)</p>
+                    <p className="text-xs text-success">You save ₹989 per year</p>
                   )}
                   <Button onClick={onUpgrade} disabled={upgrading}>
                     {upgrading ? (

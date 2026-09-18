@@ -277,14 +277,19 @@ export function Chat() {
       return;
     }
     setPreviewLoading(true);
-    setPreview(null);
-    const p = await getDocumentPreview(await getToken(), s.docId);
-    setPreviewLoading(false);
-    if (!p) {
+    try {
+      const p = await getDocumentPreview(await getToken(), s.docId);
+      if (!p) {
+        toast.error("Preview unavailable");
+        return;
+      }
+      setPreview(p);
+    } catch (e) {
       toast.error("Preview unavailable");
-      return;
     }
-    setPreview(p);
+    finally {
+      setPreviewLoading(false);
+    }
   };
 
   const downloadSource = async (s: SourceRef) => {
@@ -293,13 +298,16 @@ export function Chat() {
       return;
     }
     setDownloadBusy(s.docId);
-    const url = await getDocumentDownloadUrl(await getToken(), s.docId);
-    setDownloadBusy(null);
-    if (!url) {
+    try {
+      const url = await getDocumentDownloadUrl(await getToken(), s.docId);
+      if (!url) {
+        toast.error("Could not get download link");
+        return;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
       toast.error("Could not get download link");
-      return;
     }
-    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (

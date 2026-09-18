@@ -42,6 +42,16 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
     ).scalar_one()
 
     day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    resolved_convs = (
+        await db.execute(
+            select(func.count())
+            .select_from(Conversation)
+            .where(
+                Conversation.user_id == user.id,
+                Conversation.status == "resolved"
+            )
+        ).scalar_one()
+    )
     convs_today = (
         await db.execute(
             select(func.count())
@@ -50,6 +60,31 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
         )
     ).scalar_one()
     agents_today = (
+    # Yesterday counts for delta computation
+    convs_yesterday = (
+        await db.execute(
+            select(func.count())
+            .select_from(Conversation)
+            .where(
+                Conversation.user_id == user.id,
+                Conversation.started_at >= day_start - timedelta(days=1),
+                Conversation.started_at < day_start,
+            )
+        ).scalar_one()
+    )
+    agents_yesterday = (
+        await db.execute(
+            select(func.count())
+            .select_from(Agent)
+            .where(Agent.user_id == user.id, Agent.created_at >= day_start - timedelta(days=1), Agent.created_at < day_start)
+        ).scalar_one()
+    )
+    docs_yesterday = (
+        await db.execute(
+            select(func.count()).select_from(Document).where(Document.user_id == user.id, Document.created_at >= day_start - timedelta(days=1), Document.created_at < day_start)
+        ).scalar_one()
+    )
+
         await db.execute(
             select(func.count()).select_from(Agent).where(Agent.user_id == user.id, Agent.created_at >= day_start)
         )
@@ -290,33 +325,33 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
             "id": "agents",
             "label": "Total Agents",
             "value": str(agents_count),
-            "delta": f"+{agents_today}" if agents_today else None,
+            "delta": f"+{agents_today - agents_yesterday}" if agents_today else None,
             "sub": (f"{active_agents} active · best: {top_agent.name}" if top_agent else f"{active_agents} active"),
-            "progress": min(agents_count * 10, 100),
+            "progress": int(active_agents / agents_count * 100) if agents_count else 0,
         },
         {
             "id": "documents",
             "label": "Knowledge Files",
             "value": str(docs_count),
-            "delta": f"+{docs_today}" if docs_today else None,
+            "delta": f"+{docs_today - docs_yesterday}" if docs_today else None,
             "sub": f"{web_count} web · {file_count} files",
-            "progress": min(docs_count * 5, 100),
+            "progress": int(ready_docs / (ready_docs + pending_docs + failed_docs) * 100) if (ready_docs + pending_docs + failed_docs) else 0,
         },
         {
             "id": "conversations",
             "label": "Conversations",
             "value": str(convs_count),
-            "delta": f"+{convs_today}" if convs_today else None,
+            "delta": f"+{convs_today - convs_yesterday}" if convs_today else None,
             "sub": f"{convs_today} today",
             "progress": min(convs_count * 2, 100),
         },
         {
             "id": "resolution",
-            "label": "Auto-resolution",
+            "label": "Resolution",
             "value": resolution_value,
             "delta": "—",
-            "sub": resolution_sub,
-            "progress": int(resolution_value[:-1]) if resolution_value != "0%" else 0,
+            "sub": f"{resolved_convs} of {convs_count} conversations resolved",
+            "progress": int(resolved_convs / convs_count * 100) if convs_count else 0,
         },
     ]
     unread_announcements = (

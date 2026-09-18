@@ -81,7 +81,8 @@ async def billing_checkout(
 ):
     from ..cache import invalidate_user_cache
 
-    interval = interval if interval in ("monthly", "annual") else "monthly"
+    if interval not in ("monthly", "annual"):
+        raise HTTPException(status_code=422, detail="interval must be 'monthly' or 'annual'")
     if not billing_configured():
         raise HTTPException(status_code=503, detail="Billing not configured. Set RAZORPAY_* env vars.")
     client = _get_client()

@@ -248,7 +248,7 @@ function Pricing() {
           <Switch checked={annual} onCheckedChange={setAnnual} />
           <span className={cn(annual && "text-primary")}>Annual</span>
           <Badge variant="secondary" className="text-success">
-            Save ₹997/yr
+            Save ₹989/yr
           </Badge>
         </div>
       </CardHeader>
