@@ -27,6 +27,7 @@ const APP_LINKS = [
   { href: "/agents", label: "Agents" },
   { href: "/chat", label: "Chat" },
   { href: "/knowledge-base", label: "Knowledge" },
+  { href: "/leads", label: "Leads" },
   { href: "/logs", label: "Logs" },
 ];
 

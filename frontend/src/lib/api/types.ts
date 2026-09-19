@@ -64,6 +64,8 @@ export interface Agent {
   greetingMessage?: string;
   suggestedQuestions?: string[];
   allowedDomains?: string;
+  leadCaptureEnabled?: boolean;
+  leadCaptureTitle?: string;
   queries24h: number;
   avgLatencyMs: number;
   trainProgress?: number | null;
@@ -75,7 +77,38 @@ export interface PublicAgentConfig {
   color: string;
   greetingMessage: string;
   suggestedQuestions: string[];
+  leadCaptureEnabled?: boolean;
+  leadCaptureTitle?: string;
   status: string;
+}
+
+export type LeadStatus = "new" | "contacted" | "qualified" | "closed";
+
+export interface Lead {
+  id: string;
+  userId: string;
+  agentId?: string | null;
+  agentName?: string | null;
+  conversationId?: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  message: string;
+  status: LeadStatus;
+  createdAt: string;
+}
+
+export interface LeadsSummary {
+  total: number;
+  today: number;
+  contacted: number;
+  conversionRate: number;
+}
+
+export interface LeadsResponse {
+  leads: Lead[];
+  summary: LeadsSummary;
 }
 
 export type DocStatus = "ready" | "processing" | "failed";

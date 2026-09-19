@@ -82,6 +82,36 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "ALTER TABLE agents ADD COLUMN IF NOT EXISTS allowed_domains TEXT DEFAULT ''"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS lead_capture_enabled BOOLEAN DEFAULT FALSE"
+            )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS lead_capture_title TEXT DEFAULT 'Get in touch'"
+            )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS leads (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL,
+                    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+                    name TEXT,
+                    email TEXT NOT NULL,
+                    phone TEXT,
+                    company TEXT,
+                    message TEXT,
+                    status TEXT DEFAULT 'new',
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_user_id ON leads(user_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_agent_id ON leads(agent_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_conversation_id ON leads(conversation_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_created_at ON leads(created_at)")
 
     await run_migrations()
 

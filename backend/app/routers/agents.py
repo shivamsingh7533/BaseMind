@@ -55,6 +55,8 @@ async def create_agent(
         greeting_message=payload.greeting_message or "Hi! How can I help you today?",
         suggested_questions=sq,
         allowed_domains=payload.allowed_domains or "",
+        lead_capture_enabled=bool(payload.lead_capture_enabled),
+        lead_capture_title=payload.lead_capture_title or "Get in touch",
         status="active",
         train_progress=100,
     )

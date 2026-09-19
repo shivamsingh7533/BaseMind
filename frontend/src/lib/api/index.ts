@@ -7,3 +7,4 @@ export * from "./dashboard";
 export * from "./documents";
 export * from "./ops";
 export * from "./settings";
+export * from "./leads";

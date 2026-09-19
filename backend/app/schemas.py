@@ -25,6 +25,8 @@ class AgentCreate(BaseModel):
     greeting_message: str | None = Field(default="Hi! How can I help you today?", max_length=500)
     suggested_questions: list[str] | None = Field(default_factory=list)
     allowed_domains: str | None = Field(default="", max_length=1000)
+    lead_capture_enabled: bool | None = False
+    lead_capture_title: str | None = Field(default="Get in touch", max_length=200)
 
 
 class AgentUpdate(BaseModel):
@@ -36,6 +38,25 @@ class AgentUpdate(BaseModel):
     greeting_message: str | None = Field(default=None, max_length=500)
     suggested_questions: list[str] | None = None
     allowed_domains: str | None = Field(default=None, max_length=1000)
+    lead_capture_enabled: bool | None = None
+    lead_capture_title: str | None = Field(default=None, max_length=200)
+
+
+class LeadCreate(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    email: str = Field(min_length=3, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    company: str | None = Field(default=None, max_length=120)
+    message: str | None = Field(default=None, max_length=2000)
+    conversation_id: str | None = None
+
+
+class LeadUpdate(BaseModel):
+    status: Literal["new", "contacted", "qualified", "closed"] | None = None
+    name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=50)
+    company: str | None = Field(default=None, max_length=120)
+    message: str | None = Field(default=None, max_length=2000)
 
 
 class DocumentCreate(BaseModel):
@@ -99,9 +120,28 @@ def serialize_agent(agent, usage: dict | None = None) -> dict:
         "greetingMessage": getattr(agent, "greeting_message", "") or "Hi! How can I help you today?",
         "suggestedQuestions": suggested_questions,
         "allowedDomains": getattr(agent, "allowed_domains", "") or "",
+        "leadCaptureEnabled": bool(getattr(agent, "lead_capture_enabled", False)),
+        "leadCaptureTitle": getattr(agent, "lead_capture_title", "") or "Get in touch",
         "queries24h": usage.get("queries24h", agent.queries_24h),
         "avgLatencyMs": usage.get("avgLatencyMs", agent.avg_latency_ms),
         "trainProgress": agent.train_progress,
+    }
+
+
+def serialize_lead(lead, agent_name: str | None = None) -> dict:
+    return {
+        "id": lead.id,
+        "userId": lead.user_id,
+        "agentId": lead.agent_id,
+        "agentName": agent_name or (lead.agent.name if getattr(lead, "agent", None) else None),
+        "conversationId": lead.conversation_id,
+        "name": lead.name or "",
+        "email": lead.email,
+        "phone": lead.phone or "",
+        "company": lead.company or "",
+        "message": lead.message or "",
+        "status": lead.status or "new",
+        "createdAt": lead.created_at.isoformat() if getattr(lead, "created_at", None) else "",
     }
 
 

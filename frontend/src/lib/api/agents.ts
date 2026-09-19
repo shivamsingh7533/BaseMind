@@ -89,6 +89,8 @@ export async function updateAgent(
     greeting_message?: string;
     suggested_questions?: string[];
     allowed_domains?: string;
+    lead_capture_enabled?: boolean;
+    lead_capture_title?: string;
   }
 ): Promise<Agent | null> {
   try {
@@ -124,6 +126,8 @@ export async function getPublicAgent(agentId: string) {
       color: string;
       greetingMessage: string;
       suggestedQuestions: string[];
+      leadCaptureEnabled?: boolean;
+      leadCaptureTitle?: string;
       status: string;
     };
   } catch {

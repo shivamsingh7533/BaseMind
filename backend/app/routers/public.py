@@ -11,8 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from ..ai import embed_texts, stream_answer
 from ..db import SessionFactory, get_db
-from ..models import Agent, Conversation, Document, DocumentChunk, Message, User
-from ..schemas import MessageIn, serialize_conversation
+from ..models import Agent, Conversation, Document, DocumentChunk, Lead, Message, User
+from ..schemas import LeadCreate, MessageIn, serialize_conversation, serialize_lead
 from .deps import _allow_chat_async, _allow_rate_limited_async, log
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -66,8 +66,54 @@ async def get_public_agent(agent_id: str, request: Request, db: AsyncSession = D
         "color": agent.color or "#0d9488",
         "greetingMessage": agent.greeting_message or "Hi! How can I help you today?",
         "suggestedQuestions": suggested,
+        "leadCaptureEnabled": bool(agent.lead_capture_enabled),
+        "leadCaptureTitle": agent.lead_capture_title or "Get in touch",
         "status": agent.status,
     }
+
+
+@router.post("/agents/{agent_id}/leads", status_code=201)
+async def submit_public_lead(
+    agent_id: str,
+    payload: LeadCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = (request.client.host if request.client else "unknown")
+    if not await _allow_rate_limited_async("pub_lead", client_ip, 10, 3600.0):
+        raise HTTPException(status_code=429, detail="Too many submissions. Please try again later.")
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if agent is None or agent.status != "active":
+        raise HTTPException(status_code=404, detail="Agent not found or inactive")
+
+    if agent.allowed_domains:
+        origin = request.headers.get("origin") or request.headers.get("referer") or ""
+        if origin and not _is_origin_allowed(origin, agent.allowed_domains):
+            raise HTTPException(status_code=403, detail="Domain not authorized to embed this agent")
+
+    lead = Lead(
+        user_id=agent.user_id,
+        agent_id=agent.id,
+        conversation_id=payload.conversation_id,
+        name=payload.name,
+        email=payload.email.strip().lower(),
+        phone=payload.phone,
+        company=payload.company,
+        message=payload.message,
+        status="new",
+    )
+    db.add(lead)
+
+    if payload.conversation_id and payload.name:
+        conv = (await db.execute(select(Conversation).where(Conversation.id == payload.conversation_id))).scalar_one_or_none()
+        if conv:
+            conv.visitor = payload.name
+
+    await db.commit()
+    await db.refresh(lead)
+    return serialize_lead(lead, agent.name)
 
 
 @router.post("/agents/{agent_id}/conversations", status_code=201)

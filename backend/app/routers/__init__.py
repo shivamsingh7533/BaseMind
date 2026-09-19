@@ -6,6 +6,7 @@ from .billing import router as _billing
 from .conversations import router as _conversations
 from .dashboard import router as _dashboard
 from .documents import router as _documents
+from .leads import router as _leads
 from .public import router as _public
 
 router = APIRouter()
@@ -15,6 +16,7 @@ router.include_router(_conversations)
 router.include_router(_dashboard)
 router.include_router(_documents)
 router.include_router(_admin)
+router.include_router(_leads)
 router.include_router(_public)
 
 # Re-exports kept for test compatibility (`from app import routers` then `routers.<fn>`).
@@ -48,6 +50,11 @@ __all__ = [
     "create_public_conversation",
     "get_public_conversation",
     "public_chat",
+    "submit_public_lead",
+    "get_leads",
+    "update_lead",
+    "delete_lead",
+    "export_leads_csv",
     "list_agents",
     "list_conversations",
     "list_documents",
@@ -132,9 +139,16 @@ from .documents import (  # noqa: E402
     sync_url,
     upload_document,
 )
+from .leads import (  # noqa: E402
+    delete_lead,
+    export_leads_csv,
+    get_leads,
+    update_lead,
+)
 from .public import (  # noqa: E402
     create_public_conversation,
     get_public_agent,
     get_public_conversation,
     public_chat,
+    submit_public_lead,
 )

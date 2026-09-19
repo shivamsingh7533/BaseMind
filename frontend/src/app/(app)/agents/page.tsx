@@ -98,6 +98,8 @@ export default function AgentsPage() {
   const [embedDomains, setEmbedDomains] = useState<string[]>([]);
   const [newDomainDraft, setNewDomainDraft] = useState("");
   const [embedColor, setEmbedColor] = useState("#0d9488");
+  const [embedLeadCapture, setEmbedLeadCapture] = useState(false);
+  const [embedLeadTitle, setEmbedLeadTitle] = useState("Get in touch");
   const [savingWidget, setSavingWidget] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedIframe, setCopiedIframe] = useState(false);
@@ -120,6 +122,8 @@ export default function AgentsPage() {
         : []
     );
     setEmbedColor(agent.color || "#0d9488");
+    setEmbedLeadCapture(Boolean(agent.leadCaptureEnabled));
+    setEmbedLeadTitle(agent.leadCaptureTitle || "Get in touch");
   };
 
   const handleSaveWidget = async () => {
@@ -132,6 +136,8 @@ export default function AgentsPage() {
         suggested_questions: embedQuestions,
         allowed_domains: embedDomains.join(", "),
         color: embedColor,
+        lead_capture_enabled: embedLeadCapture,
+        lead_capture_title: embedLeadTitle.trim(),
       });
       if (updated) {
         toast.success("Widget settings saved successfully!");
@@ -953,6 +959,38 @@ export default function AgentsPage() {
                   <p className="text-[11px] text-muted-foreground">
                     Leave empty to allow embedding on any website.
                   </p>
+                </div>
+
+                <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-semibold cursor-pointer" htmlFor="lead-toggle">
+                        Visitor Lead Capture Form
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Prompt website visitors to leave their name, email, and phone.
+                      </p>
+                    </div>
+                    <input
+                      id="lead-toggle"
+                      type="checkbox"
+                      checked={embedLeadCapture}
+                      onChange={(e) => setEmbedLeadCapture(e.target.checked)}
+                      className="size-4 rounded accent-primary cursor-pointer"
+                    />
+                  </div>
+
+                  {embedLeadCapture && (
+                    <div className="pt-2">
+                      <Label className="text-[11px] text-muted-foreground">Form Heading / Prompt</Label>
+                      <Input
+                        value={embedLeadTitle}
+                        onChange={(e) => setEmbedLeadTitle(e.target.value)}
+                        placeholder="e.g. Get in touch with our team"
+                        className="text-xs mt-1"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end pt-3 border-t">

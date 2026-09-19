@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -29,6 +29,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     agents: Mapped[list["Agent"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    leads: Mapped[list["Lead"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Agent(Base):
@@ -53,11 +54,16 @@ class Agent(Base):
     allowed_domains: Mapped[str | None] = mapped_column(
         Text, default="", nullable=True, server_default=""
     )
+    lead_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    lead_capture_title: Mapped[str | None] = mapped_column(
+        Text, default="Get in touch", nullable=True, server_default="Get in touch"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     owner: Mapped["User"] = relationship(back_populates="agents")
     documents: Mapped[list["Document"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    leads: Mapped[list["Lead"]] = relationship(back_populates="agent")
 
 
 class Document(Base):
@@ -167,3 +173,26 @@ class AnnouncementRead(Base):
     )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company: Mapped[str | None] = mapped_column(Text, nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, default="new", server_default="new")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+    user: Mapped["User"] = relationship(back_populates="leads")
+    agent: Mapped[Agent | None] = relationship(back_populates="leads")
+    conversation: Mapped[Conversation | None] = relationship()
+

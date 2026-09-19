@@ -30,6 +30,7 @@ from app.models import (
     Document,
     DocumentChunk,
     EventLog,
+    Lead,
     Message,
     Subscription,
     User,
@@ -222,6 +223,59 @@ async def main():
 
             pub_detail = await routers.get_public_conversation(pub_conv["id"], db)
             check("get_public_conversation detail", pub_detail["id"] == pub_conv["id"] and pub_detail["messageCount"] >= 1)
+
+            # ---- Lead Capture & Management ----
+            from app.schemas import LeadCreate, LeadUpdate  # noqa: PLC0415
+            pub_lead = await routers.submit_public_lead(
+                agent["id"],
+                LeadCreate(
+                    name="Alice Wonder",
+                    email="alice@wonderland.io",
+                    phone="+1234567890",
+                    company="Wonder Corp",
+                    message="Interested in your enterprise solution.",
+                    conversation_id=pub_conv["id"],
+                ),
+                fake_req,
+                db,
+            )
+            check("submit_public_lead", pub_lead["id"] and pub_lead["email"] == "alice@wonderland.io")
+
+            # Check conversation visitor updated from Guest to Alice Wonder
+            conv_recheck = await routers.conversation_detail(pub_conv["id"], user, db)
+            check("lead updated conversation visitor name", conv_recheck["user"] == "Alice Wonder")
+
+            # List leads
+            leads_res = await routers.get_leads(user=user, db=db)
+            check(
+                "get_leads returns lead and summary",
+                len(leads_res["leads"]) >= 1
+                and leads_res["summary"]["total"] >= 1
+                and leads_res["summary"]["today"] >= 1,
+            )
+
+            # Filter leads by query
+            q_res = await routers.get_leads(q="Wonder Corp", user=user, db=db)
+            check("get_leads query filter matches", len(q_res["leads"]) == 1)
+
+            # Update lead status
+            updated_lead = await routers.update_lead(
+                pub_lead["id"],
+                LeadUpdate(status="contacted"),
+                user,
+                db,
+            )
+            check("update_lead status", updated_lead["status"] == "contacted")
+
+            # Export leads CSV
+            csv_resp = await routers.export_leads_csv(user, db)
+            csv_body = csv_resp.body.decode("utf-8")
+            check("export_leads_csv", "alice@wonderland.io" in csv_body and "Wonder Corp" in csv_body)
+
+            # Delete lead
+            await routers.delete_lead(pub_lead["id"], user, db)
+            leads_after_del = await routers.get_leads(user=user, db=db)
+            check("delete_lead", all(item["id"] != pub_lead["id"] for item in leads_after_del["leads"]))
 
             # ---- Dashboard ----
             dash = await routers.dashboard(user, db)
@@ -763,6 +817,7 @@ async def main():
                 await db.execute(delete(DocumentChunk).where(DocumentChunk.id.in_(chunk_ids)))
             if doc_ids:
                 await db.execute(delete(Document).where(Document.id.in_(doc_ids)))
+            await db.execute(delete(Lead).where(Lead.user_id == user.id))
             await db.execute(delete(Agent).where(Agent.user_id == user.id))
             await db.execute(delete(EventLog).where(EventLog.user_id == user.id))
             await db.execute(delete(User).where(User.id == user.id))

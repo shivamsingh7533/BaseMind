@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Bot,
+  CheckCircle2,
   ExternalLink,
   Loader2,
+  Mail,
   RefreshCw,
   Send,
   Sparkles,
+  UserPlus,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,7 @@ import {
   getPublicAgent,
   getPublicConversation,
   streamPublicChat,
+  submitPublicLead,
   type PublicAgentConfig,
 } from "@/lib/api";
 
@@ -40,6 +44,16 @@ export default function PublicWidgetPage() {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+
+  // Lead capture state
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [leadName, setLeadName] = useState("");
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadCompany, setLeadCompany] = useState("");
+  const [leadMessage, setLeadMessage] = useState("");
+  const [submittingLead, setSubmittingLead] = useState(false);
+  const [leadSuccess, setLeadSuccess] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,12 +114,36 @@ export default function PublicWidgetPage() {
 
   const handleResetChat = () => {
     if (streaming) return;
-    if (agentId && typeof window !== "undefined") {
+    if (typeof window !== "undefined" && agentId) {
       localStorage.removeItem(`basemind_conv_${agentId}`);
     }
     setConversationId(null);
     setMessages([]);
-    inputRef.current?.focus();
+  };
+
+  const handleSubmitLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agentId || !leadEmail.trim() || submittingLead) return;
+    setSubmittingLead(true);
+    try {
+      const res = await submitPublicLead(agentId, {
+        name: leadName.trim() || undefined,
+        email: leadEmail.trim(),
+        phone: leadPhone.trim() || undefined,
+        company: leadCompany.trim() || undefined,
+        message: leadMessage.trim() || undefined,
+        conversation_id: conversationId,
+      });
+      if (res) {
+        setLeadSuccess(true);
+        setTimeout(() => {
+          setShowLeadForm(false);
+          setLeadSuccess(false);
+        }, 2200);
+      }
+    } finally {
+      setSubmittingLead(false);
+    }
   };
 
   const handleClose = () => {
@@ -269,6 +307,18 @@ export default function PublicWidgetPage() {
         </div>
 
         <div className="flex items-center gap-1">
+          {agent.leadCaptureEnabled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] gap-1 px-2 border-border/60 hover:bg-primary/10 hover:text-primary"
+              onClick={() => setShowLeadForm(true)}
+              title="Leave contact details"
+            >
+              <UserPlus className="size-3" /> Contact
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -301,9 +351,22 @@ export default function PublicWidgetPage() {
                 <Sparkles className="size-3.5" style={{ color: brandColor }} />
                 <span style={{ color: brandColor }}>Welcome!</span>
               </div>
-              <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
+              <p className="mt-1 text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
                 {agent.greetingMessage}
               </p>
+
+              {agent.leadCaptureEnabled && !leadSuccess && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLeadForm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-primary/25 bg-primary/10 text-primary hover:bg-primary/25 transition-all text-left w-fit"
+                  >
+                    <Mail className="size-3.5" />
+                    <span>{agent.leadCaptureTitle || "Get in touch with our team"}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* SUGGESTED QUESTIONS CHIPS */}
@@ -427,6 +490,125 @@ export default function PublicWidgetPage() {
           </a>
         </div>
       </div>
+
+      {/* LEAD FORM MODAL OVERLAY */}
+      {showLeadForm && (
+        <div className="absolute inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md p-4 animate-in fade-in slide-in-from-bottom duration-200">
+          <div className="flex items-center justify-between border-b pb-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="flex size-7 items-center justify-center rounded-lg text-white"
+                style={{ backgroundColor: brandColor }}
+              >
+                <Mail className="size-4" />
+              </div>
+              <h2 className="text-sm font-semibold text-foreground">
+                {agent.leadCaptureTitle || "Get in touch"}
+              </h2>
+            </div>
+            <button
+              onClick={() => setShowLeadForm(false)}
+              className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          {leadSuccess ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-center p-6 space-y-2">
+              <CheckCircle2 className="size-10 text-emerald-500 animate-bounce" />
+              <h3 className="text-sm font-semibold text-foreground">Thank you!</h3>
+              <p className="text-xs text-muted-foreground">
+                We&apos;ve received your information and will be in touch shortly.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmitLead} className="flex-1 flex flex-col justify-between py-3 overflow-y-auto">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-medium text-foreground">
+                    Email Address <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={leadEmail}
+                    onChange={(e) => setLeadEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    className="mt-1 w-full rounded-lg border border-input bg-muted/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 focus:bg-background"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium text-foreground">Full Name</label>
+                  <input
+                    type="text"
+                    value={leadName}
+                    onChange={(e) => setLeadName(e.target.value)}
+                    placeholder="Jane Doe"
+                    className="mt-1 w-full rounded-lg border border-input bg-muted/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 focus:bg-background"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-medium text-foreground">Phone</label>
+                    <input
+                      type="tel"
+                      value={leadPhone}
+                      onChange={(e) => setLeadPhone(e.target.value)}
+                      placeholder="+1 (555) 000-0000"
+                      className="mt-1 w-full rounded-lg border border-input bg-muted/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 focus:bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-foreground">Company</label>
+                    <input
+                      type="text"
+                      value={leadCompany}
+                      onChange={(e) => setLeadCompany(e.target.value)}
+                      placeholder="Acme Corp"
+                      className="mt-1 w-full rounded-lg border border-input bg-muted/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 focus:bg-background"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium text-foreground">Note / How can we help?</label>
+                  <textarea
+                    rows={2}
+                    value={leadMessage}
+                    onChange={(e) => setLeadMessage(e.target.value)}
+                    placeholder="Briefly describe what you're looking for…"
+                    className="mt-1 w-full rounded-lg border border-input bg-muted/40 px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/60 focus:bg-background resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-1/2 text-xs"
+                  onClick={() => setShowLeadForm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={submittingLead || !leadEmail.trim()}
+                  className="w-1/2 text-xs text-white"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  {submittingLead ? <Loader2 className="size-3.5 animate-spin" /> : "Submit"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 }

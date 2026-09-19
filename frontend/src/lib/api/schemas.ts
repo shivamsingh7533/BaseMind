@@ -10,9 +10,26 @@ export const AgentSchema = z.object({
   greetingMessage: z.string().optional(),
   suggestedQuestions: z.array(z.string()).optional(),
   allowedDomains: z.string().optional(),
+  leadCaptureEnabled: z.boolean().optional(),
+  leadCaptureTitle: z.string().optional(),
   queries24h: z.number(),
   avgLatencyMs: z.number(),
   trainProgress: z.number().nullable().optional(),
+});
+
+export const LeadSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  agentId: z.string().nullable().optional(),
+  agentName: z.string().nullable().optional(),
+  conversationId: z.string().nullable().optional(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  company: z.string(),
+  message: z.string(),
+  status: z.enum(["new", "contacted", "qualified", "closed"]),
+  createdAt: z.string(),
 });
 
 export const KnowledgeDocSchema = z.object({
