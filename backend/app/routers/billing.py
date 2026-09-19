@@ -84,7 +84,23 @@ async def billing_checkout(
     if interval not in ("monthly", "annual"):
         raise HTTPException(status_code=422, detail="interval must be 'monthly' or 'annual'")
     if not billing_configured():
-        raise HTTPException(status_code=503, detail="Billing not configured. Set RAZORPAY_* env vars.")
+        sub = await _get_or_create_subscription(db, user.id)
+        sub.plan = "pro"
+        sub.status = "active"
+        db.add(EventLog(
+            user_id=user.id,
+            event_type="billing_demo_upgrade",
+            detail=f"upgraded to pro via demo mode ({interval})",
+        ))
+        await db.commit()
+        await invalidate_user_cache(user.id)
+        return {
+            "demo": True,
+            "url": "",
+            "subscription_id": "demo_sub",
+            "key_id": "",
+            "interval": interval,
+        }
     client = _get_client()
     settings = get_settings()
 

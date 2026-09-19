@@ -161,7 +161,13 @@ function Pricing() {
       const token = await getToken();
       const checkout = await createCheckout(token, cycle);
       if (!checkout) {
-        toast.error("Could not start checkout. Please try again.");
+        setUpgrading(false);
+        return;
+      }
+      if (checkout.demo) {
+        toast.success("Demo Mode: Upgraded to Pro without payment!");
+        setUpgrading(false);
+        refreshBilling();
         return;
       }
       await loadRazorpayCheckout();
@@ -177,6 +183,7 @@ function Pricing() {
         },
         handler: function () {
           toast.success("Payment successful — upgrading your plan");
+          setUpgrading(false);
           refreshBilling();
         },
         modal: {

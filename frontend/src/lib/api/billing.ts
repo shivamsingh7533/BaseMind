@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { API_URL, authHeader } from "./client";
 import type { BillingStatus, CheckoutResponse } from "./types";
 
@@ -27,9 +28,18 @@ export async function createCheckout(
         headers: authHeader(token),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {}
+      toast.error(`Checkout failed: ${detail}`);
+      return null;
+    }
     return (await res.json()) as CheckoutResponse;
   } catch {
+    toast.error("Network error while starting checkout");
     return null;
   }
 }

@@ -140,6 +140,7 @@ export interface CheckoutResponse {
   subscription_id: string;
   key_id: string;
   interval: "monthly" | "annual";
+  demo?: boolean;
 }
 
 export type OpsSeverity = "info" | "attention" | "error";
