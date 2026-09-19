@@ -21,6 +21,7 @@ interface AppDataState {
   documents: KnowledgeDoc[] | null;
   conversations: Conversation[] | null;
   _ts: Record<string, number>;
+  fetchDashboard: (token?: string | null, force?: boolean) => Promise<DashboardData | null>;
   fetchAgents: (token?: string | null, force?: boolean) => Promise<Agent[] | null>;
 
   fetchDocuments: (
@@ -41,7 +42,7 @@ export const useAppData = create<AppDataState>((set, get) => ({
   conversations: null,
   _ts: {},
 
-  fetchDashboard: async (token, force = false) => {
+  fetchDashboard: async (token: string | null | undefined, force = false) => {
     const state = get();
     const fresh =
       !force &&
