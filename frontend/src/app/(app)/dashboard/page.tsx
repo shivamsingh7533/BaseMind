@@ -144,6 +144,23 @@ export default function DashboardPage() {
     if (!ok) toast.error("Could not mark announcement as read");
   };
 
+  const [fetchError, setFetchError] = useState(false);
+
+  const refetch = async () => {
+    setFetchError(false);
+    const token = await getToken().catch(() => null);
+    if (!token) return;
+    try {
+      await Promise.all([
+        void fetchDashboard(token, true),
+        void fetchAgents(token, true),
+        void fetchDocuments(token, true),
+      ]);
+    } catch {
+      setFetchError(true);
+    }
+  };
+
   useEffect(() => {
     getToken()
       .then((t) => {
@@ -206,9 +223,22 @@ export default function DashboardPage() {
 
       {!data ? (
         <div className="grid gap-4 sm:grid-cols-3">
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
+          {fetchError ? (
+            <Card className="sm:col-span-3">
+              <CardContent className="pt-6 text-center text-sm text-muted-foreground">
+                <p className="mb-3">Failed to load dashboard data.</p>
+                <Button onClick={refetch} variant="outline" size="sm">
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Skeleton className="h-32 rounded-xl" />
+              <Skeleton className="h-32 rounded-xl" />
+              <Skeleton className="h-32 rounded-xl" />
+            </>
+          )}
         </div>
       ) : (
         <>

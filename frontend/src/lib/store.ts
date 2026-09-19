@@ -21,8 +21,8 @@ interface AppDataState {
   documents: KnowledgeDoc[] | null;
   conversations: Conversation[] | null;
   _ts: Record<string, number>;
-  fetchDashboard: (token?: string | null) => Promise<DashboardData | null>;
-  fetchAgents: (token?: string | null) => Promise<Agent[] | null>;
+  fetchAgents: (token?: string | null, force?: boolean) => Promise<Agent[] | null>;
+
   fetchDocuments: (
     token?: string | null,
     force?: boolean
@@ -41,9 +41,10 @@ export const useAppData = create<AppDataState>((set, get) => ({
   conversations: null,
   _ts: {},
 
-  fetchDashboard: async (token) => {
+  fetchDashboard: async (token, force = false) => {
     const state = get();
     const fresh =
+      !force &&
       state.dashboard !== null &&
       Date.now() - (state._ts.dashboard ?? 0) < TTL_MS;
     if (fresh) return state.dashboard;
@@ -68,10 +69,9 @@ export const useAppData = create<AppDataState>((set, get) => ({
     return p;
   },
 
-  fetchAgents: async (token) => {
+  fetchAgents: async (token, force = false) => {
     const state = get();
-    const fresh =
-      state.agents !== null && Date.now() - (state._ts.agents ?? 0) < TTL_MS;
+    const fresh = !force && state.agents !== null && Date.now() - (state._ts.agents ?? 0) < TTL_MS;
     if (fresh) return state.agents;
     if (inFlight.agents) return inFlight.agents as Promise<Agent[] | null>;
     const p = (async () => {
@@ -80,7 +80,7 @@ export const useAppData = create<AppDataState>((set, get) => ({
         set((s) => ({ agents: data, _ts: { ...s._ts, agents: Date.now() } }));
         return data;
       } catch (err) {
-        handleApiError(err, "Agents load nahi hue");
+        handleApiError(err, "Agents load failed");
         set((s) => ({ agents: null, _ts: { ...s._ts, agents: Date.now() } }));
         return null;
       } finally {
@@ -109,7 +109,7 @@ export const useAppData = create<AppDataState>((set, get) => ({
         }));
         return data;
       } catch (err) {
-        handleApiError(err, "Documents load nahi hue");
+        handleApiError(err, "Documents load failed");
         set((s) => ({
           documents: null,
           _ts: { ...s._ts, documents: Date.now() },
@@ -141,7 +141,7 @@ export const useAppData = create<AppDataState>((set, get) => ({
         }));
         return data;
       } catch (err) {
-        handleApiError(err, "Conversations load nahi hue");
+        handleApiError(err, "Conversations load failed");
         set((s) => ({
           conversations: null,
           _ts: { ...s._ts, conversations: Date.now() },

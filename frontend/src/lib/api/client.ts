@@ -62,7 +62,17 @@ function authHeader(token?: string | null): Record<string, string> {
 }
 
 function handleApiError(err: unknown, context = "Request failed"): void {
-  toast.error(`${context}: ${messageFrom(err)}`, {
+  let msg = messageFrom(err);
+  if (err instanceof ApiError) {
+    if (err.status === 401 || err.status === 403) {
+      msg = "Permission denied — please sign in again";
+    } else if (err.status >= 500) {
+      msg = "Server error — please try again later";
+    }
+  } else if (err instanceof TypeError && err.message.includes("fetch")) {
+    msg = "Network error — check your connection";
+  }
+  toast.error(`${context}: ${msg}`, {
     action: {
       label: "Retry",
       onClick: () => window.location.reload(),

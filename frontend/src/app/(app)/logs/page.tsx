@@ -320,7 +320,7 @@ export default function LogsPage() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
                       onClick={() => {
-                        navigator.clipboard.writeText(selected.user);
+                        navigator.clipboard.writeText(selected.id);
                         toast.success("Session ID copied");
                       }}
                     >
@@ -347,7 +347,7 @@ export default function LogsPage() {
                 </div>
               ) : selected.status === "halted" ? (
                 <div className="border-t bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive">
-                  Session halted — API rate limit exceeded
+                  Session halted
                 </div>
               ) : (
                 <div className="border-t bg-primary/5 px-4 py-3 text-sm font-medium text-primary">

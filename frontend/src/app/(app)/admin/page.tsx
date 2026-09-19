@@ -149,11 +149,16 @@ export default function AdminPage() {
   }, [getToken]);
 
   useEffect(() => {
-    const id = setInterval(() => void load().catch(() => undefined), 30_000);
+    let paused = false;
+    const id = setInterval(() => {
+      if (!paused) void load().catch(() => undefined);
+    }, 30_000);
     getToken()
       .then(() => load().catch(() => undefined))
       .catch(() => undefined);
-    return () => clearInterval(id);
+    const handleVisibility = () => { paused = document.hidden; };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", handleVisibility); };
   }, [getToken, load]);
 
   const stats = useMemo(() => {
