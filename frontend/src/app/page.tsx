@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { cancelSubscription, createCheckout, getBilling, verifyPayment, type BillingStatus } from "@/lib/api";
+import { createCheckout, getBilling, verifyPayment, type BillingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 declare global {
@@ -128,7 +128,6 @@ function Pricing() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [checking, setChecking] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,22 +152,6 @@ function Pricing() {
         if (b) setBilling(b);
       });
     });
-  };
-
-  const handleResetToFree = async () => {
-    setCancelling(true);
-    try {
-      const token = await getToken();
-      const res = await cancelSubscription(token);
-      if (!res.ok) {
-        toast.error(`Could not reset plan: ${res.detail}`);
-        return;
-      }
-      toast.success("Plan reset to Free — you can now test upgrade!");
-      refreshBilling();
-    } finally {
-      setCancelling(false);
-    }
   };
 
   const startCheckout = async (cycle: "monthly" | "annual") => {
@@ -289,32 +272,9 @@ function Pricing() {
     }
     if (isSignedIn && billing?.plan === "pro") {
       return (
-        <div className="mt-5 space-y-2">
-          <Button className="w-full" variant="outline" asChild>
-            <Link href="/settings">You&apos;re on Pro</Link>
-          </Button>
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-8 flex-1 text-xs font-medium"
-              onClick={() => void startCheckout(annual ? "annual" : "monthly")}
-              disabled={upgrading}
-            >
-              {upgrading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : null}
-              Open Razorpay Modal
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 text-xs text-muted-foreground hover:text-destructive"
-              onClick={handleResetToFree}
-              disabled={cancelling}
-            >
-              {cancelling ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : "Reset to Free"}
-            </Button>
-          </div>
-        </div>
+        <Button className="mt-5 w-full" variant="outline" asChild>
+          <Link href="/settings">You&apos;re on Pro</Link>
+        </Button>
       );
     }
     return (

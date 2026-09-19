@@ -299,32 +299,19 @@ export default function SettingsPage() {
                   "No email on this account"}
               </p>
               {isPro && (
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                    onClick={onCancel}
-                    disabled={cancelling}
-                  >
-                    {cancelling ? (
-                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                    ) : null}
-                    Cancel Subscription (Reset to Free)
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-8 text-xs font-medium"
-                    onClick={onUpgrade}
-                    disabled={upgrading}
-                  >
-                    {upgrading ? (
-                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                    ) : null}
-                    Open Razorpay Modal
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 h-auto px-0 text-muted-foreground hover:text-destructive"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    "Cancel subscription"
+                  )}
+                </Button>
               )}
             </div>
           </CardContent>
