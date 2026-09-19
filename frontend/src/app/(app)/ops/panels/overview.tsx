@@ -72,7 +72,7 @@ export function OverviewPanel({
   const groundingPct = grounding?.groundingPct ?? 0;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#f8f9fb]">
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-950">
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
         {/* Header — dark command bar */}
         <div className="relative overflow-hidden rounded-[20px] bg-slate-950 p-6 sm:p-7">
@@ -80,7 +80,7 @@ export function OverviewPanel({
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:28px_28px]" />
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
-              <span className="flex size-11 items-center justify-center rounded-2xl bg-white text-slate-900 shadow-lg">
+              <span className="flex size-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg">
                 <Shield className="size-5" />
               </span>
               <div>
@@ -107,7 +107,7 @@ export function OverviewPanel({
                 </span>
                 {isNominal ? "All systems nominal" : hasError ? "Errors active" : "Attention required"}
               </span>
-              <Badge className="rounded-full bg-white px-3 py-1 text-slate-900 hover:bg-white">v{ops.engine}</Badge>
+              <Badge className="rounded-full bg-slate-800 px-3 py-1 text-white hover:bg-slate-700">v{ops.engine}</Badge>
             </div>
           </div>
           <div className="relative mt-5 flex items-center gap-3 text-xs text-white/40">
@@ -126,12 +126,12 @@ export function OverviewPanel({
                   <MessageSquare className="size-5" />
                 </span>
                 {metrics.queriesDeltaPct !== null ? (
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${metrics.queriesDeltaPct >= 0 ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-red-50 text-red-700 ring-1 ring-red-200"}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${metrics.queriesDeltaPct >= 0 ? "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-900/30" : "bg-red-950/30 text-red-300 ring-1 ring-red-900/30"}`}>
                     <TrendingUp className="size-3" />
                     {metrics.queriesDeltaPct >= 0 ? "+" : ""}{metrics.queriesDeltaPct}%
                   </span>
                 ) : (
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-500">—</span>
+                  <span className="rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-400">—</span>
                 )}
               </div>
               <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Total Queries</p>
@@ -146,7 +146,7 @@ export function OverviewPanel({
                 <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow">
                   <Bot className="size-5" />
                 </span>
-                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${metrics.activeAgents > 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${metrics.activeAgents > 0 ? "bg-emerald-950/30 text-emerald-300 ring-emerald-900/30" : "bg-slate-800 text-slate-300 ring-slate-700"}`}>
                   <span className={`size-1.5 rounded-full ${metrics.activeAgents > 0 ? "bg-emerald-500" : "bg-slate-400"}`} />
                   {metrics.activeAgents > 0 ? "Live" : "Idle"}
                 </span>
@@ -177,7 +177,7 @@ export function OverviewPanel({
                 <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow">
                   <Database className="size-5" />
                 </span>
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ring-1 ${vector.status === "synced" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : vector.status === "empty" ? "bg-slate-100 text-slate-600 ring-slate-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ring-1 ${vector.status === "synced" ? "bg-emerald-950/30 text-emerald-300 ring-emerald-900/30" : vector.status === "empty" ? "bg-slate-800 text-slate-300 ring-slate-700" : "bg-amber-950/30 text-amber-300 ring-amber-900/30"}`}>
                   <span className={`size-1.5 rounded-full ${vector.status === "synced" ? "bg-emerald-500" : vector.status === "empty" ? "bg-slate-400" : "bg-amber-500"}`} />
                   {vector.status}
                 </span>
@@ -195,7 +195,7 @@ export function OverviewPanel({
                 <span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow">
                   <Shield className="size-5" />
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-900/30">
                   {groundingPct}%
                 </span>
               </div>
@@ -211,22 +211,22 @@ export function OverviewPanel({
           <Card className="rounded-2xl border-slate-200/70 shadow-sm lg:col-span-2">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-widest text-muted-foreground">
-                <Database className="size-4" /> Pinecone Vector Sync
+                <Database className="size-4" /> pgvector
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200/60">
+                <div className="rounded-xl bg-slate-900/50 p-3 ring-1 ring-slate-800/60">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Embeddings</p>
                   <p className="mt-1 font-heading text-xl font-bold">{vector.embeddings.toLocaleString()}</p>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200/60">
+                <div className="rounded-xl bg-slate-900/50 p-3 ring-1 ring-slate-800/60">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Indexed</p>
-                  <p className="mt-1 font-heading text-xl font-bold text-emerald-600">{vector.indexedDocs}</p>
+                  <p className="mt-1 font-heading text-xl font-bold text-emerald-400">{vector.indexedDocs}</p>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200/60">
+                <div className="rounded-xl bg-slate-900/50 p-3 ring-1 ring-slate-800/60">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Failed</p>
-                  <p className={`mt-1 font-heading text-xl font-bold ${vector.failedDocs > 0 ? "text-red-600" : "text-slate-900"}`}>{vector.failedDocs}</p>
+                  <p className={`mt-1 font-heading text-xl font-bold ${vector.failedDocs > 0 ? "text-red-400" : "text-white"}`}>{vector.failedDocs}</p>
                 </div>
               </div>
               <div className="mt-4">
@@ -234,7 +234,7 @@ export function OverviewPanel({
                   <span className="text-muted-foreground">Index health</span>
                   <span className="font-medium">{vecPct}%</span>
                 </div>
-                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800 ring-1 ring-slate-800/60">
                   <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-600 transition-all" style={{ width: `${vecPct}%` }} />
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">{vector.pendingDocs} pending · {vector.dim} dimensions</p>
@@ -250,21 +250,21 @@ export function OverviewPanel({
             </CardHeader>
             <CardContent>
               {alerts.length === 0 ? (
-                <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
-                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+                <div className="rounded-xl bg-emerald-950/20 p-4 ring-1 ring-emerald-900/30">
+                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-300">
                     <CheckCircle2 className="size-4" /> All clear
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-emerald-700/80">No active alerts. System is operating within normal thresholds.</p>
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-300/80">No active alerts. System is operating within normal thresholds.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {alerts.map((a) => (
-                    <div key={a.id} className={`rounded-xl p-3 ring-1 ${a.severity === "error" ? "bg-red-50 ring-red-200" : "bg-amber-50 ring-amber-200"}`}>
+                    <div key={a.id} className={`rounded-xl p-3 ring-1 ${a.severity === "error" ? "bg-red-950/30 ring-red-900/30" : "bg-amber-950/30 ring-amber-900/30"}`}>
                       <div className="flex gap-2.5">
                         <span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ${a.severity === "error" ? "bg-red-500 text-white" : "bg-amber-500 text-white"}`}>
                           <TriangleAlert className="size-3.5" />
                         </span>
-                        <p className={`text-sm leading-snug ${a.severity === "error" ? "text-red-900" : "text-amber-900"}`}>{a.text}</p>
+                        <p className={`text-sm leading-snug ${a.severity === "error" ? "text-red-300" : "text-amber-300"}`}>{a.text}</p>
                       </div>
                     </div>
                   ))}
@@ -279,7 +279,7 @@ export function OverviewPanel({
           <Button asChild className="rounded-full bg-slate-900 px-5 text-white hover:bg-slate-800">
             <Link href="/agents"><CirclePlus className="size-4" /> New Agent</Link>
           </Button>
-          <Button asChild variant="outline" className="rounded-full bg-white">
+          <Button asChild variant="outline" className="rounded-full bg-slate-900">
             <Link href="/knowledge-base"><FileUp className="size-4" /> Upload Data</Link>
           </Button>
           <Button asChild variant="ghost" className="rounded-full">
@@ -305,7 +305,7 @@ export function OverviewPanel({
                       <span className={`relative z-10 mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ring-4 ring-white ${a.severity === "error" ? "bg-red-500 text-white" : a.severity === "attention" ? "bg-amber-500 text-white" : "bg-slate-900 text-white"}`}>
                         <ActivityIcon kind={a.kind} severity={a.severity} />
                       </span>
-                      <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200/60">
+                      <div className="min-w-0 flex-1 rounded-xl bg-slate-900/50 px-3 py-2.5 ring-1 ring-slate-800/60">
                         <p className="text-sm leading-snug">
                           <span className="font-semibold">{a.highlight}</span>{" "}
                           <span className="text-muted-foreground">{a.text}</span>
@@ -324,7 +324,7 @@ export function OverviewPanel({
         </Card>
 
         <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CheckCircle2 className="size-3.5 text-emerald-600" /> Updated {rel(ops.generatedAt)} · Operator view · Auto-refresh 60s
+          <CheckCircle2 className="size-3.5 text-emerald-400" /> Updated {rel(ops.generatedAt)} · Operator view · Auto-refresh 60s
         </p>
       </div>
     </div>
