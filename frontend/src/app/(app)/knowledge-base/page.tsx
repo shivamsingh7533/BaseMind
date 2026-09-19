@@ -73,6 +73,7 @@ export default function KnowledgeBasePage() {
   const [uploading, setUploading] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
   useEffect(() => {
     getToken()
@@ -82,6 +83,12 @@ export default function KnowledgeBasePage() {
 
   const handleFile = async (file: File | undefined | null) => {
     if (!file || uploading) return;
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("File too large", {
+        description: "Maximum size is 10MB",
+      });
+      return;
+    }
     setUploading(true);
     try {
       const doc = await uploadDocument(await getToken().catch(() => null), file);
@@ -163,7 +170,7 @@ export default function KnowledgeBasePage() {
       </div>
       <p className="-mt-3 mb-6 text-sm text-muted-foreground">
         Train your agents by connecting data sources. Supported formats: PDF,
-        TXT, CSV.
+        TXT, CSV, MD.
       </p>
 
       <Card>
