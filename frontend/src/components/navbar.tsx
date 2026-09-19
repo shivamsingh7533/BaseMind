@@ -18,8 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 
 const MARKETING_LINKS = [
-  { href: "/#features", label: "Features" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/features", label: "Features" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 const APP_LINKS = [
@@ -83,8 +83,7 @@ export function Navbar() {
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground lg:flex">
           {links.map((item) => {
             const active =
-              item.href.startsWith("/#") === false &&
-              (pathname === item.href || pathname.startsWith(item.href + "/"));
+              pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
@@ -132,11 +131,9 @@ export function Navbar() {
                   href={item.href}
                   onClick={() => setOpen(false)}
                   aria-current={
-                    item.href.startsWith("/#")
-                      ? undefined
-                      : pathname === item.href || pathname.startsWith(item.href + "/")
-                        ? "page"
-                        : undefined
+                    pathname === item.href || pathname.startsWith(item.href + "/")
+                      ? "page"
+                      : undefined
                   }
                   className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >

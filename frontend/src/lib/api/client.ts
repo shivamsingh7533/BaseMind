@@ -23,15 +23,32 @@ async function request<T>(
   options: RequestInit & { schema?: z.ZodType<T> } = {}
 ): Promise<T> {
   const { schema, ...fetchOpts } = options;
-  const res = await fetch(`${API_URL}${path}`, {
-    cache: "no-store",
-    ...fetchOpts,
-    headers: {
-      Accept: "application/json",
-      ...(fetchOpts.body ? { "Content-Type": "application/json" } : {}),
-      ...(fetchOpts.headers ?? {}),
-    },
-  });
+  const reqHeaders = {
+    Accept: "application/json",
+    ...(fetchOpts.body ? { "Content-Type": "application/json" } : {}),
+    ...(fetchOpts.headers ?? {}),
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      cache: "no-store",
+      ...fetchOpts,
+      headers: reqHeaders,
+    });
+  } catch (err) {
+    if (err instanceof TypeError) {
+      // Retry once after 1.5s for Render cold start or transient socket drop
+      await new Promise((r) => setTimeout(r, 1500));
+      res = await fetch(`${API_URL}${path}`, {
+        cache: "no-store",
+        ...fetchOpts,
+        headers: reqHeaders,
+      });
+    } else {
+      throw err;
+    }
+  }
   if (res.status === 204) return undefined as T;
   if (!res.ok) {
     let detail: string | undefined;
