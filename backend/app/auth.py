@@ -1,5 +1,5 @@
 import jwt as pyjwt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -117,6 +117,7 @@ def _set_sentry_user(user: "User | None", claims: dict | None = None) -> None:
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -124,6 +125,19 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Missing bearer token")
     claims = verify_clerk_token(credentials.credentials)
     user = await upsert_user(db, claims)
+
+    email_hdr = request.headers.get("x-user-email")
+    name_hdr = request.headers.get("x-user-name")
+    updated = False
+    if email_hdr and email_hdr.strip() and user.email != email_hdr.strip().lower():
+        user.email = email_hdr.strip().lower()
+        updated = True
+    if name_hdr and name_hdr.strip() and not user.name:
+        user.name = name_hdr.strip()
+        updated = True
+    if updated:
+        await db.commit()
+
     _set_sentry_user(user, claims)
     try:
         import sentry_sdk  # noqa: E402

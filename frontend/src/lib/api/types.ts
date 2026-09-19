@@ -238,6 +238,7 @@ export interface OpsAgent {
   active: boolean;
   avgLatencyMs: number;
   isSlow: boolean;
+  instructions?: string;
 }
 
 export interface OpsDocumentsStats {

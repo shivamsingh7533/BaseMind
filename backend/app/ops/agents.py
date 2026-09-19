@@ -28,6 +28,7 @@ async def _agents_leaderboard(db: AsyncSession) -> list[dict]:
                 "active": a.status == "active",
                 "avgLatencyMs": m["avgLatencyMs"],
                 "isSlow": m["avgLatencyMs"] > SLOW_AGENT_MS_THRESHOLD,
+                "instructions": a.instructions or "",
             }
         )
 

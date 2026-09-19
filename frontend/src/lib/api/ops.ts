@@ -26,11 +26,18 @@ export async function fetchOpsStatus(
 }
 
 export async function checkIsOperator(
-  token?: string | null
+  token?: string | null,
+  userEmail?: string | null,
+  userName?: string | null,
 ): Promise<boolean> {
   try {
+    const headers: Record<string, string> = {
+      ...authHeader(token),
+    };
+    if (userEmail) headers["X-User-Email"] = userEmail;
+    if (userName) headers["X-User-Name"] = userName;
     const res = await fetch(`${API_URL}/api/ops/check`, {
-      headers: authHeader(token),
+      headers,
     });
     if (!res.ok) return false;
     const data = (await res.json()) as { is_operator?: boolean };
@@ -130,3 +137,51 @@ export const fetchOpsErrors = async (token?: string | null) =>
   request<OpsErrorsData>("/api/ops/errors", {
     headers: authHeader(token),
   }).catch(() => null);
+
+export async function updateOpsAgent(
+  token: string | null | undefined,
+  agentId: string,
+  changes: { status?: string; name?: string; instructions?: string; color?: string }
+): Promise<{ ok: boolean; detail?: string }> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/agents/${agentId}`, {
+      method: "PATCH",
+      headers: {
+        ...authHeader(token),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(changes),
+    });
+    if (!res.ok) {
+      const body = (await res.json()) as { detail?: string };
+      return { ok: false, detail: body.detail ?? `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, detail: "Network error updating agent" };
+  }
+}
+
+export async function sendOperatorAlert(
+  token: string | null | undefined,
+  subject: string,
+  html?: string
+): Promise<{ ok: boolean; detail?: string }> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/alert`, {
+      method: "POST",
+      headers: {
+        ...authHeader(token),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ subject, html }),
+    });
+    if (!res.ok) {
+      const body = (await res.json()) as { detail?: string };
+      return { ok: false, detail: body.detail ?? `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, detail: "Network error sending alert" };
+  }
+}

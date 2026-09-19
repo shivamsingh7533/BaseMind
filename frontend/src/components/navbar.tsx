@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import { Show, SignInButton, UserButton, useAuth } from "@clerk/nextjs";
+import { Show, SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/logo";
 import { checkIsOperator } from "@/lib/api";
@@ -61,6 +61,7 @@ export function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { isSignedIn, getToken } = useAuth();
+  const { user } = useUser();
   const cachedOps = useSyncExternalStore(subscribeOps, getOpsSnapshot, getOpsServerSnapshot);
   const [opsConfirmed, setOpsConfirmed] = useState(false);
 
@@ -68,8 +69,10 @@ export function Navbar() {
     if (!isSignedIn) return;
     if (opsCacheFresh()) return;
     let alive = true;
+    const email = user?.primaryEmailAddress?.emailAddress ?? null;
+    const name = user?.fullName ?? null;
     getToken()
-      .then((t) => checkIsOperator(t))
+      .then((t) => checkIsOperator(t, email, name))
       .then((isOp) => {
         if (alive) {
           const value = isOp ? "1" : "0";
@@ -81,12 +84,12 @@ export function Navbar() {
     return () => {
       alive = false;
     };
-  }, [isSignedIn, getToken, opsConfirmed]);
+  }, [isSignedIn, getToken, user, opsConfirmed]);
 
   const links = [
     ...MARKETING_LINKS,
     ...APP_LINKS,
-    ...(cachedOps || opsConfirmed ? [{ href: "/ops", label: "Ops" }, { href: "/admin", label: "Admin" }] : []),
+    ...(cachedOps || opsConfirmed ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   return (
