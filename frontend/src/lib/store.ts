@@ -35,8 +35,18 @@ interface AppDataState {
   reset: () => void;
 }
 
+const DASH_CACHE_KEY = "basemind_dash_v1";
+
 export const useAppData = create<AppDataState>((set, get) => ({
-  dashboard: null,
+  dashboard: (() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(DASH_CACHE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  })(),
   agents: null,
   documents: null,
   conversations: null,
@@ -53,15 +63,22 @@ export const useAppData = create<AppDataState>((set, get) => ({
     const p = (async () => {
       try {
         const data = await getDashboard(token);
+        if (data) {
+          try {
+            localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(data));
+          } catch {}
+        }
         set((s) => ({
           dashboard: data,
           _ts: { ...s._ts, dashboard: Date.now() },
         }));
         return data;
       } catch (err) {
-        handleApiError(err, "Dashboard load failed");
-        set((s) => ({ dashboard: null, _ts: { ...s._ts, dashboard: Date.now() } }));
-        return null;
+        if (get().dashboard === null) {
+          handleApiError(err, "Dashboard load failed");
+        }
+        set((s) => ({ _ts: { ...s._ts, dashboard: Date.now() } }));
+        return get().dashboard;
       } finally {
         delete inFlight.dashboard;
       }

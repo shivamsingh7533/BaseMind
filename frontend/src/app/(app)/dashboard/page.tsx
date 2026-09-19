@@ -162,14 +162,20 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    let alive = true;
     getToken()
-      .then((t) => {
-        if (!t) return;
-        void fetchDashboard(t);
-        void fetchAgents(t);
-        void fetchDocuments(t);
+      .then(async (t) => {
+        if (!t || !alive) return;
+        await fetchDashboard(t);
+        if (alive) {
+          void fetchAgents(t);
+          void fetchDocuments(t);
+        }
       })
       .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, [getToken, fetchDashboard, fetchAgents, fetchDocuments]);
 
   const hasAgents = agents !== null && agents.length > 0;
