@@ -30,66 +30,44 @@ const APP_LINKS = [
   { href: "/logs", label: "Logs" },
 ];
 
-const OPS_CACHE_KEY = "basemind_showOps";
-const OPS_CACHE_TTL_MS = 5 * 60 * 1000;
-const OPS_CACHE_TS_KEY = "basemind_showOps_ts";
-
-function subscribeOps(callback: () => void) {
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
-}
-
-function getOpsSnapshot() {
-  return window.localStorage.getItem(OPS_CACHE_KEY) === "1";
-}
-
-function opsCacheFresh() {
-  const ts = Number(window.localStorage.getItem(OPS_CACHE_TS_KEY) ?? "0");
-  return Date.now() - ts < OPS_CACHE_TTL_MS;
-}
-
-function setOpsCache(value: "1" | "0") {
-  window.localStorage.setItem(OPS_CACHE_KEY, value);
-  window.localStorage.setItem(OPS_CACHE_TS_KEY, String(Date.now()));
-}
-
-function getOpsServerSnapshot() {
-  return false;
-}
+const OPERATOR_EMAILS = [
+  "basemind599@gmail.com",
+  "shivamsingh7533@gmail.com",
+];
 
 export function Navbar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { isSignedIn, getToken } = useAuth();
   const { user } = useUser();
-  const cachedOps = useSyncExternalStore(subscribeOps, getOpsSnapshot, getOpsServerSnapshot);
   const [opsConfirmed, setOpsConfirmed] = useState(false);
+
+  const userEmail = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? "";
+  const isOperator =
+    Boolean(userEmail && OPERATOR_EMAILS.includes(userEmail)) || opsConfirmed;
 
   useEffect(() => {
     if (!isSignedIn) return;
-    if (opsCacheFresh()) return;
     let alive = true;
     const email = user?.primaryEmailAddress?.emailAddress ?? null;
     const name = user?.fullName ?? null;
     getToken()
       .then((t) => checkIsOperator(t, email, name))
       .then((isOp) => {
-        if (alive) {
-          const value = isOp ? "1" : "0";
-          setOpsConfirmed(isOp);
-          setOpsCache(value);
+        if (alive && isOp) {
+          setOpsConfirmed(true);
         }
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [isSignedIn, getToken, user, opsConfirmed]);
+  }, [isSignedIn, getToken, user]);
 
   const links = [
     ...MARKETING_LINKS,
     ...APP_LINKS,
-    ...(cachedOps || opsConfirmed ? [{ href: "/admin", label: "Admin" }] : []),
+    ...(isOperator ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   return (

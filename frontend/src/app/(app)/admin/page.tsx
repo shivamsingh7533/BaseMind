@@ -228,10 +228,14 @@ export default function AdminDashboardPage() {
     const token = await getToken();
     if (!token) return;
 
-    const email = user?.primaryEmailAddress?.emailAddress ?? null;
+    const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? "";
     const name = user?.fullName ?? null;
 
-    const isOp = await checkIsOperator(token, email, name);
+    const isKnownOperator = Boolean(
+      email && ["basemind599@gmail.com", "shivamsingh7533@gmail.com"].includes(email)
+    );
+
+    const isOp = isKnownOperator || (await checkIsOperator(token, email, name));
     if (!isOp) {
       setDenied(true);
       setLoading(false);
@@ -277,10 +281,10 @@ export default function AdminDashboardPage() {
   }, [getToken, user]);
 
   useEffect(() => {
-    if (isSignedIn) {
+    if (isSignedIn && user) {
       void loadAll();
     }
-  }, [isSignedIn, loadAll]);
+  }, [isSignedIn, user, loadAll]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
