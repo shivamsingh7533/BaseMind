@@ -64,6 +64,10 @@ export function Navbar() {
     };
   }, [isSignedIn, getToken, user]);
 
+  if (pathname?.startsWith("/widget")) {
+    return null;
+  }
+
   const links = [
     ...MARKETING_LINKS,
     ...APP_LINKS,

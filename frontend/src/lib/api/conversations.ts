@@ -131,3 +131,71 @@ export async function streamChat(
     }
   }
 }
+
+export async function getPublicConversation(
+  conversationId: string
+): Promise<Conversation | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/public/conversations/${conversationId}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Conversation;
+  } catch {
+    return null;
+  }
+}
+
+export async function streamPublicChat(
+  conversationId: string,
+  text: string,
+  onEvent: (event: ChatEvent) => void
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/public/conversations/${conversationId}/chat`, {
+      method: "POST",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text, role: "user" }),
+    });
+  } catch {
+    onEvent({ type: "error", error: "Network error" });
+    return;
+  }
+  if (!res.ok || !res.body) {
+    let errorDetail = `HTTP ${res.status}`;
+    try {
+      const errJson = (await res.json()) as { detail?: string };
+      if (errJson.detail) errorDetail = errJson.detail;
+    } catch {
+      /* ignore */
+    }
+    onEvent({
+      type: "error",
+      error: errorDetail,
+    });
+    return;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith("data: ")) continue;
+      try {
+        onEvent(JSON.parse(line.slice(6)) as ChatEvent);
+      } catch {
+        /* skip malformed frame */
+      }
+    }
+  }
+}

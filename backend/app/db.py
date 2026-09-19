@@ -70,6 +70,18 @@ async def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS ix_document_chunks_embedding_hnsw "
                 "ON document_chunks USING hnsw (embedding vector_cosine_ops)"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS greeting_message TEXT DEFAULT 'Hi! How can I help you today?'"
+            )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS suggested_questions TEXT DEFAULT '[]'"
+            )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS allowed_domains TEXT DEFAULT ''"
+            )
 
     await run_migrations()
 

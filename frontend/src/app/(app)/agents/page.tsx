@@ -4,18 +4,33 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Bot,
+  Check,
   CirclePlus,
+  Code2,
+  Copy,
+  ExternalLink,
   Headset,
+  Loader2,
   Pause,
   Play,
+  Plus,
   Rocket,
   Send,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
@@ -35,6 +50,7 @@ import {
   deleteAgent,
   setAgentStatus,
   streamChat,
+  updateAgent,
   type Agent,
   type AgentStatus,
 } from "@/lib/api";
@@ -73,6 +89,59 @@ export default function AgentsPage() {
   const [chatting, setChatting] = useState(false);
   const [studioConvId, setStudioConvId] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Embed Widget Modal State
+  const [embedAgent, setEmbedAgent] = useState<Agent | null>(null);
+  const [embedGreeting, setEmbedGreeting] = useState("");
+  const [embedQuestions, setEmbedQuestions] = useState<string[]>([]);
+  const [newQuestionDraft, setNewQuestionDraft] = useState("");
+  const [embedDomains, setEmbedDomains] = useState<string[]>([]);
+  const [newDomainDraft, setNewDomainDraft] = useState("");
+  const [embedColor, setEmbedColor] = useState("#0d9488");
+  const [savingWidget, setSavingWidget] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedIframe, setCopiedIframe] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const openEmbedModal = (agent: Agent) => {
+    setEmbedAgent(agent);
+    setEmbedGreeting(agent.greetingMessage || "Hi! How can I help you today?");
+    setEmbedQuestions(
+      agent.suggestedQuestions && agent.suggestedQuestions.length > 0
+        ? agent.suggestedQuestions
+        : ["What are your pricing plans?", "How do I get started?"]
+    );
+    setEmbedDomains(
+      agent.allowedDomains
+        ? agent.allowedDomains
+            .split(",")
+            .map((d) => d.trim())
+            .filter(Boolean)
+        : []
+    );
+    setEmbedColor(agent.color || "#0d9488");
+  };
+
+  const handleSaveWidget = async () => {
+    if (!embedAgent) return;
+    setSavingWidget(true);
+    try {
+      const token = await getToken();
+      const updated = await updateAgent(token, embedAgent.id, {
+        greeting_message: embedGreeting.trim(),
+        suggested_questions: embedQuestions,
+        allowed_domains: embedDomains.join(", "),
+        color: embedColor,
+      });
+      if (updated) {
+        toast.success("Widget settings saved successfully!");
+        setEmbedAgent(updated);
+        await fetchAgents(token);
+      }
+    } finally {
+      setSavingWidget(false);
+    }
+  };
 
   useEffect(() => {
     getToken()
@@ -286,6 +355,14 @@ export default function AgentsPage() {
                     </div>
                   )}
                   <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                      onClick={() => openEmbedModal(a)}
+                    >
+                      <Code2 className="size-3.5" /> Embed
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -554,6 +631,365 @@ export default function AgentsPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* EMBED & INTEGRATION DIALOG */}
+      <Dialog
+        open={embedAgent !== null}
+        onOpenChange={(open) => !open && setEmbedAgent(null)}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex size-7 items-center justify-center rounded-lg text-white"
+                style={{ backgroundColor: embedAgent?.color || "#0d9488" }}
+              >
+                <Code2 className="size-4" />
+              </div>
+              <DialogTitle className="text-lg font-heading">
+                Embed Chat Widget: {embedAgent?.name}
+              </DialogTitle>
+            </div>
+            <DialogDescription>
+              Integrate this agent into your website or web application with a
+              single line of code.
+            </DialogDescription>
+          </DialogHeader>
+
+          {embedAgent && (
+            <Tabs defaultValue="code" className="mt-2">
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="code">Embed Code</TabsTrigger>
+                <TabsTrigger value="customize">Customize</TabsTrigger>
+                <TabsTrigger value="preview">Live Preview</TabsTrigger>
+              </TabsList>
+
+              {/* TAB 1: EMBED CODE */}
+              <TabsContent value="code" className="space-y-4 pt-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">
+                      Option A: Floating Chat Bubble (Recommended)
+                    </Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => {
+                        const origin =
+                          typeof window !== "undefined"
+                            ? window.location.origin
+                            : "https://base-mind.vercel.app";
+                        const snippet = `<script\n  src="${origin}/widget.js"\n  data-agent-id="${embedAgent.id}"\n  data-color="${embedColor}"\n  defer>\n</script>`;
+                        navigator.clipboard.writeText(snippet);
+                        setCopiedScript(true);
+                        toast.success("Script tag copied to clipboard!");
+                        setTimeout(() => setCopiedScript(false), 2000);
+                      }}
+                    >
+                      {copiedScript ? (
+                        <Check className="size-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      {copiedScript ? "Copied" : "Copy Code"}
+                    </Button>
+                  </div>
+                  <pre className="rounded-lg border bg-muted/50 p-3 font-mono text-xs text-foreground overflow-x-auto select-all">
+                    {`<script\n  src="${
+                      typeof window !== "undefined"
+                        ? window.location.origin
+                        : "https://base-mind.vercel.app"
+                    }/widget.js"\n  data-agent-id="${
+                      embedAgent.id
+                    }"\n  data-color="${embedColor}"\n  defer>\n</script>`}
+                  </pre>
+                  <p className="text-[11px] text-muted-foreground">
+                    Paste this snippet before the closing{" "}
+                    <code>&lt;/body&gt;</code> tag on any HTML page (WordPress,
+                    Shopify, Webflow, React, etc.).
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">
+                      Option B: Inline Iframe
+                    </Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => {
+                        const origin =
+                          typeof window !== "undefined"
+                            ? window.location.origin
+                            : "https://base-mind.vercel.app";
+                        const snippet = `<iframe\n  src="${origin}/widget/${embedAgent.id}"\n  width="100%"\n  height="600"\n  style="border:none;border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.1);"\n></iframe>`;
+                        navigator.clipboard.writeText(snippet);
+                        setCopiedIframe(true);
+                        toast.success("Iframe code copied!");
+                        setTimeout(() => setCopiedIframe(false), 2000);
+                      }}
+                    >
+                      {copiedIframe ? (
+                        <Check className="size-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      {copiedIframe ? "Copied" : "Copy Code"}
+                    </Button>
+                  </div>
+                  <pre className="rounded-lg border bg-muted/50 p-3 font-mono text-xs text-foreground overflow-x-auto select-all">
+                    {`<iframe\n  src="${
+                      typeof window !== "undefined"
+                        ? window.location.origin
+                        : "https://base-mind.vercel.app"
+                    }/widget/${
+                      embedAgent.id
+                    }"\n  width="100%"\n  height="600"\n  style="border:none;border-radius:16px;"\n></iframe>`}
+                  </pre>
+                </div>
+
+                <div className="pt-2 border-t flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold">Direct Standalone Link</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Shareable URL for full-screen widget testing
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() => {
+                        const origin =
+                          typeof window !== "undefined"
+                            ? window.location.origin
+                            : "https://base-mind.vercel.app";
+                        const url = `${origin}/widget/${embedAgent.id}`;
+                        navigator.clipboard.writeText(url);
+                        setCopiedLink(true);
+                        toast.success("Link copied!");
+                        setTimeout(() => setCopiedLink(false), 2000);
+                      }}
+                    >
+                      {copiedLink ? (
+                        <Check className="size-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      Copy Link
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() =>
+                        window.open(`/widget/${embedAgent.id}`, "_blank")
+                      }
+                    >
+                      <ExternalLink className="size-3.5" /> Open Preview
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* TAB 2: CUSTOMIZE */}
+              <TabsContent value="customize" className="space-y-4 pt-3">
+                <div className="space-y-2">
+                  <Label htmlFor="widget-greeting" className="text-xs font-semibold">
+                    Greeting Message
+                  </Label>
+                  <Textarea
+                    id="widget-greeting"
+                    rows={2}
+                    value={embedGreeting}
+                    onChange={(e) => setEmbedGreeting(e.target.value)}
+                    placeholder="Hi! How can I help you today?"
+                    className="text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Shown to visitors at the top of their chat window.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Brand Accent Color</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={embedColor}
+                      onChange={(e) => setEmbedColor(e.target.value)}
+                      className="h-9 w-14 cursor-pointer rounded-md border bg-card p-1"
+                    />
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {embedColor}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">
+                    Suggested Starter Questions
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {embedQuestions.map((q, idx) => (
+                      <Badge
+                        key={idx}
+                        variant="secondary"
+                        className="gap-1.5 py-1 text-xs"
+                      >
+                        <span>{q}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEmbedQuestions((prev) =>
+                              prev.filter((_, i) => i !== idx)
+                            )
+                          }
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newQuestionDraft}
+                      onChange={(e) => setNewQuestionDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newQuestionDraft.trim()) {
+                          e.preventDefault();
+                          setEmbedQuestions((prev) => [
+                            ...prev,
+                            newQuestionDraft.trim(),
+                          ]);
+                          setNewQuestionDraft("");
+                        }
+                      }}
+                      placeholder="e.g. How do I request a refund?"
+                      className="text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (newQuestionDraft.trim()) {
+                          setEmbedQuestions((prev) => [
+                            ...prev,
+                            newQuestionDraft.trim(),
+                          ]);
+                          setNewQuestionDraft("");
+                        }
+                      }}
+                    >
+                      <Plus className="size-3.5 mr-1" /> Add
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Clickable quick-prompt buttons displayed to new visitors.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">
+                    Allowed Domains (CORS Security)
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {embedDomains.map((d, idx) => (
+                      <Badge key={idx} variant="secondary" className="gap-1.5 py-1 text-xs">
+                        <span>{d}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEmbedDomains((prev) =>
+                              prev.filter((_, i) => i !== idx)
+                            )
+                          }
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newDomainDraft}
+                      onChange={(e) => setNewDomainDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newDomainDraft.trim()) {
+                          e.preventDefault();
+                          const d = newDomainDraft.trim().toLowerCase();
+                          if (!embedDomains.includes(d)) {
+                            setEmbedDomains((prev) => [...prev, d]);
+                          }
+                          setNewDomainDraft("");
+                        }
+                      }}
+                      placeholder="e.g. *.acmecorp.com or mysite.com"
+                      className="text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (newDomainDraft.trim()) {
+                          const d = newDomainDraft.trim().toLowerCase();
+                          if (!embedDomains.includes(d)) {
+                            setEmbedDomains((prev) => [...prev, d]);
+                          }
+                          setNewDomainDraft("");
+                        }
+                      }}
+                    >
+                      <Plus className="size-3.5 mr-1" /> Add
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Leave empty to allow embedding on any website.
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-3 border-t">
+                  <Button
+                    onClick={handleSaveWidget}
+                    disabled={savingWidget}
+                    className="gap-2"
+                  >
+                    {savingWidget ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    Save Widget Settings
+                  </Button>
+                </div>
+              </TabsContent>
+
+              {/* TAB 3: LIVE PREVIEW */}
+              <TabsContent value="preview" className="pt-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-full max-w-sm rounded-2xl border bg-card shadow-lg overflow-hidden h-[480px]">
+                    <iframe
+                      src={`/widget/${embedAgent.id}`}
+                      className="w-full h-full border-none"
+                      title="Widget Live Preview"
+                    />
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground text-center">
+                    This is a live preview of the visitor experience.
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

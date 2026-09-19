@@ -6,6 +6,7 @@ from .billing import router as _billing
 from .conversations import router as _conversations
 from .dashboard import router as _dashboard
 from .documents import router as _documents
+from .public import router as _public
 
 router = APIRouter()
 router.include_router(_agents)
@@ -14,6 +15,7 @@ router.include_router(_conversations)
 router.include_router(_dashboard)
 router.include_router(_documents)
 router.include_router(_admin)
+router.include_router(_public)
 
 # Re-exports kept for test compatibility (`from app import routers` then `routers.<fn>`).
 __all__ = [
@@ -42,6 +44,10 @@ __all__ = [
     "download_document",
     "download_document_url",
     "get_plan",
+    "get_public_agent",
+    "create_public_conversation",
+    "get_public_conversation",
+    "public_chat",
     "list_agents",
     "list_conversations",
     "list_documents",
@@ -125,4 +131,10 @@ from .documents import (  # noqa: E402
     list_documents,
     sync_url,
     upload_document,
+)
+from .public import (  # noqa: E402
+    create_public_conversation,
+    get_public_agent,
+    get_public_conversation,
+    public_chat,
 )

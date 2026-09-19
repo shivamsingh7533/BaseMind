@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,12 +45,16 @@ async def create_agent(
 
     if not await _allow_rate_limited_async("agent_create", user.id, AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW):
         raise _HTTPException(status_code=429, detail="Rate limit: too many agents, try again shortly")
+    sq = json.dumps(payload.suggested_questions) if payload.suggested_questions is not None else "[]"
     agent = Agent(
         user_id=user.id,
         name=payload.name,
         url=payload.url,
         instructions=payload.instructions,
         color=payload.color,
+        greeting_message=payload.greeting_message or "Hi! How can I help you today?",
+        suggested_questions=sq,
+        allowed_domains=payload.allowed_domains or "",
         status="active",
         train_progress=100,
     )
@@ -73,7 +79,11 @@ async def update_agent(
     db: AsyncSession = Depends(get_db),
 ):
     agent = await _get_owned(db, Agent, agent_id, user)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    dump = payload.model_dump(exclude_unset=True)
+    if "suggested_questions" in dump:
+        raw_sq = dump.pop("suggested_questions")
+        agent.suggested_questions = json.dumps(raw_sq) if isinstance(raw_sq, list) else (raw_sq or "[]")
+    for field, value in dump.items():
         setattr(agent, field, value)
     await db.commit()
     await db.refresh(agent)

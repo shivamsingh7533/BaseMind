@@ -44,6 +44,15 @@ class Agent(Base):
     train_progress: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queries_24h: Mapped[int] = mapped_column(Integer, default=0)
     avg_latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    greeting_message: Mapped[str | None] = mapped_column(
+        Text, default="Hi! How can I help you today?", nullable=True, server_default="Hi! How can I help you today?"
+    )
+    suggested_questions: Mapped[str | None] = mapped_column(
+        Text, default="[]", nullable=True, server_default="[]"
+    )
+    allowed_domains: Mapped[str | None] = mapped_column(
+        Text, default="", nullable=True, server_default=""
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 

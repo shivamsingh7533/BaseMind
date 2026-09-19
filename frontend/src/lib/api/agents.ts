@@ -77,3 +77,76 @@ export async function createAgent(
     return null;
   }
 }
+
+export async function updateAgent(
+  token: string | null | undefined,
+  agentId: string,
+  input: {
+    name?: string;
+    instructions?: string;
+    color?: string;
+    status?: AgentStatus;
+    greeting_message?: string;
+    suggested_questions?: string[];
+    allowed_domains?: string;
+  }
+): Promise<Agent | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/agents/${agentId}`, {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      toast.error("Failed to update agent");
+      return null;
+    }
+    return (await res.json()) as Agent;
+  } catch {
+    toast.error("Network error updating agent");
+    return null;
+  }
+}
+
+export async function getPublicAgent(agentId: string) {
+  try {
+    const res = await fetch(`${API_URL}/api/public/agents/${agentId}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as {
+      id: string;
+      name: string;
+      color: string;
+      greetingMessage: string;
+      suggestedQuestions: string[];
+      status: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function createPublicConversation(
+  agentId: string,
+  visitor?: string
+): Promise<{ id: string; visitor: string; agentId: string } | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/public/agents/${agentId}/conversations`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ visitor: visitor || "Visitor" }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { id: string; visitor: string; agentId: string };
+  } catch {
+    return null;
+  }
+}

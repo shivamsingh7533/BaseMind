@@ -170,6 +170,59 @@ async def main():
             mcount = (await db.execute(select(Message).where(Message.conversation_id == conv["id"]))).scalars().all()
             check("chat persisted 3 messages", len(mcount) == 3, f"{len(mcount)} rows")
 
+            # ---- Public Chat Widget API ----
+            from starlette.requests import Request  # noqa: PLC0415
+            fake_req = Request({"type": "http", "method": "GET", "path": f"/api/public/agents/{agent['id']}", "headers": []})
+
+            # Check 404 while agent is paused
+            try:
+                await routers.get_public_agent(agent["id"], fake_req, db)
+                check("public agent 404 while paused", False)
+            except HTTPException as e:
+                check("public agent 404 while paused", e.status_code == 404)
+
+            # Reactivate agent for widget access
+            await routers.update_agent(agent["id"], AgentUpdate(status="active"), user, db)
+
+            pub_agent = await routers.get_public_agent(agent["id"], fake_req, db)
+            check(
+                "public agent profile",
+                pub_agent["id"] == agent["id"]
+                and pub_agent["name"] == "Test Bot 2"
+                and "greetingMessage" in pub_agent
+                and isinstance(pub_agent["suggestedQuestions"], list)
+                and pub_agent["status"] == "active",
+                str(pub_agent),
+            )
+
+            try:
+                await routers.get_public_agent("missing-agent-id", fake_req, db)
+                check("public agent 404 for missing", False)
+            except HTTPException as e:
+                check("public agent 404 for missing", e.status_code == 404)
+
+            from app.routers.public import PublicConversationCreate  # noqa: PLC0415
+            pub_conv = await routers.create_public_conversation(
+                agent["id"],
+                PublicConversationCreate(visitor="Jane Visitor"),
+                fake_req,
+                db,
+            )
+            check("create_public_conversation", bool(pub_conv["id"]) and pub_conv["visitor"] == "Jane Visitor")
+
+            pub_chat_stream = await routers.public_chat(
+                pub_conv["id"],
+                MessageIn(role="user", text="What is the refund policy?"),
+                fake_req,
+                db,
+            )
+            pub_body_chunks = [c async for c in pub_chat_stream.body_iterator]
+            pub_body = "".join(pub_body_chunks)
+            check("public_chat streamed", '"type": "token"' in pub_body and '"type": "done"' in pub_body)
+
+            pub_detail = await routers.get_public_conversation(pub_conv["id"], db)
+            check("get_public_conversation detail", pub_detail["id"] == pub_conv["id"] and pub_detail["messageCount"] >= 1)
+
             # ---- Dashboard ----
             dash = await routers.dashboard(user, db)
             stats = {s["id"]: s for s in dash["stats"]}

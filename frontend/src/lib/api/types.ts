@@ -61,9 +61,21 @@ export interface Agent {
   instructions: string;
   color: string;
   status: AgentStatus;
+  greetingMessage?: string;
+  suggestedQuestions?: string[];
+  allowedDomains?: string;
   queries24h: number;
   avgLatencyMs: number;
   trainProgress?: number | null;
+}
+
+export interface PublicAgentConfig {
+  id: string;
+  name: string;
+  color: string;
+  greetingMessage: string;
+  suggestedQuestions: string[];
+  status: string;
 }
 
 export type DocStatus = "ready" | "processing" | "failed";

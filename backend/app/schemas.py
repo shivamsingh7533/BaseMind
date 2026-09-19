@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Literal
 
@@ -21,12 +22,20 @@ class AgentCreate(BaseModel):
     url: str = Field(default="", max_length=2048)
     instructions: str = Field(default="", max_length=8000)
     color: str = Field(default="#0d9488", pattern=r"^#[0-9a-fA-F]{6}$")
+    greeting_message: str | None = Field(default="Hi! How can I help you today?", max_length=500)
+    suggested_questions: list[str] | None = Field(default_factory=list)
+    allowed_domains: str | None = Field(default="", max_length=1000)
 
 
 class AgentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     url: str | None = Field(default=None, max_length=2048)
+    instructions: str | None = Field(default=None, max_length=8000)
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     status: Literal["active", "paused", "training"] | None = None
+    greeting_message: str | None = Field(default=None, max_length=500)
+    suggested_questions: list[str] | None = None
+    allowed_domains: str | None = Field(default=None, max_length=1000)
 
 
 class DocumentCreate(BaseModel):
@@ -69,6 +78,17 @@ class AnnouncementCreate(BaseModel):
 
 def serialize_agent(agent, usage: dict | None = None) -> dict:
     usage = usage or {}
+    raw_sq = getattr(agent, "suggested_questions", "[]") or "[]"
+    if isinstance(raw_sq, str):
+        try:
+            suggested_questions = json.loads(raw_sq)
+        except Exception:
+            suggested_questions = []
+    elif isinstance(raw_sq, list):
+        suggested_questions = raw_sq
+    else:
+        suggested_questions = []
+
     return {
         "id": agent.id,
         "name": agent.name,
@@ -76,6 +96,9 @@ def serialize_agent(agent, usage: dict | None = None) -> dict:
         "instructions": getattr(agent, "instructions", "") or "",
         "color": getattr(agent, "color", "") or "#0d9488",
         "status": agent.status,
+        "greetingMessage": getattr(agent, "greeting_message", "") or "Hi! How can I help you today?",
+        "suggestedQuestions": suggested_questions,
+        "allowedDomains": getattr(agent, "allowed_domains", "") or "",
         "queries24h": usage.get("queries24h", agent.queries_24h),
         "avgLatencyMs": usage.get("avgLatencyMs", agent.avg_latency_ms),
         "trainProgress": agent.train_progress,
