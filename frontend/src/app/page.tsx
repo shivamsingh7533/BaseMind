@@ -245,7 +245,7 @@ function Pricing() {
         <p className="text-muted-foreground">Scale without surprises.</p>
         <div className="flex items-center gap-3 text-sm font-medium">
           <span className={cn(!annual && "text-primary")}>Monthly</span>
-          <Switch checked={annual} onCheckedChange={setAnnual} />
+          <Switch checked={annual} onCheckedChange={setAnnual} aria-label="Switch to annual plan" />
           <span className={cn(annual && "text-primary")}>Annual</span>
           <Badge variant="secondary" className="text-success">
             Save ₹989/yr

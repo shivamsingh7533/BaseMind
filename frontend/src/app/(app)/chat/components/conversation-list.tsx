@@ -81,7 +81,7 @@ export function ConversationList({
                   title="Delete conversation"
                   aria-label={`Delete ${c.user}`}
                   onClick={() => onDelete(c.id, c.user)}
-                  className="absolute right-2 top-2 size-6 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+                  className="absolute right-2 top-2 size-6 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus:opacity-100 group-hover:opacity-100 md:group-hover:opacity-100 touch:opacity-100"
                 >
                   <Trash2 className="size-3.5" />
                 </Button>

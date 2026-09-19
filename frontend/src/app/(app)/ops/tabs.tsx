@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 
 export const TAB_OVERVIEW = "overview";
 export const TAB_TENANTS = "tenants";
@@ -41,6 +40,7 @@ export function TabsNavigation({
               key={tab.key}
               role="tab"
               aria-selected={activeTab === tab.key}
+              aria-controls={`panel-${tab.key}`}
               variant="outline"
               size="icon"
               className={
@@ -55,7 +55,6 @@ export function TabsNavigation({
               {tab.label}
             </Button>
           ))}
-          <Separator className="my-1" />
         </div>
       </div>
     </div>

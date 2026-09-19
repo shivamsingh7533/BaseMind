@@ -5,7 +5,9 @@ export default function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <div className="min-h-screen">
-      <ErrorBoundary>{children}</ErrorBoundary>
+      <main id="main-content">
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </main>
     </div>
   );
 }

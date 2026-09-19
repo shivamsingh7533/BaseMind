@@ -213,7 +213,7 @@ export default function SettingsPage() {
   const isPro = billing?.plan === "pro";
 
   return (
-    <div className="mx-auto max-w-5xl p-6 lg:p-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <h1 className="font-heading text-2xl font-bold tracking-tight">
         Settings
       </h1>
