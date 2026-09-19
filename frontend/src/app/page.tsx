@@ -167,8 +167,7 @@ function Pricing() {
       await loadRazorpayCheckout();
       const rzp = new window.Razorpay({
         key: checkout.key_id,
-        amount: cycle === "annual" ? 4999 * 100 : 499 * 100,
-        currency: "INR",
+        subscription_id: checkout.subscription_id,
         name: "BaseMind",
         description:
           cycle === "annual" ? "Pro Plan — ₹4,999/year" : "Pro Plan — ₹499/month",

@@ -6,6 +6,7 @@ from ..auth import get_current_user
 from ..cache import cache_get, cache_set, invalidate_user_cache
 from ..db import get_db
 from ..models import Agent, User
+from ..ops.agent_metrics import agent_metrics
 from ..schemas import AgentCreate, AgentUpdate, serialize_agent
 from .billing import FREE_AGENT_LIMIT, get_plan
 from .deps import AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW, _allow_rate_limited, _get_owned
@@ -20,7 +21,9 @@ async def list_agents(user: User = Depends(get_current_user), db: AsyncSession =
     if cached is not None:
         return cached
     result = await db.execute(select(Agent).where(Agent.user_id == user.id).order_by(Agent.created_at.desc()))
-    payload = [serialize_agent(a) for a in result.scalars()]
+    rows = result.scalars().all()
+    metrics = await agent_metrics(db, [a.id for a in rows])
+    payload = [serialize_agent(a, metrics.get(a.id)) for a in rows]
     await cache_set(cache_key, payload)
     return payload
 

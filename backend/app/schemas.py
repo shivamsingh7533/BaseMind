@@ -56,7 +56,19 @@ class ConversationUpdate(BaseModel):
     duration_seconds: int | None = Field(default=None, ge=0)
 
 
-def serialize_agent(agent) -> dict:
+class OperatorAlert(BaseModel):
+    subject: str = Field(default="Operator Alert", max_length=200)
+    html: str = Field(default="", max_length=20000)
+
+
+class AnnouncementCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=5000)
+    severity: Literal["info", "attention", "error"] = "info"
+
+
+def serialize_agent(agent, usage: dict | None = None) -> dict:
+    usage = usage or {}
     return {
         "id": agent.id,
         "name": agent.name,
@@ -64,8 +76,8 @@ def serialize_agent(agent) -> dict:
         "instructions": getattr(agent, "instructions", "") or "",
         "color": getattr(agent, "color", "") or "#0d9488",
         "status": agent.status,
-        "queries24h": agent.queries_24h,
-        "avgLatencyMs": agent.avg_latency_ms,
+        "queries24h": usage.get("queries24h", agent.queries_24h),
+        "avgLatencyMs": usage.get("avgLatencyMs", agent.avg_latency_ms),
         "trainProgress": agent.train_progress,
     }
 

@@ -9,7 +9,7 @@ export const AgentSchema = z.object({
   status: z.enum(["active", "training", "paused"]),
   queries24h: z.number(),
   avgLatencyMs: z.number(),
-  trainProgress: z.number().optional(),
+  trainProgress: z.number().nullable().optional(),
 });
 
 export const KnowledgeDocSchema = z.object({

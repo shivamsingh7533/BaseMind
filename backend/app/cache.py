@@ -1,4 +1,5 @@
 import contextlib
+import json
 
 from .config import get_settings
 
@@ -26,7 +27,12 @@ async def cache_get(key: str):
     if redis is None:
         return None
     try:
-        return await redis.get(key)
+        value = await redis.get(key)
+        if value is None:
+            return None
+        if isinstance(value, (str, bytes)):
+            return json.loads(value)
+        return value
     except Exception:
         return None
 
@@ -36,7 +42,7 @@ async def cache_set(key: str, value, ttl_seconds: int = 120) -> None:
     if redis is None:
         return
     with contextlib.suppress(Exception):
-        await redis.set(key, value, ex=ttl_seconds)
+        await redis.set(key, json.dumps(value), ex=ttl_seconds)
 
 
 async def invalidate_user_cache(user_id: str) -> None:

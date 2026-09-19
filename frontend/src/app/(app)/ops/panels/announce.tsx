@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,10 +26,12 @@ export function AnnouncePanel({
   const [severity, setSeverity] = useState<"info" | "attention" | "error">("info");
   const [loading, setLoading] = useState(false);
 
+  const { getToken } = useAuth();
   const handleCreate = async () => {
     if (!title.trim() || !body.trim()) return;
     setLoading(true);
-    const res = await createAnnouncement({ title, body, severity });
+    const token = await getToken();
+    const res = await createAnnouncement({ title, body, severity }, token);
     if (res) {
       setTitle("");
       setBody("");

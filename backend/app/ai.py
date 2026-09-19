@@ -4,10 +4,10 @@ from collections.abc import AsyncIterator
 from fastapi import HTTPException
 
 from .config import get_settings
+from .models import EMBEDDING_DIM
 
 _client = None
 
-EMBEDDING_DIM = 768
 EMBED_MODEL = "gemini-embedding-001"
 CHAT_MODEL = "gemini-3.6-flash"
 
@@ -185,8 +185,24 @@ async def stream_answer(
         if contexts
         else "(knowledge base is empty)"
     )
+    sanitized_history: list[dict] = []
+    last_role = None
+    for m in history:
+        role = "model" if m.get("role") in ("agent", "model") else "user"
+        content = (m.get("content") or "").strip()
+        if not content:
+            continue
+        if role == last_role and sanitized_history:
+            sanitized_history[-1]["parts"][0]["text"] += f"\n\n{content}"
+        else:
+            sanitized_history.append({"role": role, "parts": [{"text": content}]})
+            last_role = role
+
+    if sanitized_history and sanitized_history[-1]["role"] == "user":
+        sanitized_history.pop()
+
     contents = [
-        *[{"role": m["role"], "parts": [{"text": m["content"]}]} for m in history],
+        *sanitized_history,
         {
             "role": "user",
             "parts": [{"text": f"Knowledge base context:\n{context_block}\n\nCustomer question: {question}"}],

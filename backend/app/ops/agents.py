@@ -2,32 +2,32 @@
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..models import Agent
+from .agent_metrics import agent_metrics
 from .constants import SLOW_AGENT_MS_THRESHOLD
 
 
 async def _agents_leaderboard(db: AsyncSession) -> list[dict]:
-    agents = (
-        await db.execute(
-            select(Agent)
-            .order_by(Agent.queries_24h.desc(), Agent.name)
-            .limit(20)
-        )
-    ).scalars().all()
+    agents = (await db.execute(select(Agent).options(selectinload(Agent.owner)))).scalars().all()
+    metrics = await agent_metrics(db, [a.id for a in agents])
+    agents.sort(key=lambda a: (-metrics[a.id]["queries24h"], a.name))
+    agents = agents[:20]
 
     result: list[dict] = []
     for a in agents:
+        m = metrics[a.id]
         result.append(
             {
                 "id": a.id,
                 "name": a.name,
                 "ownerEmail": a.owner.email if a.owner else None,
-                "queries24h": a.queries_24h,
+                "queries24h": m["queries24h"],
                 "status": a.status,
                 "active": a.status == "active",
-                "avgLatencyMs": a.avg_latency_ms,
-                "isSlow": a.avg_latency_ms > SLOW_AGENT_MS_THRESHOLD,
+                "avgLatencyMs": m["avgLatencyMs"],
+                "isSlow": m["avgLatencyMs"] > SLOW_AGENT_MS_THRESHOLD,
             }
         )
 

@@ -96,7 +96,7 @@ async def billing_checkout(
         subscription = client.subscription.create(
             {
                 "plan_id": plan_id,
-                "total_count": 0,
+                "total_count": 120 if interval == "monthly" else 10,
                 "customer_notify": 1,
                 "notes": {"user_id": user.id, "interval": interval},
                 "notify_email": user.email or "",

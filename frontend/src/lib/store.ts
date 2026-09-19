@@ -59,7 +59,7 @@ export const useAppData = create<AppDataState>((set, get) => ({
         }));
         return data;
       } catch (err) {
-        handleApiError(err, "Kya baat hai — dashboard load nahi hua");
+        handleApiError(err, "Dashboard load failed");
         set((s) => ({ dashboard: null, _ts: { ...s._ts, dashboard: Date.now() } }));
         return null;
       } finally {

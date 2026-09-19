@@ -1,6 +1,7 @@
 import json
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,8 +97,14 @@ async def update_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     conv = await _get_owned(db, Conversation, conversation_id, user)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    fields = payload.model_dump(exclude_unset=True)
+    for field, value in fields.items():
         setattr(conv, field, value)
+    if payload.status in ("resolved", "halted") and "duration_seconds" not in fields and conv.started_at:
+        started = conv.started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=UTC)
+        conv.duration_seconds = int((datetime.now(UTC) - started).total_seconds())
     await db.commit()
     await db.refresh(conv, attribute_names=["messages"])
     await invalidate_user_cache(user.id)
@@ -120,7 +127,6 @@ async def delete_conversation(
 async def chat(
     conversation_id: str,
     payload: MessageIn,
-    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -231,9 +237,7 @@ async def chat(
             }
         )
         assistant_id = None
-
-        async def persist_assistant():
-            nonlocal assistant_id
+        if full_answer:
             try:
                 async with SessionFactory() as session:
                     assistant = Message(
@@ -248,8 +252,6 @@ async def chat(
                     assistant_id = assistant.id
             except Exception:
                 log.exception("failed persisting assistant message for conversation %s", conversation_id_value)
-
-        background_tasks.add_task(persist_assistant)
 
         await invalidate_user_cache(user_id_value)
 

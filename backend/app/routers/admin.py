@@ -21,6 +21,7 @@ from ..ops import (
     build_ops_status,
     is_operator,
 )
+from ..schemas import AnnouncementCreate, OperatorAlert
 from ..storage import delete_original, is_b2_enabled
 from .deps import OPS_RATE_MAX, OPS_RATE_WINDOW, _allow_rate_limited
 
@@ -43,23 +44,20 @@ async def op_grounding(user: User = Depends(get_current_user), db: AsyncSession 
 
 @router.post("/ops/alert")
 async def op_alert(
-    payload: dict,
+    payload: OperatorAlert,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if not is_operator(user):
         raise HTTPException(status_code=403, detail="Operator access only")
-    subject = payload.get("subject", "Operator Alert")
-    html = payload.get("html", "")
-    if not html:
-        html = f"<p>Operator alert: {subject}</p>"
-    await dispatch_operator(db, "operator_alert", subject, html)
+    html = payload.html or f"<p>Operator alert: {payload.subject}</p>"
+    await dispatch_operator(db, "operator_alert", payload.subject, html)
     return {"status": "alert sent"}
 
 
 @router.post("/ops/announcements")
 async def op_announcements(
-    payload: dict,
+    payload: AnnouncementCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -67,10 +65,12 @@ async def op_announcements(
         raise HTTPException(status_code=403, detail="Operator access only")
     if not _allow_rate_limited("ops_announce", user.id, OPS_RATE_MAX, OPS_RATE_WINDOW):
         raise HTTPException(status_code=429, detail="Rate limit: too many announcements, try again shortly")
-    title = payload.get("title", "")
-    body = payload.get("body", "")
-    severity = payload.get("severity", "info")
-    announcement = Announcement(title=title, body=body, severity=severity, created_by=user.id)
+    announcement = Announcement(
+        title=payload.title,
+        body=payload.body,
+        severity=payload.severity,
+        created_by=user.id,
+    )
     db.add(announcement)
     await db.commit()
     await db.refresh(announcement)
@@ -212,6 +212,7 @@ async def _delete_user(db: AsyncSession, user_id: str) -> None:
     await db.execute(delete(Conversation).where(Conversation.user_id == user_id))
     await db.execute(delete(Document).where(Document.user_id == user_id))
     await db.execute(delete(Agent).where(Agent.user_id == user_id))
+    await db.execute(delete(EventLog).where(EventLog.user_id == user_id))
     await db.execute(delete(User).where(User.id == user_id))
     await db.commit()
     await invalidate_user_cache(user_id)

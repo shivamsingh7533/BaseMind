@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import get_current_user
 from ..cache import cache_get, cache_set
 from ..db import get_db
-from ..email import dispatch_digest
 from ..models import (
     EMBEDDING_DIM,
     Agent,
@@ -19,6 +18,7 @@ from ..models import (
     Message,
     User,
 )
+from ..ops.agent_metrics import agent_metrics
 from ..schemas import _fmt_time
 
 router = APIRouter(prefix="/api")
@@ -91,10 +91,6 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
             select(func.count()).select_from(Agent).where(Agent.user_id == user.id, Agent.status == "active")
         )
     ).scalar_one()
-
-    top_agent = (
-        await db.execute(select(Agent).where(Agent.user_id == user.id).order_by(Agent.queries_24h.desc()).limit(1))
-    ).scalar_one_or_none()
 
     failed_docs = (
         await db.execute(
@@ -218,6 +214,7 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
         resolution_sub = f"{answered} answered of {convs_count} conversations"
 
     agents = (await db.execute(select(Agent).where(Agent.user_id == user.id))).scalars().all()
+    metrics = await agent_metrics(db, [ag.id for ag in agents])
     conv_by_agent = dict(
         (
             await db.execute(
@@ -260,15 +257,20 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
             "id": ag.id,
             "name": ag.name,
             "color": ag.color,
-            "queries24h": ag.queries_24h,
+            "queries24h": metrics.get(ag.id, {}).get("queries24h", 0),
             "conversations": conv_by_agent.get(ag.id, 0),
             "agentMsgs": msgs_by_agent.get(ag.id, 0),
             "resolved": resolved_by_agent.get(ag.id, 0),
-            "avgLatencyMs": ag.avg_latency_ms,
+            "avgLatencyMs": metrics.get(ag.id, {}).get("avgLatencyMs", 0),
         }
         for ag in agents
     ]
     per_agent.sort(key=lambda a: (-a["agentMsgs"], -a["queries24h"]))
+    top_agent_name = (
+        per_agent[0]["name"]
+        if per_agent and (per_agent[0]["agentMsgs"] > 0 or per_agent[0]["queries24h"] > 0)
+        else (agents[0].name if agents else "")
+    )
 
     week_start = day_start - timedelta(days=6)
     conv_day = func.date_trunc(text("'day'"), Conversation.started_at)
@@ -316,7 +318,7 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
             "label": "Total Agents",
             "value": str(agents_count),
             "delta": f"+{agents_today - agents_yesterday}" if agents_today else None,
-            "sub": (f"{active_agents} active · best: {top_agent.name}" if top_agent else f"{active_agents} active"),
+            "sub": (f"{active_agents} active · best: {top_agent_name}" if top_agent_name else f"{active_agents} active"),
             "progress": min(agents_count * 10, 100),
         },
         {
@@ -375,61 +377,6 @@ async def dashboard(user: User = Depends(get_current_user), db: AsyncSession = D
         "vector": vector,
         "announcements": announcements,
     }
-    since_24h = datetime.now(UTC) - timedelta(days=1)
-    q24 = dict(
-        (
-            await db.execute(
-                select(Conversation.agent_id, func.count())
-                .where(
-                    Conversation.user_id == user.id,
-                    Conversation.agent_id.isnot(None),
-                    Conversation.started_at >= since_24h,
-                )
-                .group_by(Conversation.agent_id)
-            )
-        ).all()
-    )
-    r24 = dict(
-        (
-            await db.execute(
-                select(Conversation.agent_id, func.count())
-                .where(
-                    Conversation.user_id == user.id,
-                    Conversation.agent_id.isnot(None),
-                    Conversation.status == "resolved",
-                    Conversation.started_at >= since_24h,
-                )
-                .group_by(Conversation.agent_id)
-            )
-        ).all()
-    )
-    h24 = dict(
-        (
-            await db.execute(
-                select(Conversation.agent_id, func.count())
-                .where(
-                    Conversation.user_id == user.id,
-                    Conversation.agent_id.isnot(None),
-                    Conversation.status == "halted",
-                    Conversation.started_at >= since_24h,
-                )
-                .group_by(Conversation.agent_id)
-            )
-        ).all()
-    )
-    await dispatch_digest(
-        user,
-        {
-            "agents": [
-                {
-                    "name": ag.name,
-                    "queries": q24.get(ag.id, 0),
-                    "resolved": r24.get(ag.id, 0),
-                    "halted": h24.get(ag.id, 0),
-                }
-                for ag in agents
-            ]
-        },
-    )
     await cache_set(cache_key, payload)
     return payload
+

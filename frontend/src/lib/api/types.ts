@@ -63,7 +63,7 @@ export interface Agent {
   status: AgentStatus;
   queries24h: number;
   avgLatencyMs: number;
-  trainProgress?: number;
+  trainProgress?: number | null;
 }
 
 export type DocStatus = "ready" | "processing" | "failed";

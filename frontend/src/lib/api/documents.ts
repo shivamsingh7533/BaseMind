@@ -47,7 +47,7 @@ export async function uploadDocument(
   file: File
 ): Promise<KnowledgeDoc | null> {
   if (!token) {
-    toast.error("Login session nahi mili — page refresh karke dobara login karo");
+    toast.error("Session expired — please refresh and sign in again");
     return null;
   }
   const controller = new AbortController();
@@ -77,8 +77,8 @@ export async function uploadDocument(
     const aborted = err instanceof DOMException && err.name === "AbortError";
     toast.error(
       aborted
-        ? "Upload timed out — backend slow tha, dobara try karo"
-        : `Network error (${err instanceof Error ? err.message : "unknown"}) — Render jaag raha hoga, 30 sec baad dobara try karo.`
+        ? "Upload timed out — please try again"
+        : `Network error (${err instanceof Error ? err.message : "unknown"}) — backend server may be waking up, please retry in 30 seconds.`
     );
     return null;
   } finally {
@@ -91,7 +91,7 @@ export async function syncUrl(
   url: string
 ): Promise<KnowledgeDoc | null> {
   if (!token) {
-    toast.error("Login session nahi mili — page refresh karke dobara login karo");
+    toast.error("Session expired — please refresh and sign in again");
     return null;
   }
   const controller = new AbortController();
@@ -123,8 +123,8 @@ export async function syncUrl(
     const aborted = err instanceof DOMException && err.name === "AbortError";
     toast.error(
       aborted
-        ? "Sync timed out — backend slow tha, dobara try karo"
-        : `Network error (${err instanceof Error ? err.message : "unknown"}) — Render jaag raha hoga, 30 sec baad dobara try karo.`
+        ? "Sync timed out — please try again"
+        : `Network error (${err instanceof Error ? err.message : "unknown"}) — backend server may be waking up, please retry in 30 seconds.`
     );
     return null;
   } finally {

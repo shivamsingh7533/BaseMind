@@ -1,4 +1,6 @@
 import contextlib
+import ipaddress
+import socket
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -134,6 +136,59 @@ async def _persist_document(
     return doc
 
 
+def _is_blocked_url(url: httpx.URL) -> bool:
+    host = (url.host or "").split("%")[0]
+    if host.lower() in {"localhost", "127.0.0.1"} or host == "0.0.0.0":  # noqa: S104
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if not ip.is_global:
+            return True
+    return False
+
+
+async def _stream_url_safe(payload_url: str) -> bytes:
+    current = httpx.URL(payload_url)
+    async with httpx.AsyncClient(follow_redirects=False, timeout=DEFAULT_TIMEOUT) as client:
+        redirects = 0
+        while True:
+            if current.scheme not in ("http", "https") or not current.host:
+                raise HTTPException(status_code=422, detail="Invalid URL — must be a full http(s) link")
+            if _is_blocked_url(current):
+                raise HTTPException(
+                    status_code=422,
+                    detail="URL resolves to a private/internal address — blocked for security",
+                )
+            async with client.stream("GET", str(current)) as res:
+                if res.status_code in (301, 302, 303, 307, 308):
+                    redirects += 1
+                    if redirects > 5:
+                        raise HTTPException(status_code=422, detail="Too many redirects")
+                    location = res.headers.get("location")
+                    if not location:
+                        raise HTTPException(status_code=422, detail="Redirect response missing a Location header")
+                    try:
+                        current = current.join(location)
+                    except Exception:
+                        raise HTTPException(status_code=422, detail="Invalid redirect URL") from None
+                    continue
+                if res.status_code != 200:
+                    raise HTTPException(status_code=422, detail=f"Page returned HTTP {res.status_code}")
+                raw = b""
+                async for block in res.aiter_bytes():
+                    raw += block
+                    if len(raw) > MAX_SYNC_BYTES:
+                        raise HTTPException(status_code=413, detail="Page too large (max 2MB)")
+                return raw
+
+
 @router.post("/documents/upload", status_code=201)
 async def upload_document(
     file: UploadFile = File(...),
@@ -164,15 +219,21 @@ async def upload_document(
             exc_info=True,
         )
 
-    doc = await _persist_document(
-        db,
-        user=user,
-        name=file.filename or "upload.txt",
-        doc_type=doc_type,
-        text=text,
-        agent_id=agent_id,
-        source=source,
-    )
+    try:
+        doc = await _persist_document(
+            db,
+            user=user,
+            name=file.filename or "upload.txt",
+            doc_type=doc_type,
+            text=text,
+            agent_id=agent_id,
+            source=source,
+        )
+    except Exception:
+        if source and is_b2_enabled():
+            with contextlib.suppress(Exception):
+                await delete_original(source)
+        raise
     await invalidate_user_cache(user.id)
     return serialize_document(doc)
 
@@ -194,16 +255,7 @@ async def sync_url(
 
     raw = b""
     try:
-        async with (
-            httpx.AsyncClient(follow_redirects=True, timeout=DEFAULT_TIMEOUT) as client,
-            client.stream("GET", str(parsed)) as res,
-        ):
-            if res.status_code != 200:
-                raise HTTPException(status_code=422, detail=f"Page returned HTTP {res.status_code}")
-            async for block in res.aiter_bytes():
-                raw += block
-                if len(raw) > MAX_SYNC_BYTES:
-                    raise HTTPException(status_code=413, detail="Page too large (max 2MB)")
+        raw = await _stream_url_safe(str(parsed))
     except HTTPException:
         raise
     except httpx.TimeoutException:
