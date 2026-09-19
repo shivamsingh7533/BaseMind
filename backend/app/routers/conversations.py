@@ -1,7 +1,7 @@
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from ..db import SessionFactory, get_db
 from ..email import dispatch_rate_limit
 from ..models import Agent, Conversation, Document, DocumentChunk, EventLog, Message, User
 from ..schemas import ConversationCreate, ConversationUpdate, MessageIn, serialize_conversation
-from .deps import CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS, _allow_chat, _get_owned, log
+from .deps import CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS, _allow_chat_async, _get_owned, log
 
 router = APIRouter(prefix="/api")
 
@@ -127,6 +127,7 @@ async def delete_conversation(
 async def chat(
     conversation_id: str,
     payload: MessageIn,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -134,7 +135,7 @@ async def chat(
         raise HTTPException(status_code=422, detail="role must be 'user'")
     if getattr(user, "platform_status", "active") != "active":
         raise HTTPException(status_code=403, detail="Account not active")
-    if not _allow_chat(user.id):
+    if not await _allow_chat_async(user.id):
         agent_name_hint = (
             await db.execute(select(Conversation.agent_id).where(Conversation.id == conversation_id))
         ).scalar_one_or_none()

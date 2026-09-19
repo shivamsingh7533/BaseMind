@@ -284,7 +284,7 @@ export function Chat() {
         return;
       }
       setPreview(p);
-    } catch (e) {
+    } catch {
       toast.error("Preview unavailable");
     }
     finally {
@@ -305,7 +305,7 @@ export function Chat() {
         return;
       }
       window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
+    } catch {
       toast.error("Could not get download link");
     }
   };

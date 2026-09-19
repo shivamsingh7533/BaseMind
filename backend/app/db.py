@@ -65,6 +65,11 @@ async def init_db() -> None:
             )
         with suppress(Exception):
             await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sources TEXT")
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_document_chunks_embedding_hnsw "
+                "ON document_chunks USING hnsw (embedding vector_cosine_ops)"
+            )
 
     await run_migrations()
 

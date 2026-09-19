@@ -3,7 +3,7 @@ import ipaddress
 import socket
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ from .deps import (
     SYNC_RATE_WINDOW,
     UPLOAD_RATE_MAX,
     UPLOAD_RATE_WINDOW,
-    _allow_rate_limited,
+    _allow_rate_limited_async,
     _get_owned,
     log,
 )
@@ -136,6 +136,61 @@ async def _persist_document(
     return doc
 
 
+async def _bg_index_document(
+    doc_id: str,
+    user_id: str,
+    agent_id: str | None,
+    chunks: list[str],
+    source: str | None,
+) -> None:
+    from ..db import SessionFactory
+
+    if SessionFactory is None:
+        return
+    try:
+        embeddings = await embed_texts(chunks)
+        async with SessionFactory() as session:
+            for index, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=False)):
+                session.add(
+                    DocumentChunk(
+                        document_id=doc_id,
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        content=chunk,
+                        chunk_index=index,
+                        embedding=embedding,
+                    )
+                )
+            result = await session.execute(select(Document).where(Document.id == doc_id))
+            doc_row = result.scalar_one_or_none()
+            if doc_row:
+                doc_row.status = "ready"
+                doc_row.detail = f"{len(chunks)} chunks indexed"
+            await session.commit()
+    except Exception as exc:
+        log.exception("Background indexing failed for doc %s", doc_id)
+        if source and is_b2_enabled():
+            with contextlib.suppress(Exception):
+                await delete_original(source)
+        async with SessionFactory() as session:
+            result = await session.execute(select(Document).where(Document.id == doc_id))
+            doc_row = result.scalar_one_or_none()
+            if doc_row:
+                doc_row.status = "failed"
+                doc_row.detail = f"Indexing failed: {str(exc)[:100]}"
+            session.add(
+                EventLog(
+                    user_id=user_id,
+                    event_type="ingest_error",
+                    severity="error",
+                    detail=f"Background indexing failed for doc {doc_id}: {exc}",
+                )
+            )
+            await session.commit()
+    finally:
+        await invalidate_user_cache(user_id)
+
+
 def _is_blocked_url(url: httpx.URL) -> bool:
     host = (url.host or "").split("%")[0]
     if host.lower() in {"localhost", "127.0.0.1"} or host == "0.0.0.0":  # noqa: S104
@@ -195,8 +250,9 @@ async def upload_document(
     agent_id: str | None = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    if not _allow_rate_limited("upload", user.id, UPLOAD_RATE_MAX, UPLOAD_RATE_WINDOW):
+    if not await _allow_rate_limited_async("upload", user.id, UPLOAD_RATE_MAX, UPLOAD_RATE_WINDOW):
         raise HTTPException(status_code=429, detail="Rate limit: too many uploads, try again shortly")
     await _enforce_doc_limit(db, user)
     raw = await file.read()
@@ -206,6 +262,9 @@ async def upload_document(
         await _get_owned(db, Agent, agent_id, user)
 
     text = extract_text(file.filename or "upload.txt", raw)
+    chunks = chunk_text(text)
+    if not chunks:
+        raise HTTPException(status_code=422, detail="No readable text found")
     doc_type = "PDF" if (file.filename or "").lower().endswith(".pdf") else "Text"
 
     source = None
@@ -218,6 +277,24 @@ async def upload_document(
             file.filename,
             exc_info=True,
         )
+
+    # For documents with more than 2 chunks, process embeddings in the background if background_tasks is available
+    if background_tasks is not None and len(chunks) > 2:
+        doc = Document(
+            user_id=user.id,
+            name=(file.filename or "upload.txt")[:220],
+            type=doc_type,
+            detail=f"Processing {len(chunks)} chunks in background...",
+            status="processing",
+            agent_id=agent_id,
+            storage_key=source,
+        )
+        db.add(doc)
+        await db.commit()
+        await db.refresh(doc)
+        await invalidate_user_cache(user.id)
+        background_tasks.add_task(_bg_index_document, doc.id, user.id, agent_id, chunks, source)
+        return serialize_document(doc)
 
     try:
         doc = await _persist_document(
@@ -243,8 +320,9 @@ async def sync_url(
     payload: SyncUrlRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    if not _allow_rate_limited("sync", user.id, SYNC_RATE_MAX, SYNC_RATE_WINDOW):
+    if not await _allow_rate_limited_async("sync", user.id, SYNC_RATE_MAX, SYNC_RATE_WINDOW):
         raise HTTPException(status_code=429, detail="Rate limit: too many syncs, try again shortly")
     await _enforce_doc_limit(db, user)
     parsed = httpx.URL(payload.url)
@@ -268,8 +346,27 @@ async def sync_url(
     html = raw.decode("utf-8", errors="ignore")
     title = page_title(html) or parsed.host or payload.url
     text = extract_html(html)
-    if not text:
+    chunks = chunk_text(text)
+    if not chunks:
         raise HTTPException(status_code=422, detail="No readable text found at that URL")
+
+    # For web content with more than 2 chunks, process in the background if background_tasks is available
+    if background_tasks is not None and len(chunks) > 2:
+        doc = Document(
+            user_id=user.id,
+            name=title[:220],
+            type="Web Link",
+            detail=f"Processing {len(chunks)} chunks in background...",
+            status="processing",
+            agent_id=payload.agent_id,
+            storage_key=str(parsed),
+        )
+        db.add(doc)
+        await db.commit()
+        await db.refresh(doc)
+        await invalidate_user_cache(user.id)
+        background_tasks.add_task(_bg_index_document, doc.id, user.id, payload.agent_id, chunks, str(parsed))
+        return serialize_document(doc)
 
     doc = await _persist_document(
         db,

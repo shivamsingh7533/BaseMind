@@ -180,6 +180,7 @@ export default function AdminDashboardPage() {
   const [denied, setDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [mountedAt] = useState(() => Date.now());
 
   // Core data states
   const [ops, setOps] = useState<OpsStatus | null>(null);
@@ -281,8 +282,17 @@ export default function AdminDashboardPage() {
   }, [getToken, user]);
 
   useEffect(() => {
+    let ignore = false;
     if (isSignedIn && user) {
-      void loadAll();
+      const timer = setTimeout(() => {
+        if (!ignore) {
+          void loadAll();
+        }
+      }, 0);
+      return () => {
+        ignore = true;
+        clearTimeout(timer);
+      };
     }
   }, [isSignedIn, user, loadAll]);
 
@@ -300,7 +310,7 @@ export default function AdminDashboardPage() {
     const suspendedUsers = userList.filter((u) => u.platform_status === "suspended").length;
     const estimatedMrr = proUsers * 499;
 
-    const now = Date.now();
+    const now = mountedAt;
     const expiringCount = userList.filter((u) => {
       if (!u.current_period_end) return false;
       const t = new Date(u.current_period_end).getTime();
@@ -326,7 +336,7 @@ export default function AdminDashboardPage() {
       totalChunks,
       nominal: ops?.nominal ?? true,
     };
-  }, [tenants, ops, agents, documents]);
+  }, [tenants, ops, agents, documents, mountedAt]);
 
   // Filtered tenants
   const filteredTenants = useMemo(() => {
@@ -1186,6 +1196,26 @@ export default function AdminDashboardPage() {
                     Broadcast Notice
                   </Button>
                 </div>
+
+                {announcements && announcements.length > 0 && (
+                  <div className="pt-3 border-t space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active Broadcasts ({announcements.length})</p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {announcements.map((ann) => (
+                        <div key={ann.id} className="rounded-md border p-2.5 text-xs bg-muted/20 flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 font-medium">
+                              <SeverityBadge severity={ann.severity} />
+                              <span>{ann.title}</span>
+                            </div>
+                            <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{ann.body}</p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground shrink-0">{relTime(ann.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

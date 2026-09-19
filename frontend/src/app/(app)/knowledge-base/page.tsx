@@ -81,6 +81,19 @@ export default function KnowledgeBasePage() {
       .catch(() => {});
   }, [getToken, fetchDocuments]);
 
+  // Auto-poll if any document is currently in "processing" state
+  useEffect(() => {
+    const hasProcessing = docs?.some((d) => d.status === "processing");
+    if (!hasProcessing) return;
+    const interval = setInterval(async () => {
+      const token = await getToken().catch(() => null);
+      if (token) {
+        await fetchDocuments(token, true);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [docs, getToken, fetchDocuments]);
+
   const handleFile = async (file: File | undefined | null) => {
     if (!file || uploading) return;
     if (file.size > MAX_FILE_SIZE) {

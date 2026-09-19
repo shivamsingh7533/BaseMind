@@ -41,8 +41,28 @@ def _allow_rate_limited(bucket: str, user_id: str, max_hits: int, window: float)
     return True
 
 
+async def _allow_rate_limited_async(bucket: str, user_id: str, max_hits: int, window: float) -> bool:
+    from ..cache import _get_redis
+
+    redis = _get_redis()
+    if redis is not None:
+        try:
+            key = f"rl:{bucket}:{user_id}"
+            count = await redis.incr(key)
+            if count == 1:
+                await redis.expire(key, int(window))
+            return count <= max_hits
+        except Exception:
+            pass
+    return _allow_rate_limited(bucket, user_id, max_hits, window)
+
+
 def _allow_chat(user_id: str) -> bool:
     return _allow_rate_limited("chat", user_id, CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS)
+
+
+async def _allow_chat_async(user_id: str) -> bool:
+    return await _allow_rate_limited_async("chat", user_id, CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS)
 
 
 async def _get_owned(db: AsyncSession, model, obj_id: str, user: User):

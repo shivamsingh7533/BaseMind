@@ -5,7 +5,6 @@ import {
   BrainCircuit,
   FileCheck2,
   Layers,
-  Search,
   ShieldCheck,
   Zap,
   ArrowRight,

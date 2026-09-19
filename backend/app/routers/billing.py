@@ -113,23 +113,29 @@ async def billing_checkout(
     amount_paise = 499900 if interval == "annual" else 49900
     plan_label = "BaseMind Pro Annual" if interval == "annual" else "BaseMind Pro Monthly"
 
-    # Always create an official Razorpay Order so the animated checkout popup opens cleanly
+    # Always create an official Razorpay Order so the animated checkout popup opens cleanly,
+    # or fallback to subscription creation if client only provides subscription interface
     receipt_id = f"bm_{user.id[:8]}_{int(_time.time())}"
     try:
-        order = client.order.create({
-            "amount": amount_paise,
-            "currency": "INR",
-            "receipt": receipt_id,
-            "notes": {
-                "user_id": user.id,
-                "interval": interval,
-                "user_email": user.email or "",
-            },
-        })
+        if hasattr(client, "order"):
+            order = client.order.create({
+                "amount": amount_paise,
+                "currency": "INR",
+                "receipt": receipt_id,
+                "notes": {
+                    "user_id": user.id,
+                    "interval": interval,
+                    "user_email": user.email or "",
+                },
+            })
+            order_id = order.get("id")
+        else:
+            plan_id = settings.razorpay_annual_plan_id if interval == "annual" else settings.razorpay_plan_id
+            sub_res = client.subscription.create({"plan_id": plan_id, "customer_notify": 1, "total_count": 12})
+            order_id = sub_res.get("id")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to create Razorpay order: {exc}") from exc
 
-    order_id = order.get("id")
     sub = await _get_or_create_subscription(db, user.id)
     sub.razorpay_subscription_id = order_id
     sub.razorpay_plan_id = f"order_{interval}"
@@ -145,6 +151,7 @@ async def billing_checkout(
         "demo": False,
         "url": "",
         "order_id": order_id,
+        "subscription_id": order_id,
         "amount": amount_paise,
         "currency": "INR",
         "key_id": settings.razorpay_key_id,

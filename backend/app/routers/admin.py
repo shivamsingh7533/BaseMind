@@ -23,7 +23,7 @@ from ..ops import (
 )
 from ..schemas import AnnouncementCreate, OperatorAlert
 from ..storage import delete_original, is_b2_enabled
-from .deps import OPS_RATE_MAX, OPS_RATE_WINDOW, _allow_rate_limited
+from .deps import OPS_RATE_MAX, OPS_RATE_WINDOW, _allow_rate_limited_async
 
 router = APIRouter(prefix="/api")
 
@@ -53,6 +53,8 @@ async def op_alert(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if isinstance(payload, dict):
+        payload = OperatorAlert(**payload)
     if not is_operator(user):
         raise HTTPException(status_code=403, detail="Operator access only")
     html = payload.html or f"<p>Operator alert: {payload.subject}</p>"
@@ -66,9 +68,11 @@ async def op_announcements(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if isinstance(payload, dict):
+        payload = AnnouncementCreate(**payload)
     if not is_operator(user):
         raise HTTPException(status_code=403, detail="Operator access only")
-    if not _allow_rate_limited("ops_announce", user.id, OPS_RATE_MAX, OPS_RATE_WINDOW):
+    if not await _allow_rate_limited_async("ops_announce", user.id, OPS_RATE_MAX, OPS_RATE_WINDOW):
         raise HTTPException(status_code=429, detail="Rate limit: too many announcements, try again shortly")
     announcement = Announcement(
         title=payload.title,

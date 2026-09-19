@@ -9,7 +9,12 @@ from ..models import Agent, User
 from ..ops.agent_metrics import agent_metrics
 from ..schemas import AgentCreate, AgentUpdate, serialize_agent
 from .billing import FREE_AGENT_LIMIT, get_plan
-from .deps import AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW, _allow_rate_limited, _get_owned
+from .deps import (
+    AGENT_CREATE_RATE_MAX,
+    AGENT_CREATE_WINDOW,
+    _allow_rate_limited_async,
+    _get_owned,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -36,7 +41,7 @@ async def create_agent(
 ):
     from fastapi import HTTPException as _HTTPException
 
-    if not _allow_rate_limited("agent_create", user.id, AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW):
+    if not await _allow_rate_limited_async("agent_create", user.id, AGENT_CREATE_RATE_MAX, AGENT_CREATE_WINDOW):
         raise _HTTPException(status_code=429, detail="Rate limit: too many agents, try again shortly")
     agent = Agent(
         user_id=user.id,

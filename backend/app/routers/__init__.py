@@ -19,6 +19,8 @@ router.include_router(_admin)
 __all__ = [
     "CHAT_RATE_MAX",
     "_allow_chat",
+    "_allow_chat_async",
+    "_allow_rate_limited_async",
     "_chat_hits",
     "_persist_document",
     "add_message",
@@ -106,7 +108,13 @@ from .conversations import (  # noqa: E402
     update_conversation,
 )
 from .dashboard import dashboard  # noqa: E401, E402
-from .deps import CHAT_RATE_MAX, _allow_chat, _chat_hits  # noqa: E401, E402
+from .deps import (  # noqa: E401, E402
+    CHAT_RATE_MAX,
+    _allow_chat,
+    _allow_chat_async,
+    _allow_rate_limited_async,
+    _chat_hits,
+)
 from .documents import (  # noqa: E402
     _persist_document,
     create_document,
