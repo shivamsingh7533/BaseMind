@@ -62,42 +62,54 @@ export const PLANS = [
   },
 ] as const;
 
+const BILLING_CACHE_KEY = "basemind_billing_v1";
+
 export function PricingSection({ className }: { className?: string }) {
   const router = useRouter();
   const { isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const [annual, setAnnual] = useState(false);
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(BILLING_CACHE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  });
   const [upgrading, setUpgrading] = useState(false);
-  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    if (!isSignedIn) return;
     let cancelled = false;
     getToken()
       .then((t) => {
-        if (!t) {
-          if (!cancelled) setChecking(false);
-          return;
-        }
+        if (!t || cancelled) return;
         return getBilling(t).then((b) => {
-          if (!cancelled) {
+          if (!cancelled && b) {
             setBilling(b);
-            setChecking(false);
+            try {
+              localStorage.setItem(BILLING_CACHE_KEY, JSON.stringify(b));
+            } catch {}
           }
         });
       })
-      .catch(() => {
-        if (!cancelled) setChecking(false);
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [getToken]);
+  }, [isSignedIn, getToken]);
 
   const refreshBilling = () => {
     void getToken().then((token) => {
       void getBilling(token).then((b) => {
-        if (b) setBilling(b);
+        if (b) {
+          setBilling(b);
+          try {
+            localStorage.setItem(BILLING_CACHE_KEY, JSON.stringify(b));
+          } catch {}
+        }
       });
     });
   };
@@ -211,13 +223,7 @@ export function PricingSection({ className }: { className?: string }) {
         </Button>
       );
     }
-    if (checking) {
-      return (
-        <Button className="mt-5 w-full" disabled>
-          <Loader2 className="mr-2 size-4 animate-spin" /> Checking…
-        </Button>
-      );
-    }
+
     if (isSignedIn && billing?.plan === "pro") {
       return (
         <Button className="mt-5 w-full" variant="outline" asChild>
