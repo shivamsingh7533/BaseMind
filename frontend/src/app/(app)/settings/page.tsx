@@ -37,6 +37,7 @@ import {
   deleteWorkspace,
   getBilling,
   getSettingsStatus,
+  verifyPayment,
   type BillingStatus,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
@@ -44,7 +45,10 @@ import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on?: (event: string, callback: (response: unknown) => void) => void;
+    };
   }
 }
 function loadRazorpayCheckout(): Promise<void> {
@@ -141,37 +145,80 @@ export default function SettingsPage() {
         return;
       }
       if (checkout.demo) {
-        toast.success("Demo Mode: Upgraded to Pro without payment!");
+        toast.success(checkout.notice || "Demo Mode: Upgraded to Pro without payment!");
         setUpgrading(false);
         refreshBilling();
         return;
       }
       await loadRazorpayCheckout();
-      const rzp = new window.Razorpay({
+
+      const options: Record<string, unknown> = {
         key: checkout.key_id,
-        subscription_id: checkout.subscription_id,
         name: "BaseMind",
         description:
-          cycle === "annual" ? "Pro Plan — ₹4,999/year" : "Pro Plan — ₹499/month",
+          checkout.description ||
+          (cycle === "annual" ? "Pro Plan — ₹4,999/year" : "Pro Plan — ₹499/month"),
         prefill: {
           name: user?.fullName || user?.primaryEmailAddress?.emailAddress || "",
           email: user?.primaryEmailAddress?.emailAddress || "",
         },
-        handler: function () {
-          toast.success("Payment successful — upgrading your plan");
-          refreshBilling();
+        theme: {
+          color: "#0f766e",
         },
         modal: {
+          animation: true,
+          backdropclose: false,
           ondismiss: function () {
             setUpgrading(false);
-            refreshBilling();
           },
         },
-      });
+        handler: async function (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id?: string;
+          razorpay_signature?: string;
+        }) {
+          try {
+            if (response.razorpay_payment_id) {
+              const res = await verifyPayment(token, {
+                razorpay_order_id: response.razorpay_order_id || checkout.order_id || "",
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                interval: cycle,
+              });
+              if (!res.ok) {
+                toast.error(`Payment verification failed: ${res.detail}`);
+                return;
+              }
+            }
+            toast.success("Payment successful — upgraded to Pro!");
+          } catch {
+            toast.error("Could not verify payment with server.");
+          } finally {
+            setUpgrading(false);
+            refreshBilling();
+          }
+        },
+      };
+
+      if (checkout.order_id) {
+        options.order_id = checkout.order_id;
+        options.amount = checkout.amount;
+        options.currency = checkout.currency || "INR";
+      } else if (checkout.subscription_id && checkout.subscription_id !== "demo_sub") {
+        options.subscription_id = checkout.subscription_id;
+      }
+
+      const rzp = new window.Razorpay(options);
+      if (typeof rzp.on === "function") {
+        rzp.on("payment.failed", function (failRes: unknown) {
+          setUpgrading(false);
+          const detail = (failRes as { error?: { description?: string } })?.error?.description;
+          toast.error(detail ? `Payment failed: ${detail}` : "Payment was not completed.");
+        });
+      }
       rzp.open();
     } catch {
       toast.error("Could not start checkout. Please try again.");
-    } finally {
       setUpgrading(false);
     }
   };
@@ -252,19 +299,32 @@ export default function SettingsPage() {
                   "No email on this account"}
               </p>
               {isPro && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-1 h-auto px-0 text-muted-foreground hover:text-destructive"
-                  onClick={onCancel}
-                  disabled={cancelling}
-                >
-                  {cancelling ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    "Cancel subscription"
-                  )}
-                </Button>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                    onClick={onCancel}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : null}
+                    Cancel Subscription (Reset to Free)
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 text-xs font-medium"
+                    onClick={onUpgrade}
+                    disabled={upgrading}
+                  >
+                    {upgrading ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : null}
+                    Open Razorpay Modal
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>

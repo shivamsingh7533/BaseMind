@@ -61,3 +61,35 @@ export async function cancelSubscription(
     return { ok: false, detail: "Network error" };
   }
 }
+
+export async function verifyPayment(
+  token: string | null | undefined,
+  payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature?: string;
+    interval?: "monthly" | "annual";
+  }
+): Promise<{ ok: boolean; detail?: string }> {
+  try {
+    const res = await fetch(`${API_URL}/api/billing/verify`, {
+      method: "POST",
+      headers: {
+        ...authHeader(token),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {}
+      return { ok: false, detail };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, detail: "Network error verifying payment" };
+  }
+}

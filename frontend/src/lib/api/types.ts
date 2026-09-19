@@ -137,10 +137,16 @@ export interface BillingStatus {
 
 export interface CheckoutResponse {
   url: string;
-  subscription_id: string;
+  order_id?: string;
+  subscription_id?: string;
+  amount?: number;
+  currency?: string;
+  name?: string;
+  description?: string;
   key_id: string;
   interval: "monthly" | "annual";
   demo?: boolean;
+  notice?: string;
 }
 
 export type OpsSeverity = "info" | "attention" | "error";

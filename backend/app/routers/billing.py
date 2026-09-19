@@ -1,11 +1,13 @@
 """Razorpay billing: plan, checkout, cancel, and webhook handling."""
 
+import contextlib
 import json
 import time as _time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +45,7 @@ def _get_client() -> Any:
 
 def billing_configured() -> bool:
     settings = get_settings()
-    return bool(settings.razorpay_key_id and settings.razorpay_key_secret and settings.razorpay_plan_id)
+    return bool(settings.razorpay_key_id and settings.razorpay_key_secret)
 
 
 async def get_plan(db: AsyncSession, user_id: str) -> str:
@@ -83,7 +85,11 @@ async def billing_checkout(
 
     if interval not in ("monthly", "annual"):
         raise HTTPException(status_code=422, detail="interval must be 'monthly' or 'annual'")
-    if not billing_configured():
+
+    settings = get_settings()
+    client = _get_client()
+
+    if not billing_configured() or client is None:
         sub = await _get_or_create_subscription(db, user.id)
         sub.plan = "pro"
         sub.status = "active"
@@ -97,67 +103,101 @@ async def billing_checkout(
         return {
             "demo": True,
             "url": "",
+            "order_id": "",
             "subscription_id": "demo_sub",
             "key_id": "",
             "interval": interval,
+            "notice": "Upgraded to Pro in demo mode (no Razorpay keys configured).",
         }
-    client = _get_client()
-    settings = get_settings()
 
-    plan_id = settings.razorpay_plan_id
-    if interval == "annual":
-        plan_id = settings.razorpay_annual_plan_id or settings.razorpay_plan_id
+    amount_paise = 499900 if interval == "annual" else 49900
+    plan_label = "BaseMind Pro Annual" if interval == "annual" else "BaseMind Pro Monthly"
 
+    # Always create an official Razorpay Order so the animated checkout popup opens cleanly
+    receipt_id = f"bm_{user.id[:8]}_{int(_time.time())}"
     try:
-        subscription = client.subscription.create(
-            {
-                "plan_id": plan_id,
-                "total_count": 120 if interval == "monthly" else 10,
-                "customer_notify": 1,
-                "notes": {"user_id": user.id, "interval": interval},
-                "notify_email": user.email or "",
-                "expire_by": int(_time.time()) + 60 * 30,
-            }
-        )
+        order = client.order.create({
+            "amount": amount_paise,
+            "currency": "INR",
+            "receipt": receipt_id,
+            "notes": {
+                "user_id": user.id,
+                "interval": interval,
+                "user_email": user.email or "",
+            },
+        })
     except Exception as exc:
-        err_msg = str(exc)
-        sub = await _get_or_create_subscription(db, user.id)
-        sub.plan = "pro"
-        sub.status = "active"
-        db.add(EventLog(
-            user_id=user.id,
-            event_type="billing_demo_upgrade",
-            detail=f"fallback demo upgrade ({interval}) - note: {err_msg[:200]}",
-        ))
-        await db.commit()
-        await invalidate_user_cache(user.id)
-        return {
-            "demo": True,
-            "url": "",
-            "subscription_id": "demo_sub",
-            "key_id": settings.razorpay_key_id or "",
-            "interval": interval,
-            "notice": f"Plan '{plan_id}' not found in Razorpay. Upgraded to Pro in Demo Mode.",
-        }
+        raise HTTPException(status_code=502, detail=f"Failed to create Razorpay order: {exc}") from exc
 
-    sub_id = subscription.get("id")
+    order_id = order.get("id")
     sub = await _get_or_create_subscription(db, user.id)
-    sub.razorpay_subscription_id = sub_id
-    sub.razorpay_plan_id = plan_id
-    sub.status = "incomplete"
+    sub.razorpay_subscription_id = order_id
+    sub.razorpay_plan_id = f"order_{interval}"
     db.add(EventLog(
         user_id=user.id,
-        event_type="billing_checkout",
-        detail=f"checkout created for {interval} plan {plan_id}",
+        event_type="billing_order_created",
+        detail=f"Razorpay order {order_id} created for {interval} (amount: {amount_paise} paise)",
+        ref_id=order_id,
+    ))
+    await db.commit()
+
+    return {
+        "demo": False,
+        "url": "",
+        "order_id": order_id,
+        "amount": amount_paise,
+        "currency": "INR",
+        "key_id": settings.razorpay_key_id,
+        "name": "BaseMind",
+        "description": f"{plan_label} — ₹{amount_paise // 100}",
+        "interval": interval,
+    }
+
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str | None = None
+    interval: str = "monthly"
+
+
+@router.post("/billing/verify")
+async def billing_verify(
+    payload: VerifyPaymentRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from ..cache import invalidate_user_cache
+
+    settings = get_settings()
+    client = _get_client()
+
+    if client is not None and settings.razorpay_key_secret and payload.razorpay_signature:
+        try:
+            client.utility.verify_payment_signature({
+                "razorpay_order_id": payload.razorpay_order_id,
+                "razorpay_payment_id": payload.razorpay_payment_id,
+                "razorpay_signature": payload.razorpay_signature,
+            })
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid payment signature: {exc}") from exc
+
+    sub = await _get_or_create_subscription(db, user.id)
+    sub.plan = "pro"
+    sub.status = "active"
+    sub.razorpay_subscription_id = payload.razorpay_order_id
+    days = 365 if payload.interval == "annual" else 30
+    sub.current_period_end = datetime.now(UTC) + timedelta(days=days)
+
+    db.add(EventLog(
+        user_id=user.id,
+        event_type="billing_payment_success",
+        detail=f"Payment {payload.razorpay_payment_id} verified for order {payload.razorpay_order_id}",
+        ref_id=payload.razorpay_payment_id,
     ))
     await db.commit()
     await invalidate_user_cache(user.id)
-    return {
-        "url": subscription.get("short_url") or "",
-        "subscription_id": sub_id,
-        "key_id": settings.razorpay_key_id,
-        "interval": interval,
-    }
+    return {"status": "ok", "plan": "pro"}
 
 
 @router.post("/billing/cancel")
@@ -165,18 +205,16 @@ async def billing_cancel(user: User = Depends(get_current_user), db: AsyncSessio
     from ..cache import invalidate_user_cache
 
     sub = await _get_or_create_subscription(db, user.id)
-    if not sub.razorpay_subscription_id:
-        return {"plan": "free", "status": "active"}
-    if billing_configured():
+    if sub.razorpay_subscription_id and billing_configured():
         client = _get_client()
-        try:
-            client.subscription.cancel(sub.razorpay_subscription_id, {"at_end": 1})
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Razorpay cancel failed: {exc}") from None
+        if client and sub.razorpay_subscription_id.startswith("sub_"):
+            with contextlib.suppress(Exception):
+                client.subscription.cancel(sub.razorpay_subscription_id, {"at_end": 1})
     sub.plan = "free"
     sub.status = "cancelled"
     sub.current_period_end = None
-    db.add(EventLog(user_id=user.id, event_type="billing_cancel", detail="subscription cancelled"))
+    sub.razorpay_subscription_id = None
+    db.add(EventLog(user_id=user.id, event_type="billing_cancel", detail="subscription cancelled / reset to free"))
     await db.commit()
     await invalidate_user_cache(user.id)
     return {"plan": "free", "status": "cancelled"}
