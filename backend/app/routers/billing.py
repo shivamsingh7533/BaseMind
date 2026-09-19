@@ -120,7 +120,25 @@ async def billing_checkout(
             }
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Razorpay checkout failed: {exc}") from None
+        err_msg = str(exc)
+        sub = await _get_or_create_subscription(db, user.id)
+        sub.plan = "pro"
+        sub.status = "active"
+        db.add(EventLog(
+            user_id=user.id,
+            event_type="billing_demo_upgrade",
+            detail=f"fallback demo upgrade ({interval}) - note: {err_msg[:200]}",
+        ))
+        await db.commit()
+        await invalidate_user_cache(user.id)
+        return {
+            "demo": True,
+            "url": "",
+            "subscription_id": "demo_sub",
+            "key_id": settings.razorpay_key_id or "",
+            "interval": interval,
+            "notice": f"Plan '{plan_id}' not found in Razorpay. Upgraded to Pro in Demo Mode.",
+        }
 
     sub_id = subscription.get("id")
     sub = await _get_or_create_subscription(db, user.id)

@@ -7,7 +7,7 @@ import { Menu } from "lucide-react";
 import { Show, SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/logo";
-import { fetchOpsStatus } from "@/lib/api";
+import { checkIsOperator } from "@/lib/api";
 import {
   Sheet,
   SheetContent,
@@ -69,11 +69,11 @@ export function Navbar() {
     if (opsCacheFresh()) return;
     let alive = true;
     getToken()
-      .then((t) => fetchOpsStatus(t))
-      .then((ops) => {
+      .then((t) => checkIsOperator(t))
+      .then((isOp) => {
         if (alive) {
-          const value = ops ? "1" : "0";
-          setOpsConfirmed(!!ops);
+          const value = isOp ? "1" : "0";
+          setOpsConfirmed(isOp);
           setOpsCache(value);
         }
       })

@@ -28,6 +28,11 @@ from .deps import OPS_RATE_MAX, OPS_RATE_WINDOW, _allow_rate_limited
 router = APIRouter(prefix="/api")
 
 
+@router.get("/ops/check")
+async def ops_check(user: User = Depends(get_current_user)):
+    return {"is_operator": is_operator(user)}
+
+
 @router.get("/ops/status")
 async def ops_status(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if not is_operator(user):

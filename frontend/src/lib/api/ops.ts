@@ -25,6 +25,21 @@ export async function fetchOpsStatus(
   }
 }
 
+export async function checkIsOperator(
+  token?: string | null
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/ops/check`, {
+      headers: authHeader(token),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { is_operator?: boolean };
+    return Boolean(data.is_operator);
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchGroundingMetric(
   token?: string | null
 ): Promise<GroundingMetric | null> {

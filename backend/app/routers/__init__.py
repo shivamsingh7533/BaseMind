@@ -55,6 +55,7 @@ __all__ = [
     "op_tenants",
     "op_trends",
     "op_update_agent",
+    "ops_check",
     "ops_status",
     "razorpay_webhook",
     "admin_delete_user",
@@ -82,6 +83,7 @@ from .admin import (  # noqa: E402
     op_tenants,
     op_trends,
     op_update_agent,
+    ops_check,
     ops_status,
     settings_status,
 )
