@@ -88,8 +88,9 @@ class SyncUrlRequest(BaseModel):
 
 
 class MessageIn(BaseModel):
-    role: Literal["user", "agent"]
+    role: Literal["user", "agent", "operator"]
     text: str = Field(min_length=1, max_length=8000)
+    sender_name: str | None = Field(default=None, max_length=120)
 
 
 class ConversationCreate(BaseModel):
@@ -98,10 +99,11 @@ class ConversationCreate(BaseModel):
 
 
 class ConversationUpdate(BaseModel):
-    status: Literal["active", "resolved", "halted"] | None = None
+    status: Literal["active", "resolved", "halted", "needs_human", "in_takeover"] | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
     sentiment: Literal["positive", "neutral", "negative"] | None = None
     csat_score: int | None = Field(default=None, ge=1, le=5)
+    assigned_to: str | None = Field(default=None, max_length=200)
 
 
 class MessageFeedbackIn(BaseModel):
@@ -217,6 +219,7 @@ def serialize_message(message) -> dict:
         "time": _fmt_time(message.created_at),
         "rating": getattr(message, "rating", None),
         "feedbackReason": getattr(message, "feedback_reason", None),
+        "senderName": getattr(message, "sender_name", None),
     }
 
 
@@ -232,6 +235,8 @@ def serialize_conversation(conv, with_messages: bool = False) -> dict:
         "messageCount": len(conv.messages),
         "duration": _fmt_duration(conv.duration_seconds),
         "startedAt": conv.started_at.isoformat() if conv.started_at else "",
+        "handoverRequestedAt": conv.handover_requested_at.isoformat() if getattr(conv, "handover_requested_at", None) else None,
+        "assignedTo": getattr(conv, "assigned_to", None),
     }
     if with_messages:
         data["messages"] = [serialize_message(m) for m in conv.messages]

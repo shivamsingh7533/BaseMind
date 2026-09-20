@@ -177,6 +177,18 @@ async def init_db() -> None:
             await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_status ON knowledge_gaps(status)")
             await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_frequency ON knowledge_gaps(frequency DESC)")
             await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_last_asked ON knowledge_gaps(last_asked_at DESC)")
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS handover_requested_at TIMESTAMPTZ"
+            )
+            await conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS assigned_to TEXT")
+            await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name TEXT")
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_status ON conversations(status)"
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_handover ON conversations(handover_requested_at)"
+            )
 
     await run_migrations()
 

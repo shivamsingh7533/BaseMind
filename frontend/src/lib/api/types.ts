@@ -154,8 +154,9 @@ export interface CodeBlock {
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "agent";
+  role: "user" | "agent" | "operator";
   text: string;
+  senderName?: string | null;
   code?: CodeBlock;
   time: string;
   latencyNote?: string;
@@ -164,7 +165,7 @@ export interface ChatMessage {
   feedbackReason?: string | null;
 }
 
-export type ConversationStatus = "resolved" | "active" | "halted";
+export type ConversationStatus = "resolved" | "active" | "halted" | "needs_human" | "in_takeover";
 
 export interface Conversation {
   id: string;
@@ -177,6 +178,8 @@ export interface Conversation {
   messageCount: number;
   duration: string;
   startedAt: string;
+  handoverRequestedAt?: string | null;
+  assignedTo?: string | null;
   messages: ChatMessage[];
 }
 
@@ -195,7 +198,8 @@ export type ChatEvent =
     }
   | { type: "token"; token: string }
   | { type: "error"; error: string }
-  | { type: "done"; messageId: string | null };
+  | { type: "handover"; status: string; assignedTo?: string | null; message?: string }
+  | { type: "done"; messageId?: string | null };
 
 export interface SettingsStatus {
   db_configured: boolean;

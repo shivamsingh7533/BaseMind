@@ -14,8 +14,11 @@ import {
   getConversation,
   getDocumentDownloadUrl,
   getDocumentPreview,
+  returnConversationToAI,
+  sendOperatorMessage,
   streamChat,
   submitMessageFeedback,
+  takeoverConversation,
   updateConversationStatus,
   type ChatMessage,
   type Conversation,
@@ -67,9 +70,17 @@ export function Chat() {
     "Studio"
   ).trim();
   const userLabel = (visitorLabel.slice(0, 2) || "S").toUpperCase();
+  const operatorName = (
+    user?.fullName ??
+    user?.firstName ??
+    user?.primaryEmailAddress?.emailAddress ??
+    "Support Operator"
+  ).trim();
+
   const selected = conversations?.find((c) => c.id === selectedId) ?? detail;
   const view = detail && detail.id === selectedId ? detail : null;
   const loadingDetail = !!selectedId && !view;
+  const isOperatorMode = view?.status === "in_takeover" || view?.status === "needs_human";
 
   useEffect(() => {
     getToken()
@@ -85,6 +96,47 @@ export function Chat() {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll conversation list every 8s so operator catches new escalations
+  useEffect(() => {
+    const listTimer = setInterval(async () => {
+      if (streamingRef.current) return;
+      try {
+        const t = await getToken();
+        await fetchConversations(t, true);
+      } catch {
+        /* ignore */
+      }
+    }, 8000);
+    return () => clearInterval(listTimer);
+  }, [fetchConversations, getToken]);
+
+  // Poll active thread messages every 4s when in needs_human or in_takeover
+  useEffect(() => {
+    if (!selectedId) return;
+    const threadTimer = setInterval(async () => {
+      if (streamingRef.current) return;
+      try {
+        const t = await getToken();
+        const d = await getConversation(t, selectedId);
+        if (d && d.id === selectedId) {
+          setDetail((prev) => {
+            if (
+              prev?.status !== d.status ||
+              prev?.messages.length !== d.messages.length ||
+              prev?.assignedTo !== d.assignedTo
+            ) {
+              setMessages(d.messages);
+            }
+            return d;
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 4000);
+    return () => clearInterval(threadTimer);
+  }, [getToken, selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -112,6 +164,34 @@ export function Chat() {
     if (!stickToBottomRef.current) return;
     el.scrollTo({ top: el.scrollHeight });
   }, [messages, streaming, loadingDetail]);
+
+  const handleTakeover = async () => {
+    if (!selectedId) return;
+    const t = await getToken();
+    const updated = await takeoverConversation(t, selectedId);
+    if (updated) {
+      setDetail(updated);
+      setMessages(updated.messages);
+      toast.success("You have taken over this thread as human operator");
+      void fetchConversations(t, true);
+    } else {
+      toast.error("Could not take over conversation");
+    }
+  };
+
+  const handleReturnToAI = async () => {
+    if (!selectedId) return;
+    const t = await getToken();
+    const updated = await returnConversationToAI(t, selectedId);
+    if (updated) {
+      setDetail(updated);
+      setMessages(updated.messages);
+      toast.success("Returned conversation to AI Assistant");
+      void fetchConversations(t, true);
+    } else {
+      toast.error("Could not return conversation to AI");
+    }
+  };
 
   const selectConversation = (id: string) => {
     if (streaming) return;
@@ -172,6 +252,28 @@ export function Chat() {
       }
       setDraft("");
       setFollowUps([]);
+
+      if (isOperatorMode) {
+        const opMsg: ChatMessage = {
+          id: `op-${Date.now()}`,
+          role: "operator",
+          text,
+          senderName: operatorName,
+          time: fmtTime(new Date()),
+        };
+        setMessages((prev) => [...prev, opMsg]);
+        setDetail((prev) =>
+          prev ? { ...prev, status: "in_takeover", assignedTo: operatorName } : prev
+        );
+        const ok = await sendOperatorMessage(t, cid, text, operatorName);
+        if (!ok) {
+          toast.error("Could not send operator message");
+        } else {
+          void fetchConversations(t, true);
+        }
+        return;
+      }
+
       setDetail((prev) => (prev ? { ...prev, status: "active" } : prev));
       setMessages((prev) => [
         ...prev,
@@ -239,7 +341,7 @@ export function Chat() {
         void fetchConversations(t, true);
       }
     },
-    [draft, fetchConversations, getToken, selectedId, streaming, visitorLabel]
+    [draft, fetchConversations, getToken, isOperatorMode, operatorName, selectedId, streaming, visitorLabel]
   );
 
   const retry = () => {
@@ -389,6 +491,8 @@ export function Chat() {
                 messageCount={messages.length}
                 streaming={streaming}
                 onSetStatus={(s) => void setStatus(s)}
+                onTakeover={handleTakeover}
+                onReturnToAI={handleReturnToAI}
               />
               <MessageThread
                 messages={messages}
@@ -408,6 +512,8 @@ export function Chat() {
                 onRetry={retry}
                 streaming={streaming}
                 canRetry={messages.length >= 2}
+                isOperatorMode={isOperatorMode}
+                operatorName={operatorName}
               />
             </>
           )}

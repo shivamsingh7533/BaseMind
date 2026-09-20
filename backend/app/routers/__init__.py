@@ -32,6 +32,9 @@ __all__ = [
     "_chat_hits",
     "_persist_document",
     "add_message",
+    "takeover_conversation",
+    "return_conversation_to_ai",
+    "request_public_handover",
     "billing_cancel",
     "billing_checkout",
     "billing_status",
@@ -143,6 +146,8 @@ from .conversations import (  # noqa: E402
     create_conversation,
     delete_conversation,
     list_conversations,
+    return_conversation_to_ai,
+    takeover_conversation,
     update_conversation,
 )
 from .dashboard import dashboard  # noqa: E401, E402
@@ -183,6 +188,7 @@ from .public import (  # noqa: E402
     get_public_agent,
     get_public_conversation,
     public_chat,
+    request_public_handover,
     submit_public_lead,
     submit_public_message_feedback,
 )

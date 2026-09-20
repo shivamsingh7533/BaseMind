@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Check, FileSearch, MessageSquareWarning, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Check, FileSearch, Headphones, MessageSquareWarning, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { ChatMessage } from "@/lib/api";
 import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,7 @@ export const ChatBubble = memo(function ChatBubble({
   onRate?: (messageId: string, rating: 1 | -1, reason?: string) => void;
 }) {
   const isUser = m.role === "user";
+  const isOperator = m.role === "operator";
   const [showReasonPicker, setShowReasonPicker] = useState(false);
   const [submittingRate, setSubmittingRate] = useState(false);
 
@@ -69,10 +70,18 @@ export const ChatBubble = memo(function ChatBubble({
           "mt-1 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
           isUser
             ? "bg-muted text-muted-foreground"
-            : "bg-primary text-primary-foreground"
+            : isOperator
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "bg-primary text-primary-foreground"
         )}
       >
-        {isUser ? userLabel : <LogoMark className="size-4" />}
+        {isUser ? (
+          userLabel
+        ) : isOperator ? (
+          <Headphones className="size-3.5" />
+        ) : (
+          <LogoMark className="size-4" />
+        )}
       </span>
       <div className={cn("max-w-[85%] space-y-1.5", isUser && "text-right")}>
         <div
@@ -80,11 +89,19 @@ export const ChatBubble = memo(function ChatBubble({
             "inline-block whitespace-pre-wrap rounded-xl px-3.5 py-2.5 text-left text-sm leading-relaxed",
             isUser
               ? "rounded-br-sm bg-primary text-primary-foreground"
-              : m.text
-                ? "rounded-bl-sm border bg-card"
-                : "rounded-bl-sm border bg-card italic text-muted-foreground"
+              : isOperator
+                ? "rounded-bl-sm border border-indigo-500/30 bg-indigo-500/10 dark:bg-indigo-950/30 text-foreground"
+                : m.text
+                  ? "rounded-bl-sm border bg-card"
+                  : "rounded-bl-sm border bg-card italic text-muted-foreground"
           )}
         >
+          {isOperator && (
+            <div className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+              <Headphones className="size-3" />
+              <span>{m.senderName ? `${m.senderName} (Human Agent)` : "Human Agent"}</span>
+            </div>
+          )}
           {renderRich(m.text)}
           {!m.text && !isUser && (
             <span className="flex items-center gap-1.5">

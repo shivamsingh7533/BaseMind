@@ -1,5 +1,6 @@
 import fnmatch
 import json
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -176,6 +177,70 @@ async def get_public_conversation(
     return serialize_conversation(conv, with_messages=True)
 
 
+def _is_handover_intent(text: str) -> bool:
+    low = text.lower().strip()
+    phrases = [
+        "talk to a person",
+        "talk to person",
+        "talk to human",
+        "talk to a human",
+        "speak to a human",
+        "speak to human",
+        "speak to an agent",
+        "speak to agent",
+        "human agent",
+        "live agent",
+        "real person",
+        "human operator",
+        "talk to operator",
+        "transfer to agent",
+        "transfer to human",
+        "connect me to a person",
+        "connect to human",
+        "connect to agent",
+        "customer representative",
+        "support representative",
+        "human support",
+    ]
+    return any(p in low for p in phrases)
+
+
+@router.post("/conversations/{conversation_id}/handover")
+async def request_public_handover(
+    conversation_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = request.client.host if request.client else "unknown"
+    if not await _allow_rate_limited_async("pub_handover", client_ip, 10, 60.0):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait a moment.")
+
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = result.scalar_one_or_none()
+    if conv is None or conv.status in ("resolved", "halted"):
+        raise HTTPException(status_code=404, detail="Conversation not found or closed")
+
+    now = datetime.now(UTC)
+    conv.status = "needs_human"
+    conv.handover_requested_at = now
+
+    notice = Message(
+        conversation_id=conv.id,
+        role="agent",
+        content="Human agent requested. An operator has been notified and will be with you shortly.",
+    )
+    conv.preview = notice.content[:120]
+    db.add(notice)
+    await db.commit()
+    await db.refresh(conv, attribute_names=["messages"])
+    await invalidate_user_cache(conv.user_id)
+    return {
+        "status": "needs_human",
+        "handoverRequestedAt": conv.handover_requested_at.isoformat() if conv.handover_requested_at else None,
+        "message": notice.content,
+    }
+
+
 @router.post("/conversations/{conversation_id}/chat")
 async def public_chat(
     conversation_id: str,
@@ -192,7 +257,7 @@ async def public_chat(
 
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conv = result.scalar_one_or_none()
-    if conv is None or conv.status != "active":
+    if conv is None or conv.status not in ("active", "needs_human", "in_takeover"):
         raise HTTPException(status_code=404, detail="Conversation not found or inactive")
 
     agent_row = None
@@ -209,6 +274,42 @@ async def public_chat(
     db.add(visitor_message)
     await db.commit()
     await db.refresh(visitor_message)
+    await invalidate_user_cache(conv.user_id)
+
+    if conv.status in ("needs_human", "in_takeover"):
+        assigned_name = conv.assigned_to or "an operator"
+        info_msg = (
+            f"Your message was received by {assigned_name}."
+            if conv.status == "in_takeover"
+            else "Your request is queued for a human operator. They will respond shortly."
+        )
+
+        async def live_handover_stream():
+            yield f"data: {json.dumps({'type': 'handover', 'status': conv.status, 'assignedTo': conv.assigned_to, 'message': info_msg})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return StreamingResponse(live_handover_stream(), media_type="text/event-stream")
+
+    if _is_handover_intent(payload.text):
+        conv.status = "needs_human"
+        conv.handover_requested_at = datetime.now(UTC)
+        escalation_notice = Message(
+            conversation_id=conv.id,
+            role="agent",
+            content="I've escalated your request to a human operator. Someone will take over shortly.",
+        )
+        conv.preview = escalation_notice.content[:120]
+        db.add(escalation_notice)
+        await db.commit()
+        await db.refresh(escalation_notice)
+        await invalidate_user_cache(conv.user_id)
+
+        async def intent_handover_stream():
+            yield f"data: {json.dumps({'type': 'token', 'token': escalation_notice.content})}\n\n"
+            yield f"data: {json.dumps({'type': 'handover', 'status': 'needs_human', 'message': escalation_notice.content})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'messageId': escalation_notice.id})}\n\n"
+
+        return StreamingResponse(intent_handover_stream(), media_type="text/event-stream")
 
     msg_result = await db.execute(
         select(Message)

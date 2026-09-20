@@ -6,6 +6,7 @@ import {
   Bot,
   CheckCircle2,
   ExternalLink,
+  Headphones,
   Loader2,
   Mail,
   RefreshCw,
@@ -22,6 +23,7 @@ import {
   createPublicConversation,
   getPublicAgent,
   getPublicConversation,
+  requestPublicHandover,
   streamPublicChat,
   submitPublicFeedback,
   submitPublicLead,
@@ -30,8 +32,9 @@ import {
 
 interface MessageItem {
   id: string;
-  role: "user" | "agent";
+  role: "user" | "agent" | "operator";
   text: string;
+  senderName?: string | null;
   sources?: { source: string; docId?: string }[];
   rating?: number | null;
   feedbackReason?: string | null;
@@ -46,6 +49,9 @@ export default function PublicWidgetPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [convStatus, setConvStatus] = useState<string>("active");
+  const [assignedTo, setAssignedTo] = useState<string | null>(null);
+  const [requestingHandover, setRequestingHandover] = useState(false);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -120,11 +126,17 @@ export default function PublicWidgetPage() {
         const history = await getPublicConversation(savedConvId);
         if (isMounted && history && history.messages) {
           setConversationId(savedConvId);
+          if (history.status) setConvStatus(history.status);
+          if (history.assignedTo) setAssignedTo(history.assignedTo);
           setMessages(
-            history.messages.map((m: { id: string; role: "user" | "agent"; text: string }) => ({
+            history.messages.map((m) => ({
               id: m.id,
               role: m.role,
               text: m.text,
+              senderName: m.senderName,
+              sources: m.sources,
+              rating: m.rating,
+              feedbackReason: m.feedbackReason,
             }))
           );
         } else if (isMounted) {
@@ -139,12 +151,75 @@ export default function PublicWidgetPage() {
     };
   }, [agentId]);
 
+  // Poll conversation updates when in handover or live takeover mode
+  useEffect(() => {
+    if (!conversationId || (convStatus !== "needs_human" && convStatus !== "in_takeover")) return;
+    const timer = setInterval(async () => {
+      try {
+        const data = await getPublicConversation(conversationId);
+        if (data) {
+          if (data.status) setConvStatus(data.status);
+          if (data.assignedTo !== undefined) setAssignedTo(data.assignedTo);
+          if (data.messages && data.messages.length > 0) {
+            setMessages(
+              data.messages.map((m) => ({
+                id: m.id,
+                role: m.role,
+                text: m.text,
+                senderName: m.senderName,
+                sources: m.sources,
+                rating: m.rating,
+                feedbackReason: m.feedbackReason,
+              }))
+            );
+          }
+        }
+      } catch {
+        /* poll ignore */
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [conversationId, convStatus]);
+
+  const handleRequestHandover = async () => {
+    if (!agent || requestingHandover || streaming) return;
+    setRequestingHandover(true);
+    try {
+      let activeConvId = conversationId;
+      if (!activeConvId) {
+        const newConv = await createPublicConversation(agent.id, "Website Visitor");
+        if (!newConv) return;
+        activeConvId = newConv.id;
+        setConversationId(activeConvId);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`basemind_conv_${agent.id}`, activeConvId);
+        }
+      }
+      const res = await requestPublicHandover(activeConvId);
+      if (res) {
+        setConvStatus("needs_human");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `notice-${Date.now()}`,
+            role: "agent",
+            text: res.message,
+          },
+        ]);
+      }
+    } finally {
+      setRequestingHandover(false);
+    }
+  };
+
   const handleResetChat = () => {
     if (streaming) return;
     if (typeof window !== "undefined" && agentId) {
       localStorage.removeItem(`basemind_conv_${agentId}`);
     }
     setConversationId(null);
+    setConvStatus("active");
+    setAssignedTo(null);
     setMessages([]);
   };
 
@@ -234,6 +309,22 @@ export default function PublicWidgetPage() {
               }
               return copy;
             });
+          } else if (event.type === "handover") {
+            setConvStatus(event.status);
+            if (event.assignedTo) setAssignedTo(event.assignedTo);
+            if (event.message) {
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last && (last.role === "agent" || last.role === "operator")) {
+                  copy[copy.length - 1] = {
+                    ...last,
+                    text: event.message || last.text,
+                  };
+                }
+                return copy;
+              });
+            }
           } else if (event.type === "done") {
             if ("messageId" in event && event.messageId) {
               const returnedId = event.messageId as string;
@@ -349,6 +440,20 @@ export default function PublicWidgetPage() {
         </div>
 
         <div className="flex items-center gap-1">
+          {convStatus === "active" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px] gap-1 px-2 border-border/60 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400"
+              onClick={() => void handleRequestHandover()}
+              disabled={requestingHandover}
+              title="Talk with a human support representative"
+            >
+              <Headphones className="size-3" />
+              <span>Human</span>
+            </Button>
+          )}
+
           {agent.leadCaptureEnabled && (
             <Button
               variant="outline"
@@ -383,6 +488,26 @@ export default function PublicWidgetPage() {
         </div>
       </header>
 
+      {/* LIVE TAKEOVER / HANDOVER BANNER */}
+      {convStatus === "needs_human" && (
+        <div className="flex items-center gap-2 bg-amber-500/15 px-4 py-2 text-[11px] font-medium text-amber-900 dark:text-amber-200 border-b border-amber-500/20">
+          <span className="relative flex size-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-amber-500" />
+          </span>
+          <span className="truncate">Connecting to a human operator… automated bot is paused.</span>
+        </div>
+      )}
+
+      {convStatus === "in_takeover" && (
+        <div className="flex items-center gap-2 bg-indigo-500/15 px-4 py-2 text-[11px] font-medium text-indigo-900 dark:text-indigo-200 border-b border-indigo-500/20">
+          <Headphones className="size-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <span className="truncate">
+            Live Support: {assignedTo ? `${assignedTo} is chatting with you` : "Human operator connected"}
+          </span>
+        </div>
+      )}
+
       {/* CHAT MESSAGES THREAD */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scroll-smooth">
         {/* GREETING CARD */}
@@ -397,8 +522,8 @@ export default function PublicWidgetPage() {
                 {agent.greetingMessage}
               </p>
 
-              {agent.leadCaptureEnabled && !leadSuccess && (
-                <div className="pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
+                {agent.leadCaptureEnabled && !leadSuccess && (
                   <button
                     type="button"
                     onClick={() => setShowLeadForm(true)}
@@ -407,8 +532,20 @@ export default function PublicWidgetPage() {
                     <Mail className="size-3.5" />
                     <span>{agent.leadCaptureTitle || "Get in touch with our team"}</span>
                   </button>
-                </div>
-              )}
+                )}
+
+                {convStatus === "active" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRequestHandover()}
+                    disabled={requestingHandover}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-all text-left w-fit"
+                  >
+                    <Headphones className="size-3.5" />
+                    <span>Talk to a Human Agent</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* SUGGESTED QUESTIONS CHIPS */}
@@ -443,11 +580,19 @@ export default function PublicWidgetPage() {
               m.role === "user" ? "items-end" : "items-start"
             }`}
           >
+            {m.role === "operator" && (
+              <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 px-1">
+                <Headphones className="size-3" />
+                <span>{m.senderName ? `${m.senderName} (Human Support)` : "Human Support"}</span>
+              </div>
+            )}
             <div
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed break-words whitespace-pre-wrap ${
                 m.role === "user"
                   ? "rounded-br-xs text-white shadow-sm font-normal"
-                  : "rounded-bl-xs border border-border/70 bg-card text-foreground shadow-2xs"
+                  : m.role === "operator"
+                    ? "rounded-bl-xs border border-indigo-500/30 bg-indigo-50/80 dark:bg-indigo-950/30 text-foreground shadow-2xs"
+                    : "rounded-bl-xs border border-border/70 bg-card text-foreground shadow-2xs"
               }`}
               style={
                 m.role === "user"

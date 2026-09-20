@@ -48,25 +48,32 @@ const CodeBlockSchema = z.object({
 
 export const ChatMessageSchema = z.object({
   id: z.string(),
-  role: z.enum(["user", "agent"]),
+  role: z.enum(["user", "agent", "operator"]),
   text: z.string(),
+  senderName: z.string().nullable().optional(),
   code: CodeBlockSchema.optional(),
   time: z.string(),
   latencyNote: z.string().optional(),
   sources: z
     .array(z.object({ source: z.string(), docId: z.string().optional() }))
     .optional(),
+  rating: z.number().nullable().optional(),
+  feedbackReason: z.string().nullable().optional(),
 });
 
 const ConversationCoreSchema = z.object({
   id: z.string(),
   user: z.string(),
-  status: z.enum(["resolved", "active", "halted"]),
+  status: z.enum(["resolved", "active", "halted", "needs_human", "in_takeover"]),
   time: z.string(),
   preview: z.string(),
   messageCount: z.number(),
   duration: z.string(),
   startedAt: z.string(),
+  sentiment: z.enum(["positive", "neutral", "negative"]).nullable().optional(),
+  csatScore: z.number().nullable().optional(),
+  handoverRequestedAt: z.string().nullable().optional(),
+  assignedTo: z.string().nullable().optional(),
   messages: z.array(ChatMessageSchema).optional(),
 });
 

@@ -98,6 +98,8 @@ class Conversation(Base):
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
     sentiment: Mapped[str | None] = mapped_column(Text, default="neutral")
     csat_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    handover_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assigned_to: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     messages: Mapped[list["Message"]] = relationship(
@@ -117,6 +119,7 @@ class Message(Base):
     sources: Mapped[str | None] = mapped_column(Text, nullable=True)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     feedback_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sender_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")

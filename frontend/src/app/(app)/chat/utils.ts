@@ -10,7 +10,7 @@ export const STATUS: Record<
     badge: "bg-success/10 text-success border-transparent",
   },
   active: {
-    label: "Active",
+    label: "Active AI",
     dot: "bg-primary animate-pulse",
     badge: "bg-primary/10 text-primary border-transparent",
   },
@@ -18,6 +18,16 @@ export const STATUS: Record<
     label: "Halted",
     dot: "bg-destructive",
     badge: "bg-destructive/10 text-destructive border-transparent",
+  },
+  needs_human: {
+    label: "Needs Human",
+    dot: "bg-amber-500 animate-ping",
+    badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+  },
+  in_takeover: {
+    label: "In Takeover",
+    dot: "bg-indigo-500 animate-pulse",
+    badge: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
   },
 };
 

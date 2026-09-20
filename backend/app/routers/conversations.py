@@ -75,8 +75,19 @@ async def add_message(
     db: AsyncSession = Depends(get_db),
 ):
     conv = await _get_owned(db, Conversation, conversation_id, user)
-    message = Message(conversation_id=conv.id, role=payload.role, content=payload.text)
+    sender = payload.sender_name or (user.name or user.email if payload.role == "operator" else None)
+    message = Message(
+        conversation_id=conv.id,
+        role=payload.role,
+        content=payload.text,
+        sender_name=sender,
+    )
     conv.preview = payload.text[:120]
+    if payload.role == "operator":
+        if conv.status == "needs_human":
+            conv.status = "in_takeover"
+        if not conv.assigned_to:
+            conv.assigned_to = user.name or user.email or "Operator"
     db.add(message)
     await db.commit()
     await db.refresh(message)
@@ -85,6 +96,7 @@ async def add_message(
         "id": message.id,
         "role": message.role,
         "text": message.content,
+        "senderName": message.sender_name,
         "time": "",
     }
 
@@ -121,6 +133,53 @@ async def delete_conversation(
     await db.delete(conv)
     await db.commit()
     await invalidate_user_cache(user.id)
+
+
+@router.post("/conversations/{conversation_id}/takeover")
+async def takeover_conversation(
+    conversation_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await _get_owned(db, Conversation, conversation_id, user)
+    operator_name = user.name or user.email or "Human Support"
+    conv.status = "in_takeover"
+    conv.assigned_to = operator_name
+    notice = Message(
+        conversation_id=conv.id,
+        role="operator",
+        sender_name=operator_name,
+        content=f"👋 {operator_name} has taken over the conversation.",
+    )
+    conv.preview = notice.content[:120]
+    db.add(notice)
+    await db.commit()
+    await db.refresh(conv, attribute_names=["messages"])
+    await invalidate_user_cache(user.id)
+    return serialize_conversation(conv, with_messages=True)
+
+
+@router.post("/conversations/{conversation_id}/return-to-ai")
+async def return_conversation_to_ai(
+    conversation_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    conv = await _get_owned(db, Conversation, conversation_id, user)
+    conv.status = "active"
+    conv.assigned_to = None
+    conv.handover_requested_at = None
+    notice = Message(
+        conversation_id=conv.id,
+        role="agent",
+        content="🤖 Operator has returned this conversation back to the AI Assistant.",
+    )
+    conv.preview = notice.content[:120]
+    db.add(notice)
+    await db.commit()
+    await db.refresh(conv, attribute_names=["messages"])
+    await invalidate_user_cache(user.id)
+    return serialize_conversation(conv, with_messages=True)
 
 
 @router.post("/conversations/{conversation_id}/chat")

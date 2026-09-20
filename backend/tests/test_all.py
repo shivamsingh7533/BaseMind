@@ -234,6 +234,74 @@ async def main():
             pub_detail = await routers.get_public_conversation(pub_conv["id"], db)
             check("get_public_conversation detail", pub_detail["id"] == pub_conv["id"] and pub_detail["messageCount"] >= 1)
 
+            # ---- Live Agent Handover & Operator Takeover Tests ----
+            # 1. Operator sends message with role="operator"
+            op_msg_res = await routers.add_message(
+                conv["id"],
+                MessageIn(role="operator", text="Hello visitor, I am taking over your issue.", sender_name="Jane Agent"),
+                user,
+                db,
+            )
+            check("operator message added", op_msg_res["role"] == "operator" and op_msg_res["senderName"] == "Jane Agent")
+
+            # Verify conversation shows operator message in thread
+            conv_after_op = await routers.conversation_detail(conv["id"], user, db)
+            check("conversation shows operator in thread", any(m["role"] == "operator" for m in conv_after_op["messages"]))
+
+            # 2. Operator Takeover endpoint
+            taken_over = await routers.takeover_conversation(conv["id"], user, db)
+            check(
+                "takeover_conversation sets in_takeover",
+                taken_over["status"] == "in_takeover" and taken_over["assignedTo"] is not None,
+                f"status={taken_over['status']} assignedTo={taken_over['assignedTo']}",
+            )
+            check("takeover notice appended", any("has taken over" in m["text"] for m in taken_over["messages"]))
+
+            # 3. Return to AI endpoint
+            returned_conv = await routers.return_conversation_to_ai(conv["id"], user, db)
+            check(
+                "return_conversation_to_ai resets active",
+                returned_conv["status"] == "active" and returned_conv["assignedTo"] is None,
+                f"status={returned_conv['status']}",
+            )
+            check("return notice appended", any("returned this conversation back to the AI" in m["text"] for m in returned_conv["messages"]))
+
+            # 4. Public Handover endpoint (visitor clicks 'Talk to Human')
+            pub_handover = await routers.request_public_handover(pub_conv["id"], fake_req, db)
+            check("request_public_handover", pub_handover["status"] == "needs_human" and "handoverRequestedAt" in pub_handover)
+
+            # 5. Public chat while in needs_human returns handover event without AI rag
+            pub_msg_in_handover = await routers.public_chat(
+                pub_conv["id"],
+                MessageIn(role="user", text="Are you there operator?"),
+                fake_req,
+                db,
+            )
+            pub_handover_chunks = [c async for c in pub_msg_in_handover.body_iterator]
+            pub_handover_body = "".join(pub_handover_chunks)
+            check("public chat in handover returns handover event", '"type": "handover"' in pub_handover_body and '"needs_human"' in pub_handover_body)
+
+            # 6. Natural Language Handover Intent Detection
+            pub_conv2 = await routers.create_public_conversation(
+                agent["id"],
+                PublicConversationCreate(visitor="Escalation Tester"),
+                fake_req,
+                db,
+            )
+            intent_chat_stream = await routers.public_chat(
+                pub_conv2["id"],
+                MessageIn(role="user", text="I really want to talk to a human support person please"),
+                fake_req,
+                db,
+            )
+            intent_chunks = [c async for c in intent_chat_stream.body_iterator]
+            intent_body = "".join(intent_chunks)
+            check("natural language escalation intent triggered", '"type": "handover"' in intent_body and '"needs_human"' in intent_body)
+
+            # Verify pub_conv2 status became needs_human
+            pub_conv2_detail = await routers.get_public_conversation(pub_conv2["id"], db)
+            check("conv auto-escalated status is needs_human", pub_conv2_detail["status"] == "needs_human")
+
             # ---- Conversation Analytics, CSAT Ratings & Knowledge Gap Detection ----
             pub_asst_msgs = [m for m in pub_detail["messages"] if m["role"] == "agent"]
             if pub_asst_msgs:

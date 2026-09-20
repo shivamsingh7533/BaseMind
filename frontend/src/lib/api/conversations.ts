@@ -199,3 +199,84 @@ export async function streamPublicChat(
     }
   }
 }
+
+export async function takeoverConversation(
+  token: string | null | undefined,
+  conversationId: string
+): Promise<Conversation | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/conversations/${conversationId}/takeover`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeader(token),
+      },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Conversation;
+  } catch {
+    return null;
+  }
+}
+
+export async function returnConversationToAI(
+  token: string | null | undefined,
+  conversationId: string
+): Promise<Conversation | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/conversations/${conversationId}/return-to-ai`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeader(token),
+      },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as Conversation;
+  } catch {
+    return null;
+  }
+}
+
+export async function sendOperatorMessage(
+  token: string | null | undefined,
+  conversationId: string,
+  text: string,
+  senderName?: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/conversations/${conversationId}/messages`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...authHeader(token),
+      },
+      body: JSON.stringify({
+        role: "operator",
+        text,
+        sender_name: senderName,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function requestPublicHandover(
+  conversationId: string
+): Promise<{ status: string; handoverRequestedAt: string | null; message: string } | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/public/conversations/${conversationId}/handover`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}

@@ -50,6 +50,16 @@ const STATUS: Record<
     dot: "bg-destructive",
     badge: "bg-destructive/10 text-destructive border-transparent",
   },
+  needs_human: {
+    label: "Needs Human",
+    dot: "bg-amber-500 animate-ping",
+    badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+  },
+  in_takeover: {
+    label: "In Takeover",
+    dot: "bg-indigo-500 animate-pulse",
+    badge: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
+  },
 };
 
 function renderRich(text: string) {
