@@ -1,4 +1,5 @@
 import jwt as pyjwt
+import structlog
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -9,6 +10,7 @@ from .db import get_db
 from .email import dispatch_welcome
 from .models import Subscription, User
 
+log = structlog.get_logger("basemind.auth")
 _bearer = HTTPBearer(auto_error=False)
 _jwks_client: pyjwt.PyJWKClient | None = None
 
@@ -17,12 +19,18 @@ def _get_jwks_client() -> pyjwt.PyJWKClient:
     global _jwks_client
     if _jwks_client is None:
         settings = get_settings()
-        if not settings.clerk_jwks_url:
+        raw_url = (settings.clerk_jwks_url or "").strip()
+        if not raw_url and settings.clerk_issuer:
+            raw_url = f"{settings.clerk_issuer.strip().rstrip('/')}/.well-known/jwks.json"
+        elif raw_url and not raw_url.endswith("/jwks.json"):
+            raw_url = f"{raw_url.rstrip('/')}/.well-known/jwks.json"
+
+        if not raw_url:
             raise HTTPException(
                 status_code=503,
-                detail="Auth not configured. Set CLERK_JWKS_URL.",
+                detail="Auth not configured. Set CLERK_JWKS_URL or CLERK_ISSUER.",
             )
-        _jwks_client = pyjwt.PyJWKClient(settings.clerk_jwks_url, cache_keys=True)
+        _jwks_client = pyjwt.PyJWKClient(raw_url, cache_keys=True)
     return _jwks_client
 
 
@@ -36,11 +44,14 @@ def verify_clerk_token(token: str) -> dict:
             detail=f"Cannot fetch signing key from CLERK_JWKS_URL: {exc}",
         ) from None
     try:
+        exp_iss = settings.clerk_issuer.strip().rstrip("/") if settings.clerk_issuer else None
+        valid_issuers = [exp_iss, f"{exp_iss}/"] if exp_iss else None
         return pyjwt.decode(
             token,
             key.key,
             algorithms=["RS256"],
-            issuer=settings.clerk_issuer or None,
+            issuer=valid_issuers,
+            leeway=60,
             options={"verify_aud": False},
         )
     except pyjwt.InvalidIssuerError:
@@ -115,15 +126,19 @@ def _set_sentry_user(user: "User | None", claims: dict | None = None) -> None:
     except Exception:
         pass
 
-
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     if credentials is None or not credentials.credentials:
+        log.warning("auth_missing_bearer_token", path=request.url.path)
         raise HTTPException(status_code=401, detail="Missing bearer token")
-    claims = verify_clerk_token(credentials.credentials)
+    try:
+        claims = verify_clerk_token(credentials.credentials)
+    except HTTPException as exc:
+        log.warning("auth_token_rejected", path=request.url.path, detail=exc.detail)
+        raise
     user = await upsert_user(db, claims)
 
     email_hdr = request.headers.get("x-user-email")
