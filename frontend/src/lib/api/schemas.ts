@@ -12,6 +12,8 @@ export const AgentSchema = z.object({
   allowedDomains: z.string().optional(),
   leadCaptureEnabled: z.boolean().optional(),
   leadCaptureTitle: z.string().optional(),
+  hideBranding: z.boolean().optional(),
+  customBrandName: z.string().optional(),
   queries24h: z.number(),
   avgLatencyMs: z.number(),
   trainProgress: z.number().nullable().optional(),

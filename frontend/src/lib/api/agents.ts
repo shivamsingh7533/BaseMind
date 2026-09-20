@@ -91,6 +91,8 @@ export async function updateAgent(
     allowed_domains?: string;
     lead_capture_enabled?: boolean;
     lead_capture_title?: string;
+    hide_branding?: boolean;
+    custom_brand_name?: string;
   }
 ): Promise<Agent | null> {
   try {
@@ -128,6 +130,8 @@ export async function getPublicAgent(agentId: string) {
       suggestedQuestions: string[];
       leadCaptureEnabled?: boolean;
       leadCaptureTitle?: string;
+      hideBranding?: boolean;
+      customBrandName?: string;
       status: string;
     };
   } catch {

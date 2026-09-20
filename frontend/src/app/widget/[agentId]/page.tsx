@@ -721,17 +721,26 @@ export default function PublicWidgetPage() {
         </form>
 
         {/* FOOTER BRANDING */}
-        <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
-          <span>Powered by</span>
-          <a
-            href="https://base-mind.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-foreground/80 hover:text-primary inline-flex items-center gap-0.5"
-          >
-            BaseMind <ExternalLink className="size-2.5 opacity-60" />
-          </a>
-        </div>
+        {agent.hideBranding ? (
+          agent.customBrandName ? (
+            <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+              <span>Powered by</span>
+              <span className="font-semibold text-foreground/80">{agent.customBrandName}</span>
+            </div>
+          ) : null
+        ) : (
+          <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+            <span>Powered by</span>
+            <a
+              href="https://base-mind.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-foreground/80 hover:text-primary inline-flex items-center gap-0.5"
+            >
+              BaseMind <ExternalLink className="size-2.5 opacity-60" />
+            </a>
+          </div>
+        )}
       </div>
 
       {/* LEAD FORM MODAL OVERLAY */}

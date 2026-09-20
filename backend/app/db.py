@@ -189,6 +189,13 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_conversations_handover ON conversations(handover_requested_at)"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS hide_branding BOOLEAN DEFAULT FALSE"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS custom_brand_name TEXT DEFAULT ''"
+            )
 
     await run_migrations()
 

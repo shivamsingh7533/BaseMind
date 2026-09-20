@@ -110,6 +110,8 @@ export default function AgentsPage() {
   const [embedColor, setEmbedColor] = useState("#0d9488");
   const [embedLeadCapture, setEmbedLeadCapture] = useState(false);
   const [embedLeadTitle, setEmbedLeadTitle] = useState("Get in touch");
+  const [embedHideBranding, setEmbedHideBranding] = useState(false);
+  const [embedCustomBrand, setEmbedCustomBrand] = useState("");
   const [savingWidget, setSavingWidget] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedIframe, setCopiedIframe] = useState(false);
@@ -271,6 +273,8 @@ export default function AgentsPage() {
     setEmbedColor(agent.color || "#0d9488");
     setEmbedLeadCapture(Boolean(agent.leadCaptureEnabled));
     setEmbedLeadTitle(agent.leadCaptureTitle || "Get in touch");
+    setEmbedHideBranding(Boolean(agent.hideBranding));
+    setEmbedCustomBrand(agent.customBrandName || "");
   };
 
   const handleSaveWidget = async () => {
@@ -285,6 +289,8 @@ export default function AgentsPage() {
         color: embedColor,
         lead_capture_enabled: embedLeadCapture,
         lead_capture_title: embedLeadTitle.trim(),
+        hide_branding: embedHideBranding,
+        custom_brand_name: embedCustomBrand.trim(),
       });
       if (updated) {
         toast.success("Widget settings saved successfully!");
@@ -1142,6 +1148,43 @@ export default function AgentsPage() {
                         value={embedLeadTitle}
                         onChange={(e) => setEmbedLeadTitle(e.target.value)}
                         placeholder="e.g. Get in touch with our team"
+                        className="text-xs mt-1"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs font-semibold cursor-pointer" htmlFor="branding-toggle">
+                          White-Label &amp; Custom Branding
+                        </Label>
+                        <span className="text-[10px] font-semibold text-primary border border-primary/30 bg-primary/10 rounded px-1.5 py-0.5">
+                          Pro
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Remove &ldquo;Powered by BaseMind&rdquo; or replace it with your company brand name.
+                      </p>
+                    </div>
+                    <input
+                      id="branding-toggle"
+                      type="checkbox"
+                      checked={embedHideBranding}
+                      onChange={(e) => setEmbedHideBranding(e.target.checked)}
+                      className="size-4 rounded accent-primary cursor-pointer"
+                    />
+                  </div>
+
+                  {embedHideBranding && (
+                    <div className="pt-2">
+                      <Label className="text-[11px] text-muted-foreground">Custom Brand Name (Optional)</Label>
+                      <Input
+                        value={embedCustomBrand}
+                        onChange={(e) => setEmbedCustomBrand(e.target.value)}
+                        placeholder="e.g. Acme Support (leave blank to hide badge completely)"
                         className="text-xs mt-1"
                       />
                     </div>

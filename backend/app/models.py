@@ -60,6 +60,10 @@ class Agent(Base):
     lead_capture_title: Mapped[str | None] = mapped_column(
         Text, default="Get in touch", nullable=True, server_default="Get in touch"
     )
+    hide_branding: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    custom_brand_name: Mapped[str | None] = mapped_column(
+        Text, default="", nullable=True, server_default=""
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 

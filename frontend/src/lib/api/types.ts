@@ -66,6 +66,8 @@ export interface Agent {
   allowedDomains?: string;
   leadCaptureEnabled?: boolean;
   leadCaptureTitle?: string;
+  hideBranding?: boolean;
+  customBrandName?: string;
   queries24h: number;
   avgLatencyMs: number;
   trainProgress?: number | null;
@@ -79,6 +81,8 @@ export interface PublicAgentConfig {
   suggestedQuestions: string[];
   leadCaptureEnabled?: boolean;
   leadCaptureTitle?: string;
+  hideBranding?: boolean;
+  customBrandName?: string;
   status: string;
 }
 

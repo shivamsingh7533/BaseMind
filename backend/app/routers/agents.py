@@ -57,6 +57,8 @@ async def create_agent(
         allowed_domains=payload.allowed_domains or "",
         lead_capture_enabled=bool(payload.lead_capture_enabled),
         lead_capture_title=payload.lead_capture_title or "Get in touch",
+        hide_branding=bool(payload.hide_branding),
+        custom_brand_name=payload.custom_brand_name or "",
         status="active",
         train_progress=100,
     )

@@ -74,16 +74,32 @@ async def main():
         db.add(user)
         await db.commit()
         await db.refresh(user)
+        user_id = user.id
 
         try:
             # ---- Agents ----
             agent = await routers.create_agent(
-                AgentCreate(name="Test Bot", instructions="Be brief.", color="#123456"), user, db
+                AgentCreate(
+                    name="Test Bot",
+                    instructions="Be brief.",
+                    color="#123456",
+                    hide_branding=True,
+                    custom_brand_name="Custom Brand Corp",
+                ),
+                user,
+                db,
             )
-            check("create_agent", agent["status"] == "active" and agent["name"] == "Test Bot")
+            check("create_agent", agent["status"] == "active" and agent["name"] == "Test Bot" and agent["hideBranding"] is True and agent["customBrandName"] == "Custom Brand Corp")
 
-            upd = await routers.update_agent(agent["id"], AgentUpdate(status="paused", name="Test Bot 2"), user, db)
-            check("update_agent (pause+rename)", upd["status"] == "paused" and upd["name"] == "Test Bot 2")
+            class _DummyRequest:
+                headers = {}
+                client = None
+
+            pub = await routers.get_public_agent(agent["id"], _DummyRequest(), db)
+            check("get_public_agent (whitelabel)", pub["hideBranding"] is True and pub["customBrandName"] == "Custom Brand Corp")
+
+            upd = await routers.update_agent(agent["id"], AgentUpdate(status="paused", name="Test Bot 2", hide_branding=False, custom_brand_name=""), user, db)
+            check("update_agent (pause+rename)", upd["status"] == "paused" and upd["name"] == "Test Bot 2" and upd["hideBranding"] is False and upd["customBrandName"] == "")
 
             # ownership guard
             user2 = User(clerk_id="func-test-" + uuid.uuid4().hex + "-b")
@@ -1037,6 +1053,8 @@ async def main():
             email_mod._send_brevo = _orig_brevo
 
             check("email welcome template", "Welcome to BaseMind" in email_mod._welcome_html("Tester"))
+            check("email escalation template", "Visitor Escalated to Human Support" in email_mod._escalation_html("Bot", "Visitor 1", "conv-123"))
+            check("email new lead template", "New Lead Captured" in email_mod._new_lead_html("Bot", "Alice", "alice@example.com", "+12345", "Acme", "Interested"))
             _dig = email_mod._digest_html(
                 "Tester", {"agents": [{"name": "Bot", "queries": 3, "resolved": 2, "halted": 0}]}
             )
@@ -1044,18 +1062,18 @@ async def main():
 
             await routers.delete_workspace(user, db)
             n_docs = (
-                await db.execute(select(func.count()).select_from(Document).where(Document.user_id == user.id))
+                await db.execute(select(func.count()).select_from(Document).where(Document.user_id == user_id))
             ).scalar_one()
             n_convs = (
-                await db.execute(select(func.count()).select_from(Conversation).where(Conversation.user_id == user.id))
+                await db.execute(select(func.count()).select_from(Conversation).where(Conversation.user_id == user_id))
             ).scalar_one()
-            n_users = (await db.execute(select(func.count()).select_from(User).where(User.id == user.id))).scalar_one()
+            n_users = (await db.execute(select(func.count()).select_from(User).where(User.id == user_id))).scalar_one()
             check("delete /api/me wiped documents", n_docs == 0, f"{n_docs} docs left")
             check("delete /api/me wiped conversations", n_convs == 0, f"{n_convs} convs left")
             check("delete /api/me wiped user row", n_users == 0)
             api = get_blob_api()
             if api:
-                objs = list(api.get_bucket_by_name("BaseMind").ls(f"{user.id}/"))
+                objs = list(api.get_bucket_by_name("BaseMind").ls(f"{user_id}/"))
                 check("delete /api/me removed B2 objects", len(objs) == 0, f"{len(objs)} left")
             else:
                 check("delete /api/me removed B2 objects", True, "B2 off")
@@ -1065,25 +1083,25 @@ async def main():
             with contextlib.suppress(Exception):
                 await db.rollback()
             conv_ids = (
-                (await db.execute(select(Conversation.id).where(Conversation.user_id == user.id))).scalars().all()
+                (await db.execute(select(Conversation.id).where(Conversation.user_id == user_id))).scalars().all()
             )
             if conv_ids:
                 await db.execute(delete(Message).where(Message.conversation_id.in_(conv_ids)))
-            await db.execute(delete(Conversation).where(Conversation.user_id == user.id))
+            await db.execute(delete(Conversation).where(Conversation.user_id == user_id))
             chunk_ids = (
-                (await db.execute(select(DocumentChunk.id).where(DocumentChunk.user_id == user.id))).scalars().all()
+                (await db.execute(select(DocumentChunk.id).where(DocumentChunk.user_id == user_id))).scalars().all()
             )
-            doc_ids = (await db.execute(select(Document.id).where(Document.user_id == user.id))).scalars().all()
+            doc_ids = (await db.execute(select(Document.id).where(Document.user_id == user_id))).scalars().all()
             if chunk_ids:
                 await db.execute(delete(DocumentChunk).where(DocumentChunk.id.in_(chunk_ids)))
             if doc_ids:
                 await db.execute(delete(Document).where(Document.id.in_(doc_ids)))
-            await db.execute(delete(KnowledgeGap).where(KnowledgeGap.user_id == user.id))
-            await db.execute(delete(Lead).where(Lead.user_id == user.id))
-            await db.execute(delete(Integration).where(Integration.user_id == user.id))
-            await db.execute(delete(Agent).where(Agent.user_id == user.id))
-            await db.execute(delete(EventLog).where(EventLog.user_id == user.id))
-            await db.execute(delete(User).where(User.id == user.id))
+            await db.execute(delete(KnowledgeGap).where(KnowledgeGap.user_id == user_id))
+            await db.execute(delete(Lead).where(Lead.user_id == user_id))
+            await db.execute(delete(Integration).where(Integration.user_id == user_id))
+            await db.execute(delete(Agent).where(Agent.user_id == user_id))
+            await db.execute(delete(EventLog).where(EventLog.user_id == user_id))
+            await db.execute(delete(User).where(User.id == user_id))
             await db.execute(delete(User).where(User.clerk_id.like("func-test-%")))
             await db.commit()
             print("teardown: db rows removed for test user")
@@ -1093,7 +1111,7 @@ async def main():
                 api = get_blob_api()
                 if api:
                     bucket = api.get_bucket_by_name("BaseMind")
-                    for fv, _name in bucket.ls(f"{user.id}/"):
+                    for fv, _name in bucket.ls(f"{user_id}/"):
                         api.delete_file_version(fv.id_, fv.file_name)
                     print("teardown: B2 objects removed")
                 else:

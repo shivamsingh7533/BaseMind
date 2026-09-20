@@ -17,6 +17,8 @@ _COOLDOWNS: dict[str, timedelta] = {
     "welcome": timedelta(days=365),
     "digest": timedelta(hours=23),
     "rate_limit": timedelta(minutes=10),
+    "escalation": timedelta(minutes=2),
+    "new_lead": timedelta(minutes=1),
 }
 
 
@@ -151,6 +153,55 @@ def _rate_limit_html(agent_name: str, limit: int) -> str:
 </body></html>"""
 
 
+def _escalation_html(agent_name: str, visitor: str, conversation_id: str) -> str:
+    v = visitor or "A website visitor"
+    takeover_url = f"https://base-mind.vercel.app/chat?id={conversation_id}"
+    return f"""<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#f8fafc;color:#1e293b">
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+<div style="display:inline-block;background:#fef3c7;border:1px solid #fcd34d;color:#b45309;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:12px">🚨 Action Required</div>
+<h2 style="color:#0f172a;margin-top:0">Visitor Escalated to Human Support</h2>
+<p style="font-size:14px;line-height:1.6">A visitor on your agent <strong>{agent_name}</strong> requested live human assistance. Automated bot replies have been paused on this thread.</p>
+<div style="background:#f1f5f9;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:6px;margin:20px 0;font-size:13px">
+  <p style="margin:0 0 4px 0"><strong>Visitor:</strong> {v}</p>
+  <p style="margin:0"><strong>Thread ID:</strong> {conversation_id}</p>
+</div>
+<p style="margin-top:24px"><a href="{takeover_url}" style="background:#0d9488;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Take Over Conversation &rarr;</a></p>
+<p style="color:#94a3b8;font-size:11px;margin-top:32px">BaseMind — Human-in-the-Loop AI Customer Support</p>
+</div>
+</body></html>"""
+
+
+def _new_lead_html(
+    agent_name: str,
+    name: str | None,
+    email: str,
+    phone: str | None,
+    company: str | None,
+    message: str | None,
+) -> str:
+    n = name or "Anonymous"
+    p = phone or "Not provided"
+    c = company or "Not provided"
+    m = message or "No note attached"
+    crm_url = "https://base-mind.vercel.app/leads"
+    return f"""<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#f8fafc;color:#1e293b">
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+<div style="display:inline-block;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:12px">🎉 New Lead Captured</div>
+<h2 style="color:#0f172a;margin-top:0">New Lead on {agent_name}</h2>
+<p style="font-size:14px;line-height:1.6">A visitor left their contact details through the chat widget on <strong>{agent_name}</strong>.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px">
+  <tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b;width:90px"><strong>Name:</strong></td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:500">{n}</td></tr>
+  <tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b"><strong>Email:</strong></td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:500"><a href="mailto:{email}" style="color:#0d9488">{email}</a></td></tr>
+  <tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b"><strong>Phone:</strong></td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0">{p}</td></tr>
+  <tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#64748b"><strong>Company:</strong></td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0">{c}</td></tr>
+  <tr><td style="padding:8px 0;color:#64748b;vertical-align:top"><strong>Note:</strong></td><td style="padding:8px 0;line-height:1.5">{m}</td></tr>
+</table>
+<p style="margin-top:24px"><a href="{crm_url}" style="background:#0d9488;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">View in Leads CRM &rarr;</a></p>
+<p style="color:#94a3b8;font-size:11px;margin-top:32px">BaseMind — AI Customer Support & Lead Conversion</p>
+</div>
+</body></html>"""
+
+
 async def dispatch_welcome(user: "object") -> None:
     """Fire-and-forget welcome email (first agent created)."""
     if not getattr(user, "email", None):
@@ -187,6 +238,46 @@ async def dispatch_rate_limit(user: "object", agent_name: str) -> None:
         user.email,
         f"Rate limit alert: {agent_name}",
         _rate_limit_html(agent_name, 20),
+    )
+
+
+async def dispatch_escalation_alert(
+    user: "object",
+    agent_name: str,
+    visitor: str,
+    conversation_id: str,
+) -> None:
+    """Fire-and-forget escalation notification to agent owner."""
+    if not getattr(user, "email", None):
+        return
+    await _dispatch(
+        "escalation",
+        user.id,
+        user.email,
+        f"🚨 [Action Required] Visitor requested human support on {agent_name}",
+        _escalation_html(agent_name, visitor, conversation_id),
+    )
+
+
+async def dispatch_new_lead_alert(
+    user: "object",
+    agent_name: str,
+    name: str | None,
+    email: str,
+    phone: str | None,
+    company: str | None,
+    message: str | None,
+) -> None:
+    """Fire-and-forget notification to agent owner when a lead is captured."""
+    if not getattr(user, "email", None):
+        return
+    display_title = name or email
+    await _dispatch(
+        "new_lead",
+        user.id,
+        user.email,
+        f"🎉 New Lead Captured on {agent_name}: {display_title}",
+        _new_lead_html(agent_name, name, email, phone, company, message),
     )
 
 

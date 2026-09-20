@@ -27,6 +27,8 @@ class AgentCreate(BaseModel):
     allowed_domains: str | None = Field(default="", max_length=1000)
     lead_capture_enabled: bool | None = False
     lead_capture_title: str | None = Field(default="Get in touch", max_length=200)
+    hide_branding: bool | None = False
+    custom_brand_name: str | None = Field(default="", max_length=120)
 
 
 class AgentUpdate(BaseModel):
@@ -40,6 +42,8 @@ class AgentUpdate(BaseModel):
     allowed_domains: str | None = Field(default=None, max_length=1000)
     lead_capture_enabled: bool | None = None
     lead_capture_title: str | None = Field(default=None, max_length=200)
+    hide_branding: bool | None = None
+    custom_brand_name: str | None = Field(default=None, max_length=120)
 
 
 class LeadCreate(BaseModel):
@@ -153,6 +157,8 @@ def serialize_agent(agent, usage: dict | None = None) -> dict:
         "allowedDomains": getattr(agent, "allowed_domains", "") or "",
         "leadCaptureEnabled": bool(getattr(agent, "lead_capture_enabled", False)),
         "leadCaptureTitle": getattr(agent, "lead_capture_title", "") or "Get in touch",
+        "hideBranding": bool(getattr(agent, "hide_branding", False)),
+        "customBrandName": getattr(agent, "custom_brand_name", "") or "",
         "queries24h": usage.get("queries24h", agent.queries_24h),
         "avgLatencyMs": usage.get("avgLatencyMs", agent.avg_latency_ms),
         "trainProgress": agent.train_progress,

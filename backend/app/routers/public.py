@@ -48,7 +48,11 @@ def _is_origin_allowed(origin: str, allowed: str) -> bool:
 
 
 @router.get("/agents/{agent_id}")
-async def get_public_agent(agent_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+async def get_public_agent(
+    agent_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(Agent).where(Agent.id == agent_id))
     agent = result.scalar_one_or_none()
     if agent is None or agent.status != "active":
@@ -58,7 +62,7 @@ async def get_public_agent(agent_id: str, request: Request, db: AsyncSession = D
     if owner is None or getattr(owner, "platform_status", "active") != "active":
         raise HTTPException(status_code=403, detail="Agent is temporarily unavailable")
 
-    if agent.allowed_domains:
+    if agent.allowed_domains and request is not None:
         origin = request.headers.get("origin") or request.headers.get("referer") or ""
         if origin and not _is_origin_allowed(origin, agent.allowed_domains):
             raise HTTPException(status_code=403, detail="Domain not authorized to embed this agent")
@@ -77,6 +81,8 @@ async def get_public_agent(agent_id: str, request: Request, db: AsyncSession = D
         "suggestedQuestions": suggested,
         "leadCaptureEnabled": bool(agent.lead_capture_enabled),
         "leadCaptureTitle": agent.lead_capture_title or "Get in touch",
+        "hideBranding": bool(getattr(agent, "hide_branding", False)),
+        "customBrandName": getattr(agent, "custom_brand_name", "") or "",
         "status": agent.status,
     }
 
@@ -122,6 +128,21 @@ async def submit_public_lead(
 
     await db.commit()
     await db.refresh(lead)
+
+    owner = (await db.execute(select(User).where(User.id == agent.user_id))).scalar_one_or_none()
+    if owner:
+        from ..email import dispatch_new_lead_alert
+
+        await dispatch_new_lead_alert(
+            owner,
+            agent.name,
+            lead.name,
+            lead.email,
+            lead.phone,
+            lead.company,
+            lead.message,
+        )
+
     return serialize_lead(lead, agent.name)
 
 
@@ -234,6 +255,23 @@ async def request_public_handover(
     await db.commit()
     await db.refresh(conv, attribute_names=["messages"])
     await invalidate_user_cache(conv.user_id)
+
+    owner = (await db.execute(select(User).where(User.id == conv.user_id))).scalar_one_or_none()
+    agent_title = "Support Agent"
+    if conv.agent_id:
+        agent_obj = (await db.execute(select(Agent).where(Agent.id == conv.agent_id))).scalar_one_or_none()
+        if agent_obj:
+            agent_title = agent_obj.name
+    if owner:
+        from ..email import dispatch_escalation_alert
+
+        await dispatch_escalation_alert(
+            user=owner,
+            agent_name=agent_title,
+            visitor=conv.visitor,
+            conversation_id=conv.id,
+        )
+
     return {
         "status": "needs_human",
         "handoverRequestedAt": conv.handover_requested_at.isoformat() if conv.handover_requested_at else None,
@@ -303,6 +341,18 @@ async def public_chat(
         await db.commit()
         await db.refresh(escalation_notice)
         await invalidate_user_cache(conv.user_id)
+
+        owner = (await db.execute(select(User).where(User.id == conv.user_id))).scalar_one_or_none()
+        agent_title = agent_row.name if agent_row else "Support Agent"
+        if owner:
+            from ..email import dispatch_escalation_alert
+
+            await dispatch_escalation_alert(
+                user=owner,
+                agent_name=agent_title,
+                visitor=conv.visitor,
+                conversation_id=conv.id,
+            )
 
         async def intent_handover_stream():
             yield f"data: {json.dumps({'type': 'token', 'token': escalation_notice.content})}\n\n"
