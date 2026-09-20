@@ -102,6 +102,36 @@ With BaseMind, businesses can connect documentation, knowledge bases, and live w
 
 ---
 
+## 📸 Screenshots
+
+### 🏠 Home Page — Hero & Multi-Agent Architecture
+> High-conversion landing page with interactive demo preview, architecture highlights, and live health footer
+<p align="center">
+  <img src="./docs/screenshots/landing-overview.png" alt="BaseMind Landing Page" width="850"/>
+</p>
+
+### ⚡ Supercharged AI Features & Precision RAG
+> Deep dive into retrieval-augmented generation, multi-agent orchestration, and 4-step ingestion pipeline
+<p align="center">
+  <img src="./docs/screenshots/features-overview.png" alt="BaseMind Features" width="850"/>
+</p>
+
+### 💳 Transparent SaaS Pricing Plans
+> Flexible monthly and annual tiers (Starter ₹0, Pro ₹499) with full feature breakdowns and security guarantees
+<p align="center">
+  <img src="./docs/screenshots/pricing-overview.png" alt="BaseMind Pricing" width="850"/>
+</p>
+
+### 📊 Workspace Console & Knowledge Management
+> Unified dashboard and knowledge base for managing active agents, vector-indexed documents, and real-time conversation threads
+<p align="center">
+  <img src="./docs/screenshots/dashboard.png" alt="Workspace Dashboard" width="380"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="./docs/screenshots/knowledge-base.png" alt="Knowledge Base" width="380"/>
+</p>
+
+---
+
 ## 🛠️ Tech Stack
 
 ### **Frontend**
