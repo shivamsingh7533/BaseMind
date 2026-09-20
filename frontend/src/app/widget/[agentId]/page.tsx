@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Send,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   UserPlus,
   X,
 } from "lucide-react";
@@ -21,6 +23,7 @@ import {
   getPublicAgent,
   getPublicConversation,
   streamPublicChat,
+  submitPublicFeedback,
   submitPublicLead,
   type PublicAgentConfig,
 } from "@/lib/api";
@@ -30,6 +33,8 @@ interface MessageItem {
   role: "user" | "agent";
   text: string;
   sources?: { source: string; docId?: string }[];
+  rating?: number | null;
+  feedbackReason?: string | null;
 }
 
 export default function PublicWidgetPage() {
@@ -54,6 +59,28 @@ export default function PublicWidgetPage() {
   const [leadMessage, setLeadMessage] = useState("");
   const [submittingLead, setSubmittingLead] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState(false);
+  const [reasonPickerMsgId, setReasonPickerMsgId] = useState<string | null>(null);
+
+  const handleWidgetFeedback = async (
+    messageId: string,
+    rating: 1 | -1,
+    reason?: string
+  ) => {
+    if (!messageId || messageId.startsWith("agent-")) return;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, rating, feedbackReason: reason ?? m.feedbackReason }
+          : m
+      )
+    );
+    setReasonPickerMsgId(null);
+    try {
+      await submitPublicFeedback(messageId, { rating, reason });
+    } catch {
+      /* ignore */
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -207,6 +234,21 @@ export default function PublicWidgetPage() {
               }
               return copy;
             });
+          } else if (event.type === "done") {
+            if ("messageId" in event && event.messageId) {
+              const returnedId = event.messageId as string;
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last && last.role === "agent") {
+                  copy[copy.length - 1] = {
+                    ...last,
+                    id: returnedId,
+                  };
+                }
+                return copy;
+              });
+            }
           } else if (event.type === "error") {
             setMessages((prev) => {
               const copy = [...prev];
@@ -435,6 +477,62 @@ export default function PublicWidgetPage() {
                   >
                     Source: {s.source}
                   </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* AGENT RATING CONTROLS */}
+            {m.role === "agent" && m.text && !streaming && (
+              <div className="mt-1 flex items-center gap-1.5 px-0.5 text-muted-foreground">
+                <button
+                  type="button"
+                  aria-label="Helpful"
+                  onClick={() => void handleWidgetFeedback(m.id, 1)}
+                  className={`flex size-5 items-center justify-center rounded transition-colors hover:text-foreground ${
+                    m.rating === 1 ? "text-emerald-500 font-bold" : "opacity-60 hover:opacity-100"
+                  }`}
+                  title="Helpful"
+                >
+                  <ThumbsUp className="size-2.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Not helpful"
+                  onClick={() => {
+                    if (m.rating === -1) {
+                      setReasonPickerMsgId((id) => (id === m.id ? null : m.id));
+                    } else {
+                      setReasonPickerMsgId(m.id);
+                      void handleWidgetFeedback(m.id, -1);
+                    }
+                  }}
+                  className={`flex size-5 items-center justify-center rounded transition-colors hover:text-foreground ${
+                    m.rating === -1 ? "text-rose-500 font-bold" : "opacity-60 hover:opacity-100"
+                  }`}
+                  title="Not helpful"
+                >
+                  <ThumbsDown className="size-2.5" />
+                </button>
+                {m.feedbackReason && (
+                  <span className="text-[10px] text-muted-foreground/80 italic">
+                    • {m.feedbackReason}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* REASON PICKER */}
+            {reasonPickerMsgId === m.id && (
+              <div className="mt-1 flex flex-wrap gap-1 max-w-[85%] rounded-lg border border-border/60 bg-muted/40 p-1.5 text-[10px]">
+                {["Inaccurate", "Missing info", "Confusing", "Other"].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => void handleWidgetFeedback(m.id, -1, reason)}
+                    className="rounded bg-background px-1.5 py-0.5 border border-border/50 text-foreground transition-colors hover:bg-primary/10 hover:border-primary/40"
+                  >
+                    {reason}
+                  </button>
                 ))}
               </div>
             )}

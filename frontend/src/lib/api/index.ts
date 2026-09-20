@@ -9,3 +9,4 @@ export * from "./ops";
 export * from "./settings";
 export * from "./leads";
 export * from "./integrations";
+export * from "./analytics";

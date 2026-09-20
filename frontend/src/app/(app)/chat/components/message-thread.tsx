@@ -14,6 +14,7 @@ export function MessageThread({
   onSend,
   onOpenSources,
   onScroll,
+  onRate,
 }: {
   messages: ChatMessage[];
   streaming: boolean;
@@ -23,6 +24,7 @@ export function MessageThread({
   onSend: (text?: string) => void;
   onOpenSources: (sources: SourceRef[]) => void;
   onScroll: () => void;
+  onRate?: (messageId: string, rating: 1 | -1, reason?: string) => void;
 }) {
   return (
     <>
@@ -39,6 +41,7 @@ export function MessageThread({
               m={m}
               userLabel={userLabel}
               onOpenSources={onOpenSources}
+              onRate={onRate}
             />
           ))}
         </div>

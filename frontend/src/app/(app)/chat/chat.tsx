@@ -15,6 +15,7 @@ import {
   getDocumentDownloadUrl,
   getDocumentPreview,
   streamChat,
+  submitMessageFeedback,
   updateConversationStatus,
   type ChatMessage,
   type Conversation,
@@ -307,8 +308,38 @@ export function Chat() {
       window.open(url, "_blank", "noopener,noreferrer");
     } catch {
       toast.error("Could not get download link");
+    } finally {
+      setDownloadBusy(null);
     }
   };
+
+  const handleRateMessage = useCallback(
+    async (messageId: string, rating: 1 | -1, reason?: string) => {
+      if (!selectedId) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, rating, feedbackReason: reason ?? m.feedbackReason }
+            : m
+        )
+      );
+      try {
+        const token = await getToken();
+        await submitMessageFeedback(token, selectedId, messageId, {
+          rating,
+          reason,
+        });
+        toast.success(
+          rating === 1
+            ? "Thank you for the positive feedback!"
+            : "Feedback recorded — we'll improve our answers."
+        );
+      } catch {
+        toast.error("Failed to save feedback");
+      }
+    },
+    [getToken, selectedId]
+  );
 
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
@@ -368,6 +399,7 @@ export function Chat() {
                 onSend={(t) => void send(t)}
                 onOpenSources={openSources}
                 onScroll={handleThreadScroll}
+                onRate={handleRateMessage}
               />
               <Composer
                 draft={draft}

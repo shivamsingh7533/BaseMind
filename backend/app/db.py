@@ -148,6 +148,35 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_integrations_agent_platform ON integrations(agent_id, platform)"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN IF NOT EXISTS rating INTEGER")
+            await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_reason TEXT")
+            await conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS csat_score INTEGER")
+            await conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS sentiment TEXT DEFAULT 'neutral'")
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS knowledge_gaps (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL,
+                    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+                    query TEXT NOT NULL,
+                    matched_context TEXT,
+                    ai_response_snippet TEXT,
+                    reason TEXT DEFAULT 'low_confidence',
+                    frequency INTEGER DEFAULT 1,
+                    status TEXT DEFAULT 'unresolved',
+                    resolution_note TEXT,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    last_asked_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_user_id ON knowledge_gaps(user_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_agent_id ON knowledge_gaps(agent_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_status ON knowledge_gaps(status)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_frequency ON knowledge_gaps(frequency DESC)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_knowledge_gaps_last_asked ON knowledge_gaps(last_asked_at DESC)")
 
     await run_migrations()
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from .admin import router as _admin
 from .agents import router as _agents
+from .analytics import router as _analytics
 from .billing import router as _billing
 from .conversations import router as _conversations
 from .dashboard import router as _dashboard
@@ -12,6 +13,7 @@ from .public import router as _public
 
 router = APIRouter()
 router.include_router(_agents)
+router.include_router(_analytics)
 router.include_router(_billing)
 router.include_router(_conversations)
 router.include_router(_dashboard)
@@ -88,6 +90,13 @@ __all__ = [
     "update_agent",
     "update_conversation",
     "upload_document",
+    "rate_message",
+    "analytics_overview",
+    "list_knowledge_gaps",
+    "update_knowledge_gap",
+    "delete_knowledge_gap",
+    "record_knowledge_gap",
+    "submit_public_message_feedback",
 ]
 
 from .admin import (  # noqa: E402
@@ -111,6 +120,14 @@ from .admin import (  # noqa: E402
     settings_status,
 )
 from .agents import create_agent, delete_agent, list_agents, update_agent  # noqa: E401, E402
+from .analytics import (  # noqa: E401, E402
+    analytics_overview,
+    delete_knowledge_gap,
+    list_knowledge_gaps,
+    rate_message,
+    record_knowledge_gap,
+    update_knowledge_gap,
+)
 from .billing import (  # noqa: E401, E402
     billing_cancel,
     billing_checkout,
@@ -167,4 +184,5 @@ from .public import (  # noqa: E402
     get_public_conversation,
     public_chat,
     submit_public_lead,
+    submit_public_message_feedback,
 )

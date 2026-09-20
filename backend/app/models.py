@@ -31,6 +31,7 @@ class User(Base):
     agents: Mapped[list["Agent"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     leads: Mapped[list["Lead"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     integrations: Mapped[list["Integration"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    knowledge_gaps: Mapped[list["KnowledgeGap"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Agent(Base):
@@ -66,6 +67,7 @@ class Agent(Base):
     documents: Mapped[list["Document"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     leads: Mapped[list["Lead"]] = relationship(back_populates="agent")
     integrations: Mapped[list["Integration"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    knowledge_gaps: Mapped[list["KnowledgeGap"]] = relationship(back_populates="agent")
 
 
 class Document(Base):
@@ -94,6 +96,8 @@ class Conversation(Base):
     status: Mapped[str] = mapped_column(Text, default="active")
     preview: Mapped[str] = mapped_column(Text, default="")
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    sentiment: Mapped[str | None] = mapped_column(Text, default="neutral")
+    csat_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     messages: Mapped[list["Message"]] = relationship(
@@ -111,6 +115,8 @@ class Message(Base):
     role: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     sources: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
@@ -216,5 +222,30 @@ class Integration(Base):
 
     user: Mapped["User"] = relationship(back_populates="integrations")
     agent: Mapped["Agent"] = relationship(back_populates="integrations")
+
+
+class KnowledgeGap(Base):
+    __tablename__ = "knowledge_gaps"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True
+    )
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    matched_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_response_snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, default="low_confidence", server_default="low_confidence")
+    frequency: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    status: Mapped[str] = mapped_column(Text, default="unresolved", server_default="unresolved", index=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_asked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+    user: Mapped["User"] = relationship(back_populates="knowledge_gaps")
+    agent: Mapped[Agent | None] = relationship(back_populates="knowledge_gaps")
+    conversation: Mapped[Conversation | None] = relationship()
+
 
 

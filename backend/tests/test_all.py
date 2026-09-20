@@ -13,12 +13,15 @@ cleaned up on teardown.
 """
 
 import asyncio
+import contextlib
 import io
 import json
 import os
 import sys
 import time
 import uuid
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile
 from sqlalchemy import delete, func, select, update
@@ -32,6 +35,7 @@ from app.models import (
     DocumentChunk,
     EventLog,
     Integration,
+    KnowledgeGap,
     Lead,
     Message,
     Subscription,
@@ -43,6 +47,8 @@ from app.schemas import (
     ConversationCreate,
     ConversationUpdate,
     DocumentCreate,
+    KnowledgeGapUpdate,
+    MessageFeedbackIn,
     MessageIn,
     SyncUrlRequest,
 )
@@ -227,6 +233,73 @@ async def main():
 
             pub_detail = await routers.get_public_conversation(pub_conv["id"], db)
             check("get_public_conversation detail", pub_detail["id"] == pub_conv["id"] and pub_detail["messageCount"] >= 1)
+
+            # ---- Conversation Analytics, CSAT Ratings & Knowledge Gap Detection ----
+            pub_asst_msgs = [m for m in pub_detail["messages"] if m["role"] == "agent"]
+            if pub_asst_msgs:
+                pub_msg_id = pub_asst_msgs[0]["id"]
+                rated_pub = await routers.submit_public_message_feedback(
+                    pub_msg_id,
+                    MessageFeedbackIn(rating=1, reason="Very helpful", comment="Clear explanation"),
+                    fake_req,
+                    db,
+                )
+                check("submit_public_message_feedback (+1)", rated_pub["rating"] == 1 and "Very helpful" in (rated_pub["feedbackReason"] or ""))
+
+            # Studio chat message rating (-1 negative feedback auto-generates gap)
+            asst_msgs = [m for m in mcount if m.role == "agent"]
+            if asst_msgs:
+                rated_asst = await routers.rate_message(
+                    conv["id"],
+                    asst_msgs[0].id,
+                    MessageFeedbackIn(rating=-1, reason="outdated_knowledge", comment="Policy details were old"),
+                    user,
+                    db,
+                )
+                check("rate_message (-1 with reason)", rated_asst["rating"] == -1 and "outdated_knowledge" in (rated_asst["feedbackReason"] or ""))
+
+            # Knowledge gaps listing & auto-detection verification
+            gaps_res = await routers.list_knowledge_gaps(status="unresolved", user=user, db=db)
+            check("knowledge gap auto-created from negative rating", gaps_res["total"] >= 1, f"gaps={gaps_res['total']}")
+
+            if gaps_res["gaps"]:
+                first_gap = gaps_res["gaps"][0]
+                check("gap fields populated", bool(first_gap["id"]) and first_gap["frequency"] >= 1)
+
+                # Deduplication test: re-recording the same query increments frequency
+                dupe = await routers.record_knowledge_gap(
+                    db=db,
+                    user_id=user.id,
+                    agent_id=agent["id"],
+                    conversation_id=conv["id"],
+                    query=first_gap["query"],
+                    reason="low_confidence",
+                )
+                check("knowledge gap deduplication increments frequency", dupe.frequency >= 2, f"frequency={dupe.frequency}")
+
+                # Update gap status to resolved
+                resolved_gap = await routers.update_knowledge_gap(
+                    first_gap["id"],
+                    KnowledgeGapUpdate(status="resolved", resolution_note="Added updated policy document"),
+                    user=user,
+                    db=db,
+                )
+                check("update_knowledge_gap (resolved)", resolved_gap["status"] == "resolved" and resolved_gap["resolutionNote"] == "Added updated policy document")
+
+                # Delete gap
+                del_ok = await routers.delete_knowledge_gap(first_gap["id"], user=user, db=db)
+                check("delete_knowledge_gap", del_ok is None or getattr(del_ok, "status_code", None) == 204 or del_ok is True)
+
+            # Analytics overview KPIs & trends
+            overview_res = await routers.analytics_overview(days=14, user=user, db=db)
+            check(
+                "analytics_overview computation",
+                isinstance(overview_res["csatScore"], (int, float))
+                and overview_res["totalRatings"] >= 1
+                and isinstance(overview_res["trend14d"], list)
+                and isinstance(overview_res["perAgent"], list),
+                f"csat={overview_res.get('csatScore')} totalRatings={overview_res.get('totalRatings')}",
+            )
 
             # ---- Lead Capture & Management ----
             from app.schemas import LeadCreate, LeadUpdate  # noqa: PLC0415
@@ -921,6 +994,8 @@ async def main():
 
         finally:
             # ---- Teardown: remove every test row ----
+            with contextlib.suppress(Exception):
+                await db.rollback()
             conv_ids = (
                 (await db.execute(select(Conversation.id).where(Conversation.user_id == user.id))).scalars().all()
             )
@@ -935,6 +1010,7 @@ async def main():
                 await db.execute(delete(DocumentChunk).where(DocumentChunk.id.in_(chunk_ids)))
             if doc_ids:
                 await db.execute(delete(Document).where(Document.id.in_(doc_ids)))
+            await db.execute(delete(KnowledgeGap).where(KnowledgeGap.user_id == user.id))
             await db.execute(delete(Lead).where(Lead.user_id == user.id))
             await db.execute(delete(Integration).where(Integration.user_id == user.id))
             await db.execute(delete(Agent).where(Agent.user_id == user.id))

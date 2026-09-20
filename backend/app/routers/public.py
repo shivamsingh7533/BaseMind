@@ -10,9 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..ai import embed_texts, stream_answer
+from ..cache import invalidate_user_cache
 from ..db import SessionFactory, get_db
 from ..models import Agent, Conversation, Document, DocumentChunk, Lead, Message, User
-from ..schemas import LeadCreate, MessageIn, serialize_conversation, serialize_lead
+from ..schemas import (
+    LeadCreate,
+    MessageFeedbackIn,
+    MessageIn,
+    serialize_conversation,
+    serialize_lead,
+    serialize_message,
+)
 from .deps import _allow_chat_async, _allow_rate_limited_async, log
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -243,6 +251,7 @@ async def public_chat(
             }
         )
         yield f"data: {sources_line}\n\n"
+        saved_message_id: str | None = None
         try:
             async for token in stream_answer(
                 question,
@@ -252,25 +261,20 @@ async def public_chat(
             ):
                 answer_parts.append(token)
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
-            yield "data: {\"type\": \"done\"}\n\n"
-        except Exception as e:
-            log.exception("public_chat_stream_failed", error=str(e), conversation_id=conversation_id_value)
-            yield f"data: {json.dumps({'type': 'error', 'error': 'Failed to complete response'})}\n\n"
-        finally:
+
             full_answer = "".join(answer_parts).strip()
             if full_answer and SessionFactory:
                 try:
                     async with SessionFactory() as final_session:
-                        final_session.add(
-                            Message(
-                                conversation_id=conversation_id_value,
-                                role="agent",
-                                content=full_answer,
-                                sources=json.dumps(
-                                    [{"docId": c["docId"], "source": c["source"]} for c in contexts]
-                                ),
-                            )
+                        new_msg = Message(
+                            conversation_id=conversation_id_value,
+                            role="agent",
+                            content=full_answer,
+                            sources=json.dumps(
+                                [{"docId": c["docId"], "source": c["source"]} for c in contexts]
+                            ),
                         )
+                        final_session.add(new_msg)
                         if agent_id_value:
                             await final_session.execute(
                                 update(Agent)
@@ -278,8 +282,57 @@ async def public_chat(
                                 .values(queries_24h=Agent.queries_24h + 1)
                             )
                         await final_session.commit()
+                        await final_session.refresh(new_msg)
+                        saved_message_id = new_msg.id
+
+                        # If 0 chunks matched, automatically record an unresolved knowledge gap
+                        if len(contexts) == 0:
+                            from .analytics import record_knowledge_gap
+
+                            await record_knowledge_gap(
+                                db=final_session,
+                                user_id=conv.user_id,
+                                agent_id=agent_id_value,
+                                conversation_id=conversation_id_value,
+                                query=question,
+                                reason="no_contexts_found",
+                                response_snippet=full_answer,
+                            )
                 except Exception:
                     log.exception("public_chat_persist_failed", conversation_id=conversation_id_value)
+
+            done_data = {"type": "done"}
+            if saved_message_id:
+                done_data["messageId"] = saved_message_id
+            yield f"data: {json.dumps(done_data)}\n\n"
+        except Exception as e:
+            log.exception("public_chat_stream_failed", error=str(e), conversation_id=conversation_id_value)
+            yield f"data: {json.dumps({'type': 'error', 'error': 'Failed to complete response'})}\n\n"
+        finally:
+            if not saved_message_id:
+                fallback_answer = "".join(answer_parts).strip()
+                if fallback_answer and SessionFactory:
+                    try:
+                        async with SessionFactory() as final_session:
+                            final_session.add(
+                                Message(
+                                    conversation_id=conversation_id_value,
+                                    role="agent",
+                                    content=fallback_answer,
+                                    sources=json.dumps(
+                                        [{"docId": c["docId"], "source": c["source"]} for c in contexts]
+                                    ),
+                                )
+                            )
+                            if agent_id_value:
+                                await final_session.execute(
+                                    update(Agent)
+                                    .where(Agent.id == agent_id_value)
+                                    .values(queries_24h=Agent.queries_24h + 1)
+                                )
+                            await final_session.commit()
+                    except Exception:
+                        log.exception("public_chat_fallback_persist_failed", conversation_id=conversation_id_value)
 
     return StreamingResponse(
         event_stream(),
@@ -290,3 +343,82 @@ async def public_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/messages/{message_id}/feedback")
+async def submit_public_message_feedback(
+    message_id: str,
+    payload: MessageFeedbackIn,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Submit rating and feedback for an assistant message from the public widget."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not await _allow_rate_limited_async("pub_feedback", client_ip, 30, 60.0):
+        raise HTTPException(status_code=429, detail="Too many feedback submissions. Please slow down.")
+
+    msg = (
+        await db.execute(
+            select(Message)
+            .options(selectinload(Message.conversation))
+            .where(Message.id == message_id)
+        )
+    ).scalar_one_or_none()
+
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    if msg.role != "agent":
+        raise HTTPException(status_code=400, detail="Only assistant messages can be rated")
+
+    msg.rating = payload.rating
+    if payload.reason:
+        msg.feedback_reason = payload.reason
+    if payload.comment:
+        msg.feedback_reason = (
+            f"{payload.reason or 'other'}: {payload.comment}"
+            if payload.reason
+            else payload.comment
+        )
+
+    # If negative feedback (-1), automatically record or update knowledge gap
+    if payload.rating == -1 and msg.conversation:
+        prev_user_msg = (
+            await db.execute(
+                select(Message)
+                .where(
+                    Message.conversation_id == msg.conversation_id,
+                    Message.role == "user",
+                    Message.created_at <= msg.created_at,
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        query_text = prev_user_msg.content if prev_user_msg else (msg.conversation.preview or "Unspecified query")
+        from .analytics import record_knowledge_gap
+
+        await record_knowledge_gap(
+            db=db,
+            user_id=msg.conversation.user_id,
+            agent_id=msg.conversation.agent_id,
+            conversation_id=msg.conversation.id,
+            query=query_text,
+            reason=payload.reason or "negative_feedback",
+            matched_context=msg.sources,
+            response_snippet=msg.content,
+        )
+
+    if msg.conversation:
+        if payload.rating == 1:
+            msg.conversation.sentiment = "positive"
+            msg.conversation.csat_score = 5
+        elif payload.rating == -1:
+            msg.conversation.sentiment = "negative"
+            msg.conversation.csat_score = 1
+        await invalidate_user_cache(msg.conversation.user_id)
+
+    await db.commit()
+    await db.refresh(msg)
+    return serialize_message(msg)

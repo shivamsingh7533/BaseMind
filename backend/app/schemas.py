@@ -100,6 +100,19 @@ class ConversationCreate(BaseModel):
 class ConversationUpdate(BaseModel):
     status: Literal["active", "resolved", "halted"] | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
+    sentiment: Literal["positive", "neutral", "negative"] | None = None
+    csat_score: int | None = Field(default=None, ge=1, le=5)
+
+
+class MessageFeedbackIn(BaseModel):
+    rating: Literal[1, -1]
+    reason: str | None = Field(default=None, max_length=120)
+    comment: str | None = Field(default=None, max_length=1000)
+
+
+class KnowledgeGapUpdate(BaseModel):
+    status: Literal["unresolved", "resolved", "dismissed", "ignored"] | None = None
+    resolution_note: str | None = Field(default=None, max_length=2000)
 
 
 class OperatorAlert(BaseModel):
@@ -202,6 +215,8 @@ def serialize_message(message) -> dict:
         "role": message.role,
         "text": message.content,
         "time": _fmt_time(message.created_at),
+        "rating": getattr(message, "rating", None),
+        "feedbackReason": getattr(message, "feedback_reason", None),
     }
 
 
@@ -210,6 +225,8 @@ def serialize_conversation(conv, with_messages: bool = False) -> dict:
         "id": conv.id,
         "user": conv.visitor,
         "status": conv.status,
+        "sentiment": getattr(conv, "sentiment", "neutral") or "neutral",
+        "csatScore": getattr(conv, "csat_score", None),
         "time": _fmt_time(conv.started_at),
         "preview": conv.preview,
         "messageCount": len(conv.messages),
@@ -219,3 +236,22 @@ def serialize_conversation(conv, with_messages: bool = False) -> dict:
     if with_messages:
         data["messages"] = [serialize_message(m) for m in conv.messages]
     return data
+
+
+def serialize_knowledge_gap(gap, agent_name: str | None = None) -> dict:
+    return {
+        "id": gap.id,
+        "userId": gap.user_id,
+        "agentId": gap.agent_id,
+        "agentName": agent_name or (gap.agent.name if getattr(gap, "agent", None) else None),
+        "conversationId": gap.conversation_id,
+        "query": gap.query,
+        "matchedContext": gap.matched_context or "",
+        "aiResponseSnippet": gap.ai_response_snippet or "",
+        "reason": gap.reason or "low_confidence",
+        "frequency": gap.frequency or 1,
+        "status": gap.status or "unresolved",
+        "resolutionNote": gap.resolution_note or "",
+        "createdAt": gap.created_at.isoformat() if getattr(gap, "created_at", None) else "",
+        "lastAskedAt": gap.last_asked_at.isoformat() if getattr(gap, "last_asked_at", None) else "",
+    }

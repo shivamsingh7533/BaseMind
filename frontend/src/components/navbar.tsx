@@ -28,6 +28,7 @@ const APP_LINKS = [
   { href: "/chat", label: "Chat" },
   { href: "/knowledge-base", label: "Knowledge" },
   { href: "/leads", label: "Leads" },
+  { href: "/analytics", label: "Analytics" },
   { href: "/logs", label: "Logs" },
 ];
 

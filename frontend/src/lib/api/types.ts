@@ -160,6 +160,8 @@ export interface ChatMessage {
   time: string;
   latencyNote?: string;
   sources?: { source: string; docId?: string }[];
+  rating?: number | null;
+  feedbackReason?: string | null;
 }
 
 export type ConversationStatus = "resolved" | "active" | "halted";
@@ -168,6 +170,8 @@ export interface Conversation {
   id: string;
   user: string;
   status: ConversationStatus;
+  sentiment?: "positive" | "neutral" | "negative" | null;
+  csatScore?: number | null;
   time: string;
   preview: string;
   messageCount: number;
@@ -340,4 +344,64 @@ export interface OpsErrorsData {
   counts24h: Record<string, number>;
   counts7d: Record<string, number>;
   recent: OpsErrorRecent[];
+}
+
+export interface KnowledgeGap {
+  id: string;
+  agentId?: string | null;
+  agentName?: string | null;
+  agentColor?: string | null;
+  conversationId?: string | null;
+  query: string;
+  matchedContext?: string | null;
+  aiResponseSnippet?: string | null;
+  reason: string;
+  frequency: number;
+  status: "unresolved" | "resolved" | "dismissed";
+  resolutionNote?: string | null;
+  createdAt: string;
+  lastAskedAt: string;
+}
+
+export interface AnalyticsTrendDay {
+  date: string;
+  ratingCount: number;
+  positiveCount: number;
+  negativeCount: number;
+  csatScore: number;
+}
+
+export interface AnalyticsAgentStat {
+  agentId: string;
+  agentName: string;
+  agentColor: string;
+  totalRatings: number;
+  positiveRatings: number;
+  negativeRatings: number;
+  csatScore: number;
+  gapsCount: number;
+}
+
+export interface AnalyticsOverview {
+  csatScore: number;
+  totalRatings: number;
+  positiveRatings: number;
+  negativeRatings: number;
+  resolutionRate: number;
+  totalConversations: number;
+  resolvedConversations: number;
+  unresolvedGapsCount: number;
+  trend14d: AnalyticsTrendDay[];
+  perAgent: AnalyticsAgentStat[];
+}
+
+export interface MessageFeedbackInput {
+  rating: 1 | -1;
+  reason?: string;
+  comment?: string;
+}
+
+export interface KnowledgeGapUpdateInput {
+  status?: "unresolved" | "resolved" | "dismissed";
+  resolution_note?: string;
 }
