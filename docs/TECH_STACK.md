@@ -1,22 +1,30 @@
-# Tech Stack
+# BaseMind Technology Stack
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Frontend | Next.js 16.3.2 (App Router, Turbopack) | TypeScript, Tailwind CSS, shadcn-style UI kit |
-| State | Zustand + TTL cache | `src/lib/store.ts` |
-| Auth | Clerk (`@clerk/nextjs` 7.8.0) | Dev instance `secure-griffon-2008`; catch-all `/login`, `/signup` routes; middleware guard |
-| Backend | FastAPI (Python 3.14 venv) | SQLAlchemy 2 async, PyJWT `PyJWKClient` for Clerk JWKS |
-| Database | Neon Postgres + pgvector | Shared by local dev and Render |
-| Embeddings | Gemini `gemini-embedding-001` | 768 dims via `output_dimensionality` (text-embedding-004 is dead for new keys) |
-| Chat model | Gemini `gemini-3.6-flash` | streaming via `google-genai` SDK (`await client.aio.models.generate_content_stream`) |
-| File parsing | pypdf + plain-text readers | PDF/TXT/CSV/MD up to 10 MB |
-| URL crawling | httpx (stdlib HTMLParser extractor) | `POST /api/documents/sync`, 2 MB cap, 15 s timeout |
-| Hot/cold blob storage | Backblaze B2 via `b2sdk` (lazy, optional) | Enabled for private bucket `BaseMind`; stores raw originals, key `{owner_id}/{uuid}-{file}`; off when `B2_*` env vars unset |
-| Web hosting | Vercel | `base-mind.vercel.app`, Analytics enabled |
-| API hosting | Render free tier | `basemind-api.onrender.com`; sleeps after ~15 min idle |
-| CI | GitHub Actions (`.github/workflows/ci.yml`) | push/PR to `main`: backend `compileall` + `import app.main` boot (no DB creds in CI), frontend `npm ci` + lint + build |
-| Toasts/UX | sonner | exact-reason error messages everywhere |
+BaseMind combines modern web technologies, asynchronous Python web services, serverless vector databases, and state-of-the-art Google Gemini foundation models.
 
-## Planned
-- **Production Clerk instance** with custom domain — needs paid plan + domain (dev instance `secure-griffon-2008` still in use).
-- Large binary/media storage on Backblaze B2 (gateway for raw originals exists today; broaden to arbitrary media files).
+---
+
+## Core Technologies Inventory
+
+| Layer / Domain | Technology | Version / Spec | Purpose & Notes |
+|---|---|---|---|
+| **Frontend Framework** | Next.js (App Router) | `16.3.2` | Server Components, Turbopack, Dynamic Routes (`/widget/[agentId]`, `/legal/*`) |
+| **Language & Runtime** | TypeScript & React | `React 19`, `TS 5.x` | Strict type safety, Client/Server boundary separation |
+| **Styling & Design System**| Tailwind CSS & shadcn/ui | Modern CSS Variables | Glassmorphism, tailored dark mode, responsive layout system |
+| **Component Icons** | Lucide React | Modern SVG icons | Streamlined UI iconography with custom SVG brand assets |
+| **Client State Management**| Zustand | TTL-cached stores | In-memory caching for agents, knowledge docs, and conversation feeds |
+| **User Authentication** | Clerk | `@clerk/nextjs` | Multi-tenant JWT auth, session management, route middleware protection |
+| **Backend Framework** | FastAPI (Python) | `Python 3.11+ / 3.12+` | High-performance async ASGI server, Pydantic v2 validation |
+| **Database & Vector Engine**| Neon PostgreSQL | `PostgreSQL 16` | Serverless Postgres with `pgvector` extension for vector indexing |
+| **ORM & Migrations** | SQLAlchemy 2.0 & Alembic | `asyncpg` driver | Fully asynchronous connection pooling and versioned migrations |
+| **RAG Embeddings** | Google Gemini Embeddings | `gemini-embedding-001` | 768-dimensional normalized text embeddings |
+| **Generative AI Chat** | Google Gemini Foundation | `gemini-2.5-flash` | Ultra-low latency Server-Sent Events (SSE) streaming with citations |
+| **Document Ingestion** | PyPDF & HTMLParser | `pypdf`, `httpx` | PDF extraction, raw text parser, and live URL crawler |
+| **Object Storage** | Backblaze B2 | `b2sdk` (S3 Compatible) | Private encrypted bucket storage for raw documents with signed URLs |
+| **Multi-Channel: Slack** | Slack Events API | HMAC-SHA256 | Bidirectional bot responses to `app_mention` and DM events |
+| **Multi-Channel: Discord** | Discord Interactions API | Ed25519 signature | Webhook-driven bot answering slash commands in servers |
+| **Live Agent Handover** | Event Polling Engine | State Machine | Automated bot pauses token generation; operator claims conversation |
+| **Transactional Emails** | Resend / Brevo / SMTP | Asynchronous Tasks | Immediate notifications for escalations and new leads with cooldowns |
+| **Telemetry & Metrics** | Prometheus & Sentry | `prometheus-fastapi-instrumentator` | Latency tracing, route metrics (`/metrics`), and crash diagnostics |
+| **Web Hosting** | Vercel | Production CDN | Automated Git deploys, Edge middleware, custom routing |
+| **API Hosting** | Render | Managed Web Service | Continuous deployment, automated health checks (`/api/health`) |

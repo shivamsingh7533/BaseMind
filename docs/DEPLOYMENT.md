@@ -1,107 +1,116 @@
-# Deployment
+# Production Deployment Guide
 
-## Topology
-- **Frontend** → Vercel, auto-deploys `main` from GitHub (`base-mind.vercel.app`).
-- **Backend** → Render free tier (`basemind-api.onrender.com`), auto-deploys on push.
-- **Database** → Neon Postgres, same instance shared by local `.env` and Render.
+BaseMind is architected for zero-downtime continuous deployment using **Vercel** (Frontend) and **Render** (Backend API), backed by **Neon** (PostgreSQL + pgvector) and **Backblaze B2** (Encrypted Object Storage).
 
-## Frontend env vars (Vercel + local `.env.local`)
-| var | value |
-|---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_test_…` (decodes to your Clerk instance) |
-| `NEXT_PUBLIC_API_URL` | `https://basemind-api.onrender.com` (prod) / `http://localhost:8000` (local) |
+---
 
-`next.config.ts` pins `CLERK_SIGN_IN_URL=/login`, `CLERK_SIGN_UP_URL=/signup`.
+## Production Topology & Endpoints
 
-## Backend env vars (Render)
-| var | value |
-|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://…neon.tech/neondb?ssl=require` |
-| `CLERK_JWKS_URL` | `https://<instance>.clerk.accounts.dev/.well-known/jwks.json` |
-| `CLERK_ISSUER` | `https://<instance>.clerk.accounts.dev` |
-| `ALLOWED_ORIGINS` | `https://base-mind.vercel.app` |
-| `GEMINI_API_KEY` | AI Studio API key |
-| `B2_APPLICATION_KEY_ID` | Backblaze B2 app key ID (scoped, bucket `BaseMind`) |
-| `B2_APPLICATION_KEY` | Backblaze B2 application key |
-| `B2_BUCKET_NAME` | `BaseMind` |
-| `BREVO_ENABLED` | `1` (app-level transactional emails — welcome, daily digest, rate-limit alert) |
-| `BREVO_API_KEY` | Brevo SMTP API key (free tier: 300 emails/day, no card) |
-| `BREVO_SENDER_EMAIL` | verified sender, e.g. `hi@yourdomain.com` |
-| `BREVO_SENDER_NAME` | `BaseMind` |
-| `SENTRY_DSN` | Sentry project DSN (crash + performance) |
-| `OPERATOR_EMAILS` | comma-separated emails allowed to open the Ops/Admin dashboard (`GET /api/ops/status`, `/ops`). Empty = nobody (always 403) |
-
-Emails no-op safely without `BREVO_ENABLED`/`BREVO_API_KEY` (Clerk already covers
-verification/reset emails). Sentry initializes only when `SENTRY_DSN` is set; the
-frontend reads `SENTRY_DSN` (server) / `NEXT_PUBLIC_SENTRY_DSN` (client) and only
-wraps `next.config.ts` when `SENTRY_DSN` is present, so local builds never need Sentry keys.
-
-CORS also allows any `https://*.vercel.app` via regex (preview deploys).
-
-## CI
-`main` push / PR runs `.github/workflows/ci.yml`: backend `compileall` + `import app.main` boot (never touches the DB — keys stay out of CI), frontend `npm ci` + `npm run lint` + `npm run build`. Green CI required before deploy reviews.
-
-`render.yaml` declares the B2 service env (`B2_APPLICATION_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`, all `sync: false`) plus `restartPolicy: web`; the actual secret values stay in the Render dashboard.
-
-## Deploy checklist
-1. Push to `main` → both platforms rebuild.
-2. Wake the API: first request after idle may take ~30–60 s (free tier sleep).
-3. Verify `GET /api/health` returns ok.
-4. Login and confirm `/api/dashboard` returns 200.
-
-## Soft-launch checklist (final regression)
-1. CI green on the pushed commit (both jobs).
-2. Full functional suite passes locally (temp `test_all.py`, **63/63**).
-3. Landing: `/` renders, both CTAs route to `/signup`, footer has Privacy/Terms links.
-4. Authenticated smoke on prod URLs:
-   - Dashboard loads 4 stats + onboarding checklist (fresh account).
-   - Agent Studio: create an agent.
-   - Knowledge Base: upload a file → row shows chunks; Actions (Open/Download/Delete) work.
-   - Chat: new conversation streams with sources; status Resolve/Halt; conversation delete removes the thread.
-   - Settings: Service Status shows DB + B2 Connected; "Delete workspace" typed-confirm wipes data.
-   - Ops: `/ops` shows for OPERATOR_EMAILS members only and renders RAG engine pill, metrics, vector sync, alerts, activity feed.
-5. Discovery submission (manual, one-time): Google Search Console + Bing Webmaster — verify `base-mind.vercel.app`, submit `https://base-mind.vercel.app/sitemap.xml`, request indexing of `/`. Exact steps in `AI_DISCOVERABILITY_FRAMEWORKS.md`.
-6. Check Render + Vercel logs for request-log lines and any 5xx spikes.
-
-## Swapping the Clerk dev instance
-1. Create new application at dashboard.clerk.com.
-2. Update publishable key in Vercel (+ local) → redeploy frontend.
-3. Update `CLERK_JWKS_URL` + `CLERK_ISSUER` in Render to the NEW instance domain → redeploy backend.
-4. Old tokens/cookies are invalid; users just log in again.
-
-## Launch ops checklist
-
-### A. Live endpoints — pre-verified
-| Check | Expected | Status |
+| Service | Host / Platform | Production URL |
 |---|---|---|
-| `GET https://basemind-api.onrender.com/api/health` | 200 | ✓ (early access) |
-| `GET https://base-mind.vercel.app/robots.txt` | 200 | ✓ |
-| `GET https://base-mind.vercel.app/sitemap.xml` | 200 | ✓ |
-| `GET https://base-mind.vercel.app/google8607095a72bb7021.html` | 200 (GSC verify file) | ✓ |
-| `GET https://base-mind.vercel.app/opengraph-image` | 200 (OG/social card) | ✓ |
+| **Web Frontend** | Vercel (Edge + Node.js) | [base-mind.vercel.app](https://base-mind.vercel.app) |
+| **Backend REST & SSE API** | Render (Web Service) | [basemind-api.onrender.com](https://basemind-api.onrender.com) |
+| **Database** | Neon (Serverless Postgres) | `postgresql+asyncpg://...@...neon.tech/neondb?ssl=require` |
+| **Object Storage** | Backblaze B2 (Private S3) | Bucket `BaseMind` |
+| **Authentication** | Clerk (JWT Session Provider) | Production Clerk Dashboard |
 
-### B. Uptime monitoring (free UptimeRobot, manual — needs account)
-1. Sign up at uptimerobot.com (free).
-2. New monitor: **HTTP(s)**, URL `https://basemind-api.onrender.com/api/health`, interval 5 min, alert via email.
-3. Notify when down 2 consecutive checks; treat scheduled Render restarts as expected.
-4. Optional second monitor on `https://base-mind.vercel.app` (200).
-_Status: ✓ complete (2026-09-13) — confirm green monitor in UptimeRobot dashboard._
+---
 
-### C. Search engine submission (one-time, manual — needs GSC access)
-1. Google Search Console → Add property `base-mind.vercel.app` → verify via HTML file (already deployed at `/google8607095a72bb7021.html`).
-2. Submit sitemap `https://base-mind.vercel.app/sitemap.xml`.
-3. Bing Webmaster → import from Search Console → submit the same sitemap.
-4. Request indexing for `/` after each major release. Full detail: `AI_DISCOVERABILITY_FRAMEWORKS.md`.
-_Status: ✓ complete (2026-09-13) — indexing takes days; not yet visible in search._
+## Environment Variables Configuration
 
-### D. Prod smoke (authenticated)
-- `/login` → dashboard loads with onboarding checklist.
-- Agent Studio → create agent → appears on dashboard.
-- Knowledge Base → upload file → chunks count appears → Open/Download/Delete work.
-- Chat → new conversation streams with sources → Resolve/Halt → delete thread.
-- Settings → Service Status shows DB *and* B2 Connected.
-_Status: ✓ complete (2026-09-13). Public surface re-verified: health/robots/sitemap/verify-file all 200, og:image live._
+### 1. Frontend (Vercel & Local `.env.local`)
 
-## Planned
-- Production Clerk instance with custom domain for a real launch (dev instance `secure-griffon-2008` suffices for evaluation).
-- Credits/usage card on `/ops` (schema + tables exist; renders once Gap 1 Razorpay billing ships).
+| Variable | Description | Example / Required Value |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Base URL of FastAPI backend | `https://basemind-api.onrender.com` (Prod) / `http://localhost:8000` (Local) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key | `pk_live_...` (Prod) / `pk_test_...` (Dev) |
+| `NEXT_PUBLIC_SENTRY_DSN` | Client-side Sentry error tracking (Optional) | `https://...@o...ingest.sentry.io/...` |
+
+---
+
+### 2. Backend (Render & Local `.env`)
+
+#### Database & Authentication
+| Variable | Description | Production Setting |
+|---|---|---|
+| `DATABASE_URL` | Neon PostgreSQL async connection string | `postgresql+asyncpg://[user]:[password]@[host]/neondb?ssl=require` |
+| `CLERK_JWKS_URL` | Clerk JWKS public key endpoint | `https://<instance>.clerk.accounts.dev/.well-known/jwks.json` |
+| `CLERK_ISSUER` | Expected JWT issuer (with or without trailing slash) | `https://<instance>.clerk.accounts.dev` |
+| `ALLOWED_ORIGINS` | Permitted CORS client origins | `https://base-mind.vercel.app,http://localhost:3000` |
+
+#### AI & RAG Engine
+| Variable | Description | Production Setting |
+|---|---|---|
+| `GEMINI_API_KEY` | Google AI Studio API key | Key with permissions for `gemini-2.5-flash` and `gemini-embedding-001` |
+
+#### Backblaze B2 Storage
+| Variable | Description | Production Setting |
+|---|---|---|
+| `B2_APPLICATION_KEY_ID` | Backblaze Application Key ID | Private scoped key |
+| `B2_APPLICATION_KEY` | Backblaze Application Key secret | Secret key |
+| `B2_BUCKET_NAME` | Storage bucket name | `BaseMind` |
+
+#### Transactional Email Alerts (Resend / Brevo / SMTP)
+| Variable | Description | Production Setting |
+|---|---|---|
+| `BREVO_ENABLED` | Toggle email alert dispatching | `1` (or `true`) |
+| `BREVO_API_KEY` | SMTP or transactional email API key | Active API key |
+| `BREVO_SENDER_EMAIL` | Verified sender email address | `support@yourdomain.com` |
+| `BREVO_SENDER_NAME` | Display name on email alerts | `BaseMind Support` |
+
+#### Observability & Super-Admin Console
+| Variable | Description | Production Setting |
+|---|---|---|
+| `SENTRY_DSN` | Sentry DSN for backend exception reporting | `https://...@ingest.sentry.io/...` |
+| `OPERATOR_EMAILS` | Comma-separated emails allowed into `/ops` and `/admin` | `admin@yourdomain.com,owner@yourdomain.com` |
+
+---
+
+## Database Migrations (Alembic)
+
+BaseMind uses Alembic to manage database schema evolutions. Migrations must be run whenever schema changes occur:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+### Automated Boot DDL Guards:
+In addition to Alembic, the backend engine (`backend/app/db.py`) executes idempotent DDL checks on startup (`CREATE EXTENSION IF NOT EXISTS vector;`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`), ensuring that cold boots on Render never crash due to missing columns or race conditions.
+
+---
+
+## Deployment & Verification Checklist
+
+### Pre-Deployment
+1. Run local tests:
+   ```bash
+   cd backend && pytest tests/
+   cd ../frontend && npm run lint && npm run build
+   ```
+2. Confirm both jobs pass with 0 errors.
+
+### Deploying
+1. Commit and push to the `main` branch on GitHub:
+   ```bash
+   git push origin main
+   ```
+2. GitHub Webhook triggers automated builds:
+   - **Vercel**: Compiles Next.js 16 app with Turbopack and pushes to edge CDN.
+   - **Render**: Rebuilds Python container, runs pip installs, and boots Uvicorn worker.
+
+### Post-Deployment Smoke Test
+1. **Health Check**:
+   ```bash
+   curl -s https://basemind-api.onrender.com/api/health
+   # Expected: {"status": "ok", "service": "basemind-api", "checks": {"db": {"status": "ok"}, "b2": {"status": "ok"}}}
+   ```
+2. **Auth Verification**:
+   - Log into `https://base-mind.vercel.app/login`.
+   - Verify `/dashboard` renders with live statistics and no 401 toast notifications.
+3. **RAG Chat Test**:
+   - Open `/chat`, select an agent, and send a message. Verify Server-Sent Events stream answers with citations.
+4. **Public Widget Test**:
+   - Open `/widget/{agentId}` in an incognito window.
+   - Send a query, click "Talk to Human", and verify that the status updates to *"Connecting to a human operator..."*.
+   - Check the operator studio to confirm the conversation appears in the **Escalated** queue.
