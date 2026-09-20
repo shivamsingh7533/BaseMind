@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LogoLockup } from "@/components/logo-lockup";
 import { Badge } from "@/components/ui/badge";
 import { PricingSection } from "@/components/pricing-section";
+import { Footer } from "@/components/footer";
 
 const FEATURES = [
   {
@@ -163,35 +164,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        <div className="flex items-center justify-center gap-5">
-          <Link
-            href="/features"
-            className="hover:text-foreground hover:underline"
-          >
-            Features
-          </Link>
-          <Link
-            href="/pricing"
-            className="hover:text-foreground hover:underline"
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/legal/privacy"
-            className="hover:text-foreground hover:underline"
-          >
-            Privacy Policy
-          </Link>
-          <Link
-            href="/legal/terms"
-            className="hover:text-foreground hover:underline"
-          >
-            Terms of Service
-          </Link>
-        </div>
-        <p className="mt-3">© 2026 BaseMind. All rights reserved.</p>
-      </footer>
+      <Footer />
     </div>
   );
 }

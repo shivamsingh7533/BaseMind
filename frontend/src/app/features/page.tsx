@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
   title: "Features | BaseMind — Intelligence for Support & Knowledge",
@@ -254,6 +255,8 @@ export default function FeaturesPage() {
           </div>
         </div>
       </section>
+
+      <Footer />
     </div>
   );
 }

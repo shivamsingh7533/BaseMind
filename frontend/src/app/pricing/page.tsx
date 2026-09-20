@@ -4,6 +4,7 @@ import { Check, ChevronDown, HelpCircle, Shield, Zap } from "lucide-react";
 import { PricingSection } from "@/components/pricing-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
   title: "Pricing | BaseMind — Simple, Transparent Pricing",
@@ -165,6 +166,8 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+
+      <Footer />
     </div>
   );
 }

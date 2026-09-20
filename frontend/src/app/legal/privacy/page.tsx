@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — BaseMind",
@@ -36,29 +37,32 @@ const SECTIONS: { h: string; body: string }[] = [
 
 export default function PrivacyPage() {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
-      <Link
-        href="/"
-        className="text-sm font-medium text-primary hover:underline"
-      >
-        ← Back to home
-      </Link>
-      <h1 className="mt-4 font-heading text-3xl font-bold tracking-tight">
-        Privacy Policy
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Last updated: September 2026
-      </p>
-      <div className="mt-8 space-y-8">
-        {SECTIONS.map((s) => (
-          <section key={s.h}>
-            <h2 className="font-heading text-xl font-semibold">{s.h}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {s.body}
-            </p>
-          </section>
-        ))}
+    <div className="min-h-screen flex flex-col justify-between">
+      <div className="mx-auto max-w-3xl px-6 py-16 flex-1 w-full">
+        <Link
+          href="/"
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          ← Back to home
+        </Link>
+        <h1 className="mt-4 font-heading text-3xl font-bold tracking-tight">
+          Privacy Policy
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Last updated: September 2026
+        </p>
+        <div className="mt-8 space-y-8">
+          {SECTIONS.map((s) => (
+            <section key={s.h}>
+              <h2 className="font-heading text-xl font-semibold">{s.h}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {s.body}
+              </p>
+            </section>
+          ))}
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }
