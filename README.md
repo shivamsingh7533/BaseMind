@@ -1,230 +1,290 @@
-# BaseMind — Autonomous Multi-Channel AI Customer Support & RAG Platform
+<p align="center">
+  <img src="./frontend/public/logo.svg" alt="BaseMind Logo" width="110"/>
+</p>
 
-<div align="center">
+<h1 align="center">🧠 BaseMind — Autonomous Multi-Channel AI Customer Support & RAG Platform</h1>
 
-![BaseMind Banner](https://img.shields.io/badge/BaseMind-AI_SaaS_Platform-0d9488?style=for-the-badge&logo=probot&logoColor=white)
-[![Next.js 16](https://img.shields.io/badge/Next.js_16-App_Router-black?style=flat-square&logo=next.js)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.12-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![PostgreSQL](https://img.shields.io/badge/Neon_PostgreSQL-pgvector-336791?style=flat-square&logo=postgresql)](https://neon.tech/)
-[![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?style=flat-square&logo=google)](https://ai.google.dev/)
-[![Clerk Auth](https://img.shields.io/badge/Clerk-JWT_Auth-6C47FF?style=flat-square&logo=clerk)](https://clerk.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+<p align="center">
+  <strong>Deploy Grounded AI Support Agents · Ingest Multi-Source Knowledge · Seamlessly Hand Over to Human Operators</strong>
+</p>
 
-**Deploy high-accuracy, hallucination-resistant AI support agents in minutes.**  
-Connect your documents and website URLs, deploy embeddable chat widgets, integrate directly into Slack and Discord, capture inbound leads, and seamlessly escalate complex conversations to human operators in real-time.
+<p align="center">
+  <a href="https://base-mind.vercel.app/">
+    <img src="https://img.shields.io/badge/🌐_Live_Demo-Visit_Now-0D9488?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo"/>
+  </a>
+  <a href="https://github.com/shivamsingh7533/BaseMind">
+    <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"/>
+  </a>
+  <a href="https://basemind-api.onrender.com/api/health">
+    <img src="https://img.shields.io/badge/⚡_API_Status-Operational-22C55E?style=for-the-badge&logo=fastapi&logoColor=white" alt="API Status"/>
+  </a>
+</p>
 
-[Live Application](https://base-mind.vercel.app) · [Backend API](https://basemind-api.onrender.com/api/health) · [Interactive API Docs](https://basemind-api.onrender.com/docs)
-
-</div>
-
----
-
-## 🌟 Key Features
-
-### 🧠 Grounded Gemini RAG Architecture
-- **Multi-Source Ingestion**: Ingest PDF, TXT, CSV, Markdown, and live website URLs via asynchronous streaming web crawlers.
-- **pgvector Semantic Search**: High-dimensional vector embeddings (`gemini-embedding-001`, 768-dim) paired with cosine similarity and contextual re-ranking.
-- **Backblaze B2 Object Storage**: Private, encrypted cloud storage for original source files with secure time-limited signed download URLs.
-- **Transparent Citations**: Every AI response streams real-time citations linking directly to exact source document chunks.
-
-### 🎧 Human-in-the-Loop Live Takeover & Handover
-- **Instant Operator Escalation**: Visitors can click "Talk to Human" or type natural language escalation requests (e.g., *"I want to talk to an agent"*).
-- **Zero Hallucination Pause**: Automated bot pauses token generation instantly when a thread enters the handover queue (`needs_human`).
-- **Live Operator Mode**: Support agents can claim conversations (`in_takeover`), chat directly with visitors using custom agent names, and return conversations back to AI with one click.
-- **Real-Time Polling Engine**: Visitor widget and operator studio stay synchronized without page refreshes.
-
-### 💬 Multi-Channel Bot Integrations
-- **Embeddable JavaScript Widget**: One-line `<script>` tag or iframe embed (`/widget/{agentId}`) for any web application or CMS.
-- **Slack App Webhooks**: Bidirectional Slack bot listening to `app_mention` and DM events, answering queries directly inside customer channels.
-- **Discord Bot Webhooks**: Discord interaction endpoint responding to slash commands and server messages.
-
-### 🎯 Lead Capture & CRM Pipeline
-- **Pre-Chat & In-Chat Forms**: Capture visitor name, email, phone number, company, and message before or during support conversations.
-- **Leads Management**: Dedicated CRM dashboard with status tracking (`new`, `contacted`, `converted`, `dismissed`) and CSV export.
-- **Instant Email Alerts**: Asynchronous email notifications to workspace owners via Resend/SMTP when escalations occur or new leads arrive (with rate-limiting cooldowns).
-
-### 🏷️ White-Label Pro Branding
-- Custom widget brand name and toggle to remove *"Powered by BaseMind"* branding on Pro accounts.
-
-### 🔐 Multi-Tenant Security & Isolation
-- JWT session authentication powered by Clerk with clock-skew tolerance (`leeway=60`) and JWKS auto-discovery.
-- Row-Level Ownership Enforcement (`user_id` scoping across all DB queries).
-- Ephemeral workspace wipe (`DELETE /api/me`) with cascading purges for GDPR/privacy compliance.
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16.3.2-black?style=flat-square&logo=next.js&logoColor=white"/>
+  <img src="https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react&logoColor=black"/>
+  <img src="https://img.shields.io/badge/TailwindCSS-4.x-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white"/>
+  <img src="https://img.shields.io/badge/FastAPI-Python_3.12-009688?style=flat-square&logo=fastapi&logoColor=white"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-Neon_pgvector-336791?style=flat-square&logo=postgresql&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Google_Gemini-2.5_Flash_RAG-4285F4?style=flat-square&logo=google&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Auth-Clerk_JWT-6C47FF?style=flat-square&logo=clerk&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Storage-Backblaze_B2-D32F2F?style=flat-square&logo=backblaze&logoColor=white"/>
+</p>
 
 ---
 
-## 🏗️ Architecture & Request Flow
+## 📖 Overview
+
+**BaseMind** is a production-grade, multi-tenant AI customer support and conversational automation platform. Designed for fast-growing SaaS products, e-commerce stores, and digital agencies, BaseMind bridges the gap between hallucination-free generative AI and human customer service teams.
+
+With BaseMind, businesses can connect documentation, knowledge bases, and live web pages to deploy autonomous AI agents across web widgets, Slack, and Discord. When a customer inquiry requires nuanced human intervention, BaseMind's real-time **Human-in-the-Loop Handover System** instantly pauses the bot, alerts workspace operators via instant email, and provides a live operator chat console for seamless human takeover.
+
+---
+
+## ✨ Key Features
+
+### 🧠 **Grounded Gemini 2.5 RAG Engine**
+- 📄 **Multi-Format Document Ingestion**: Upload PDF, TXT, CSV, and Markdown files up to 10 MB.
+- 🌐 **Async Web Crawler**: Scrapes live website URLs, cleans markup, and auto-syncs knowledge bases.
+- ⚡ **pgvector Cosine Similarity**: High-performance 768-dimensional vector indexing (`gemini-embedding-001`).
+- 🔍 **Real-Time Citation Links**: Every AI response streams with verifiable source badges pointing to exact chunks.
+- 🔒 **Encrypted Cloud Storage**: Original uploaded files stored securely in private Backblaze B2 buckets with short-lived signed download URLs.
+
+### 🎧 **Human-in-the-Loop Live Takeover & Handover**
+- 🙋‍♂️ **Visitor "Talk to Human" Trigger**: One-click escalation button inside the visitor chat widget.
+- 🗣️ **Natural Language Intent Detection**: Phrases like *"I want to talk to an agent"* or *"real person"* automatically escalate threads.
+- ⏸️ **Instant Bot Generation Pause**: Automatically enters `needs_human` queue to prevent conflicting bot replies.
+- 👩‍💼 **Live Operator Console**: Support agents claim conversations (`in_takeover`), reply using operator names, and return threads to the AI with one click.
+- 🔄 **Real-Time Polling Engine**: 3-second background polling keeps visitor widget and operator dashboard in sync without page refreshes.
+
+### 💬 **Multi-Channel Messaging Bots**
+- 💼 **Slack App Integration**: Bidirectional webhook bot answering `app_mention` and DM queries in Slack channels.
+- 🎮 **Discord Bot Integration**: Ed25519 cryptographic verification for slash commands and server inquiries.
+
+### 🌐 **Embeddable Customer Chat Widget**
+- 📦 **One-Line Web Embed**: Add to any website via `<script>` tag or standalone iframe (`/widget/{agentId}`).
+- 🎨 **Full Visual Customization**: Custom primary colors, avatar, starter questions, and greeting cards.
+- 🛡️ **Allowed Domains Sandboxing**: Restrict widget initialization strictly to authorized customer domains.
+
+### 🎯 **Lead Capture CRM & Pipeline**
+- 📋 **In-Chat Lead Forms**: Capture visitor name, email, phone number, company, and message before or during chat.
+- 📊 **Dedicated Leads CRM**: Filter leads by status (`new`, `contacted`, `converted`, `dismissed`) and associated agent.
+- 📥 **One-Click CSV Export**: Export captured leads formatted for HubSpot, Salesforce, or Google Sheets.
+
+### 🏷️ **White-Label & Custom Branding (Pro)**
+- 🏢 **Custom Brand Attribution**: Replace *"Powered by BaseMind"* with custom branding (e.g., *"Powered by Acme Support"*).
+- 🚫 **Complete Branding Removal**: Option to remove platform footer branding entirely on Pro plans.
+
+### 🔐 **Authentication & Multi-Tenant Security**
+- 🔑 **Clerk JWT Authentication**: Robust session verification with 60-second clock-drift leeway and JWKS auto-derivation.
+- 🛡️ **Row-Level Tenant Isolation**: All queries strictly scoped by `user_id` with foreign key cascade deletions.
+- 🧨 **Ephemeral Workspace Purge**: One-click GDPR-compliant workspace wipe (`DELETE /api/me`) that purges all database rows and B2 files.
+
+### 📬 **Instant Transactional Email Notifications**
+- ⚡ **Real-Time Alerts**: Asynchronous email notifications to workspace owners via Resend/SMTP when escalations occur or new leads arrive.
+- ⏱️ **Intelligent Rate-Limiting**: 2-minute escalation cooldown and 1-minute lead cooldown prevent notification spam.
+
+### 📊 **Operational Analytics & Knowledge Gaps**
+- 📈 **Resolution & Sentiment Metrics**: Track conversation volume, average resolution latency, CSAT scores, and user sentiment.
+- ❓ **Automated Knowledge Gap Detection**: Flags unanswered queries with low semantic match confidence so admins can update documentation.
+
+---
+
+## 👥 Role-Based Access & Operating Modes
+
+| Role / Mode | Capabilities |
+|---|---|
+| **Visitor / Customer** | Chats via embeddable widget, requests human handover, submits lead details, views source citations |
+| **Autonomous AI Bot** | Answers questions grounded on vector knowledge base, detects escalation intent, streams SSE responses |
+| **Human Operator** | Views escalated conversations queue, claims live takeover, chats directly with visitors, returns thread to AI |
+| **Workspace Admin** | Creates/configures agents, uploads knowledge files, syncs web URLs, manages leads CRM, views analytics |
+| **Platform Operator (Super-Admin)**| Accesses `/ops` console (guarded by `OPERATOR_EMAILS`), views multi-tenant trends, system health, and error logs |
+
+---
+
+## 🛠️ Tech Stack
+
+### **Frontend**
+| Technology | Purpose |
+|---|---|
+| [Next.js 16](https://nextjs.org/) | React App Router Framework (Turbopack, Server & Client Components) |
+| [React 19](https://react.dev/) | Core UI Library |
+| [TypeScript 5](https://www.typescriptlang.org/) | End-to-end static type safety |
+| [Tailwind CSS 4](https://tailwindcss.com/) | Modern utility-first CSS styling & responsive layouts |
+| [Clerk](https://clerk.com/) | Authentication, JWT session tokens, and route protection |
+| [Zustand](https://github.com/pmndrs/zustand) | Global client-side state management with TTL caching |
+| [Lucide React](https://lucide.dev/) | Clean, modern iconography |
+| [Sonner](https://sonner.emilkowal.ski/) | Toast notification system with detailed error messages |
+
+### **Backend & Cloud Infrastructure**
+| Technology | Purpose |
+|---|---|
+| [FastAPI](https://fastapi.tiangolo.com/) | High-performance asynchronous Python REST & SSE web framework |
+| [Neon PostgreSQL](https://neon.tech/) | Serverless PostgreSQL 16 database |
+| [pgvector](https://github.com/pgvector/pgvector) | Vector similarity search using 768-dimensional embeddings |
+| [Google Gemini 2.5 Flash](https://ai.google.dev/) | Generative AI foundation model for streaming answers |
+| [Google Gemini Embeddings](https://ai.google.dev/) | `gemini-embedding-001` text embedding generation |
+| [Backblaze B2](https://www.backblaze.com/b2/) | Private, S3-compatible cloud object storage for source documents |
+| [SQLAlchemy 2.0](https://www.sqlalchemy.org/) & [Alembic](https://alembic.sqlalchemy.org/) | Async ORM & automated database migrations |
+| [PyPDF](https://pypi.org/project/pypdf/) & [HTTPX](https://www.python-httpx.org/) | Document text extraction and asynchronous web crawling |
+| [Resend / Brevo](https://www.brevo.com/) | Asynchronous transactional email alerts for escalations & leads |
+| [Vercel](https://vercel.com/) | Global Edge CDN hosting for Next.js frontend |
+| [Render](https://render.com/) | Managed cloud hosting for FastAPI backend service |
+
+---
+
+## 🏗️ Architecture & Data Flow
 
 ```mermaid
 graph TD
-    A[Visitor / Client] -->|Web Widget / Slack / Discord| B(FastAPI Gateway)
-    B -->|Verify Clerk JWT / Auth| C{Authorized?}
-    C -->|No| D[401 Unauthorized]
-    C -->|Yes| E[Routing Engine]
-    
-    E -->|Upload Doc / Sync URL| F[Text Extraction & Chunking]
-    F -->|Gemini Embeddings| G[(Neon PostgreSQL + pgvector)]
-    F -->|Raw File Archive| H[(Backblaze B2 Storage)]
-    
-    E -->|Chat Query| I[Semantic Vector Search]
-    G -->|Top-K Chunks| I
-    I -->|Augmented Prompt| J[Gemini 2.5 Flash]
-    J -->|Server-Sent Events| A
-    
-    E -->|Escalation / Handover| K[Handover Queue: needs_human]
-    K -->|Email Alert| L[Workspace Owner Inbox]
-    K -->|Operator Takeover| M[Human Operator Studio]
-    M -->|Operator Reply| A
+    subgraph Client Layer
+        A[Website Visitor] -->|Embed Widget / Standalone| B(Public Chat API)
+        C[Slack User] -->|Slack Events API| D(Slack Webhook)
+        E[Discord User] -->|Interactions API| F(Discord Webhook)
+        G[Support Operator] -->|Next.js Studio| H(Operator Console)
+    end
+
+    subgraph API Gateway (FastAPI on Render)
+        B & D & F & H --> I{Routing & Auth Guard}
+        I -->|Clerk JWT / Webhook Sig| J[Verified Handlers]
+    end
+
+    subgraph Core Engines
+        J -->|Document Upload / URL Sync| K[Ingestion & Chunking Pipeline]
+        J -->|RAG Question| L[pgvector Cosine Search]
+        J -->|Escalation Request| M[Handover State Machine]
+        J -->|Lead Capture| N[Leads CRM Pipeline]
+    end
+
+    subgraph Storage & AI Services
+        K -->|Embeddings| O[(Neon PostgreSQL + pgvector)]
+        K -->|Raw File Archive| P[(Backblaze B2 Storage)]
+        L -->|Context Chunks| Q[Google Gemini 2.5 Flash]
+        Q -->|Stream Tokens & Citations| B
+        M -->|Instant Notification| R[Owner Email Inbox]
+    end
 ```
 
 ---
 
-## 📂 Repository Structure
+## 📡 Key API Endpoints
 
-```
-BaseMind/
-├── backend/                  # FastAPI REST & SSE API
-│   ├── alembic/              # PostgreSQL schema migrations (0001 - 0011)
-│   ├── app/
-│   │   ├── main.py           # Application entrypoint, CORS, Sentry & Prometheus
-│   │   ├── auth.py           # Clerk JWKS & JWT verification with leeway
-│   │   ├── models.py         # SQLAlchemy models (User, Agent, Document, Lead, etc.)
-│   │   ├── schemas.py        # Pydantic schemas & response validation
-│   │   ├── ai.py             # Gemini RAG pipeline, embeddings & streaming
-│   │   ├── storage.py        # Backblaze B2 S3-compatible client
-│   │   ├── email.py          # Transactional email alert engine
-│   │   └── routers/          # Modular API endpoints
-│   │       ├── agents.py     # Agent studio & branding configuration
-│   │       ├── analytics.py  # Usage metrics, CSAT & sentiment trends
-│   │       ├── billing.py    # Subscriptions & checkout
-│   │       ├── conversations.py # Chat sessions, SSE & operator takeover
-│   │       ├── dashboard.py  # Aggregated workspace statistics
-│   │       ├── documents.py  # File upload, web sync & previews
-│   │       ├── integrations.py # Slack & Discord webhooks
-│   │       ├── leads.py      # Lead capture CRM & CSV exports
-│   │       ├── public.py     # Widget public endpoints & handover
-│   │       └── admin.py      # Ops observability & tenant management
-│   └── tests/                # Pytest functional and integration test suites
-│
-├── frontend/                 # Next.js 16 App Router (TypeScript, Tailwind CSS)
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── (app)/        # Protected workspace routes
-│   │   │   │   ├── dashboard/    # Workspace overview & onboarding
-│   │   │   │   ├── agents/       # Agent configuration & widget customization
-│   │   │   │   ├── knowledge-base/# File upload & web crawler ingestion
-│   │   │   │   ├── chat/         # Live chat studio & operator takeover
-│   │   │   │   ├── leads/        # Lead management CRM
-│   │   │   │   ├── analytics/    # Resolution rate & sentiment charts
-│   │   │   │   └── settings/     # Storage status & workspace security
-│   │   │   ├── widget/       # Standalone embeddable public chat widget
-│   │   │   ├── features/     # Product capabilities showcase
-│   │   │   ├── pricing/      # Subscription tiers & FAQ
-│   │   │   ├── legal/        # Privacy policy & Terms of service
-│   │   │   └── page.tsx      # High-conversion marketing landing page
-│   │   ├── components/       # UI design system & shared components
-│   │   │   ├── footer.tsx    # Responsive SaaS footer with live health status
-│   │   │   └── ...
-│   │   └── lib/api/          # Strongly-typed API client & Zod schemas
-│
-└── docs/                     # Technical specifications & system architecture
-    ├── API.md                # Comprehensive API endpoint reference
-    ├── ARCHITECTURE.md       # Multi-tenant and component architecture
-    ├── DB_SCHEMA.md          # Complete PostgreSQL schema & relationships
-    ├── DEPLOYMENT.md         # Production deployment guide (Render + Vercel)
-    └── TECH_STACK.md         # Complete technology inventory
-```
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/health` | Live service health check (DB + Backblaze B2 status) |
+| `GET` | `/api/agents` | List workspace AI agents |
+| `POST` | `/api/agents` | Create new agent with custom instructions and colors |
+| `PATCH` | `/api/agents/{id}` | Update agent configuration, status, or white-label branding |
+| `POST` | `/api/documents/upload` | Upload & chunk PDF/TXT/CSV/MD with Gemini embeddings |
+| `POST` | `/api/documents/sync` | Scrape and ingest external web URLs into knowledge base |
+| `GET` | `/api/documents/{id}/download-url` | Generate Backblaze B2 signed download URL |
+| `POST` | `/api/conversations/{id}/chat` | SSE streaming AI chat with inline citations |
+| `POST` | `/api/conversations/{id}/takeover` | Human operator claims conversation |
+| `POST` | `/api/conversations/{id}/return-to-ai` | Operator returns thread back to AI bot |
+| `GET` | `/api/public/agents/{id}` | Public widget configuration & branding |
+| `POST` | `/api/public/conversations/{id}/chat` | Public visitor streaming chat & escalation detection |
+| `POST` | `/api/public/conversations/{id}/handover` | Visitor triggers human handover request |
+| `POST` | `/api/public/agents/{id}/leads` | Public lead capture form submission |
+| `GET` | `/api/leads` | List captured leads with filter and search |
+| `POST` | `/api/leads/export` | Export leads in CSV format |
+| `POST` | `/api/integrations/slack/events` | Bidirectional Slack events webhook listener |
+| `POST` | `/api/integrations/discord/interactions`| Discord slash command webhook listener |
+| `GET` | `/api/dashboard` | Aggregated analytics, 7-day trends, and activity |
+
+*For complete parameters, request bodies, and error formats, see [docs/API.md](docs/API.md).*
 
 ---
 
-## 🚀 Quick Start (Local Development)
+## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 20+
-- PostgreSQL database with `pgvector` extension enabled (or [Neon](https://neon.tech))
-- Google Gemini API Key ([Google AI Studio](https://aistudio.google.com/))
-- Clerk Authentication project ([Clerk Dashboard](https://clerk.com/))
+- **Python**: `3.11` or higher
+- **Node.js**: `20.x` or higher
+- **PostgreSQL**: Version 16 with `pgvector` extension enabled ([Neon](https://neon.tech) recommended)
+- **Google Gemini API Key**: ([Google AI Studio](https://aistudio.google.com/))
+- **Clerk Account**: ([Clerk Dashboard](https://clerk.com/))
+
+---
 
 ### 1. Backend Setup
 
 ```bash
-cd backend
+# Clone the repository
+git clone https://github.com/shivamsingh7533/BaseMind.git
+cd BaseMind/backend
 
-# Create and activate virtual environment
+# Create and activate Python virtual environment
 python -m venv .venv
 .venv\Scripts\activate       # Windows
-# source .venv/bin/activate  # macOS/Linux
+# source .venv/bin/activate  # macOS / Linux
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure environment variables
 cp .env.example .env
-# Edit .env with your DATABASE_URL, GEMINI_API_KEY, CLERK_JWKS_URL, etc.
+```
 
-# Run database migrations
+Edit `.env` with your credentials:
+```env
+DATABASE_URL=postgresql+asyncpg://[user]:[password]@[host]/neondb?ssl=require
+CLERK_JWKS_URL=https://<instance>.clerk.accounts.dev/.well-known/jwks.json
+CLERK_ISSUER=https://<instance>.clerk.accounts.dev
+GEMINI_API_KEY=your_gemini_api_key
+B2_APPLICATION_KEY_ID=your_b2_key_id
+B2_APPLICATION_KEY=your_b2_secret_key
+B2_BUCKET_NAME=BaseMind
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+Apply database migrations and start the server:
+```bash
 alembic upgrade head
-
-# Start development server
 uvicorn app.main:app --reload --port 8000
 ```
-API will be live at `http://localhost:8000` with Swagger docs at `http://localhost:8000/docs`.
+API will run at `http://localhost:8000` with Swagger docs at `http://localhost:8000/docs`.
+
+---
 
 ### 2. Frontend Setup
 
 ```bash
-cd frontend
+cd ../frontend
 
-# Install dependencies
+# Install node dependencies
 npm install
 
 # Configure environment variables
 cp .env.example .env.local
-# Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-# Start Next.js development server
+Edit `.env.local`:
+```env
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Start Next.js development server:
+```bash
 npm run dev
 ```
-Open `http://localhost:3000` in your browser.
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
 
-## 📡 API Reference Overview
+## 🌐 Production Deployment
 
-| Domain | Method & Route | Description |
-|---|---|---|
-| **Health** | `GET /api/health` | Live service health & DB/B2 connectivity |
-| **Agents** | `GET /api/agents` · `POST /api/agents` | Manage AI agents and custom instructions |
-| **Branding** | `PATCH /api/agents/{id}` | Configure white-label branding & custom names |
-| **Documents**| `POST /api/documents/upload` | Ingest PDF, TXT, CSV, MD with Gemini RAG |
-| **Crawler**  | `POST /api/documents/sync` | Scrape and embed web pages into knowledge base |
-| **Download** | `GET /api/documents/{id}/download-url` | Generate Backblaze B2 short-lived signed URL |
-| **Chat**     | `POST /api/conversations/{id}/chat` | SSE streaming AI chat with cited sources |
-| **Takeover** | `POST /api/conversations/{id}/takeover` | Human operator claims conversation |
-| **Handover** | `POST /api/conversations/{id}/return-to-ai` | Return thread from human operator back to bot |
-| **Public**   | `GET /api/public/agents/{id}` | Fetch public widget configuration & branding |
-| **Public Chat** | `POST /api/public/conversations/{id}/chat` | Public visitor streaming chat & escalation |
-| **Leads**    | `GET /api/leads` · `POST /api/leads/export` | Query captured leads and export to CSV |
-| **Slack**    | `POST /api/integrations/slack/events` | Bidirectional Slack event webhook receiver |
-| **Discord**  | `POST /api/integrations/discord/interactions` | Discord interaction webhook receiver |
+- **Frontend**: Connect your GitHub repository to [Vercel](https://vercel.com). Vercel will automatically build and deploy the Next.js 16 app.
+- **Backend**: Deploy as a Web Service on [Render](https://render.com) using the `backend/` directory, pointing the start command to `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- **Database**: Serverless PostgreSQL on [Neon](https://neon.tech) with automatic scaling and zero cold-starts.
+- **Object Storage**: Private bucket on [Backblaze B2](https://www.backblaze.com/b2/).
 
-*For complete endpoint schemas, query parameters, and example responses, see [docs/API.md](docs/API.md).*
+*For step-by-step production checklists, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).*
 
 ---
 
-## 🛡️ Production Deployment
+## 📄 License & Author
 
-BaseMind is optimized for continuous delivery:
-- **Frontend**: Deployed on [Vercel](https://vercel.com) with Edge middleware and automated branch previews.
-- **Backend**: Deployed on [Render](https://render.com) with automated health probes and Prometheus metrics.
-- **Database**: Serverless PostgreSQL with `pgvector` hosted on [Neon](https://neon.tech).
-- **Storage**: S3-compatible private storage hosted on [Backblaze B2](https://www.backblaze.com/b2/).
+Distributed under the **MIT License**. See `LICENSE` for more information.
 
-For production environment variables and CI/CD checklists, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+Created with ❤️ by **[Shivam Singh](https://github.com/shivamsingh7533)**.
