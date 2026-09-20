@@ -59,6 +59,22 @@ class LeadUpdate(BaseModel):
     message: str | None = Field(default=None, max_length=2000)
 
 
+class IntegrationCreate(BaseModel):
+    platform: Literal["slack", "discord"]
+    bot_token: str | None = Field(default=None, max_length=1000)
+    signing_secret: str | None = Field(default=None, max_length=1000)
+    webhook_url: str | None = Field(default=None, max_length=2048)
+    channel_id: str | None = Field(default=None, max_length=255)
+
+
+class IntegrationUpdate(BaseModel):
+    bot_token: str | None = Field(default=None, max_length=1000)
+    signing_secret: str | None = Field(default=None, max_length=1000)
+    webhook_url: str | None = Field(default=None, max_length=2048)
+    channel_id: str | None = Field(default=None, max_length=255)
+    status: Literal["active", "inactive"] | None = None
+
+
 class DocumentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     type: str = Field(default="PDF", max_length=20)
@@ -142,6 +158,30 @@ def serialize_lead(lead, agent_name: str | None = None) -> dict:
         "message": lead.message or "",
         "status": lead.status or "new",
         "createdAt": lead.created_at.isoformat() if getattr(lead, "created_at", None) else "",
+    }
+
+
+def serialize_integration(integ) -> dict:
+    def _mask(s: str | None) -> str:
+        if not s:
+            return ""
+        if len(s) <= 8:
+            return "••••••••"
+        return s[:4] + "••••••••" + s[-4:]
+
+    return {
+        "id": integ.id,
+        "agentId": integ.agent_id,
+        "platform": integ.platform,
+        "botTokenMasked": _mask(integ.bot_token),
+        "signingSecretMasked": _mask(integ.signing_secret),
+        "hasBotToken": bool(integ.bot_token),
+        "hasSigningSecret": bool(integ.signing_secret),
+        "webhookUrl": integ.webhook_url or "",
+        "channelId": integ.channel_id or "",
+        "status": integ.status,
+        "createdAt": integ.created_at.isoformat() if getattr(integ, "created_at", None) else "",
+        "updatedAt": integ.updated_at.isoformat() if getattr(integ, "updated_at", None) else "",
     }
 
 

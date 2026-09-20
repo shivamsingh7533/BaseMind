@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path
@@ -10,6 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 
 from .config import get_settings
+
+# Prefer IPv4 on networks where IPv6 routes are blackholed to avoid connection timeouts
+_orig_getaddrinfo = socket.getaddrinfo
+
+
+def _prefer_ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    if family == socket.AF_UNSPEC:
+        family = socket.AF_INET
+    return _orig_getaddrinfo(host, port, family, type, proto, flags)
+
+
+socket.getaddrinfo = _prefer_ipv4_getaddrinfo
 
 
 class Base(DeclarativeBase):
@@ -112,6 +125,29 @@ async def init_db() -> None:
             await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_agent_id ON leads(agent_id)")
             await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_conversation_id ON leads(conversation_id)")
             await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_leads_created_at ON leads(created_at)")
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS integrations (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                    platform TEXT NOT NULL,
+                    bot_token TEXT,
+                    signing_secret TEXT,
+                    webhook_url TEXT,
+                    channel_id TEXT,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_integrations_user_id ON integrations(user_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_integrations_agent_id ON integrations(agent_id)")
+            await conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_integrations_agent_platform ON integrations(agent_id, platform)"
+            )
 
     await run_migrations()
 

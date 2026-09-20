@@ -6,6 +6,7 @@ from .billing import router as _billing
 from .conversations import router as _conversations
 from .dashboard import router as _dashboard
 from .documents import router as _documents
+from .integrations import router as _integrations
 from .leads import router as _leads
 from .public import router as _public
 
@@ -18,6 +19,7 @@ router.include_router(_documents)
 router.include_router(_admin)
 router.include_router(_leads)
 router.include_router(_public)
+router.include_router(_integrations)
 
 # Re-exports kept for test compatibility (`from app import routers` then `routers.<fn>`).
 __all__ = [
@@ -55,6 +57,12 @@ __all__ = [
     "update_lead",
     "delete_lead",
     "export_leads_csv",
+    "list_agent_integrations",
+    "upsert_agent_integration",
+    "delete_agent_integration",
+    "trigger_integration_test",
+    "handle_slack_webhook",
+    "handle_discord_webhook",
     "list_agents",
     "list_conversations",
     "list_documents",
@@ -138,6 +146,14 @@ from .documents import (  # noqa: E402
     list_documents,
     sync_url,
     upload_document,
+)
+from .integrations import (  # noqa: E402
+    delete_agent_integration,
+    handle_discord_webhook,
+    handle_slack_webhook,
+    list_agent_integrations,
+    trigger_integration_test,
+    upsert_agent_integration,
 )
 from .leads import (  # noqa: E402
     delete_lead,

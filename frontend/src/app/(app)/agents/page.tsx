@@ -9,15 +9,20 @@ import {
   Code2,
   Copy,
   ExternalLink,
+  Hash,
   Headset,
   Loader2,
+  MessageSquareText,
   Pause,
   Play,
   Plus,
   Rocket,
   Send,
+  Share2,
+  ShieldCheck,
   Sparkles,
   Trash2,
+  Unlink,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,10 +53,15 @@ import {
   createAgent,
   createConversation,
   deleteAgent,
+  deleteAgentIntegration,
+  getAgentIntegrations,
+  saveAgentIntegration,
   setAgentStatus,
   streamChat,
+  triggerIntegrationTest,
   updateAgent,
   type Agent,
+  type AgentIntegration,
   type AgentStatus,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
@@ -104,6 +114,143 @@ export default function AgentsPage() {
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedIframe, setCopiedIframe] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Integrations Modal State
+  const [integrationsAgent, setIntegrationsAgent] = useState<Agent | null>(null);
+  const [integrationsList, setIntegrationsList] = useState<AgentIntegration[]>([]);
+  const [loadingIntegrations, setLoadingIntegrations] = useState(false);
+  const [slackBotToken, setSlackBotToken] = useState("");
+  const [slackSigningSecret, setSlackSigningSecret] = useState("");
+  const [slackChannelId, setSlackChannelId] = useState("");
+  const [savingSlack, setSavingSlack] = useState(false);
+  const [testingSlack, setTestingSlack] = useState(false);
+
+  const [discordPublicKey, setDiscordPublicKey] = useState("");
+  const [discordBotToken, setDiscordBotToken] = useState("");
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
+  const [discordChannelId, setDiscordChannelId] = useState("");
+  const [savingDiscord, setSavingDiscord] = useState(false);
+  const [testingDiscord, setTestingDiscord] = useState(false);
+
+  const [copiedSlackWebhook, setCopiedSlackWebhook] = useState(false);
+  const [copiedDiscordWebhook, setCopiedDiscordWebhook] = useState(false);
+
+  const openIntegrationsModal = async (agent: Agent) => {
+    setIntegrationsAgent(agent);
+    setLoadingIntegrations(true);
+    try {
+      const token = await getToken();
+      const list = await getAgentIntegrations(token, agent.id);
+      setIntegrationsList(list);
+
+      const slack = list.find((i) => i.platform === "slack");
+      setSlackBotToken("");
+      setSlackSigningSecret("");
+      setSlackChannelId(slack?.channelId || "");
+
+      const discord = list.find((i) => i.platform === "discord");
+      setDiscordPublicKey("");
+      setDiscordBotToken("");
+      setDiscordWebhookUrl(discord?.webhookUrl || "");
+      setDiscordChannelId(discord?.channelId || "");
+    } finally {
+      setLoadingIntegrations(false);
+    }
+  };
+
+  const handleSaveSlack = async () => {
+    if (!integrationsAgent) return;
+    setSavingSlack(true);
+    try {
+      const token = await getToken();
+      const res = await saveAgentIntegration(token, integrationsAgent.id, {
+        platform: "slack",
+        bot_token: slackBotToken.trim() || undefined,
+        signing_secret: slackSigningSecret.trim() || undefined,
+        channel_id: slackChannelId.trim() || undefined,
+      });
+      if (res) {
+        toast.success("Slack integration saved!");
+        const list = await getAgentIntegrations(token, integrationsAgent.id);
+        setIntegrationsList(list);
+        setSlackBotToken("");
+        setSlackSigningSecret("");
+      } else {
+        toast.error("Failed to save Slack settings");
+      }
+    } finally {
+      setSavingSlack(false);
+    }
+  };
+
+  const handleTestSlack = async (integId: string) => {
+    if (!integrationsAgent) return;
+    setTestingSlack(true);
+    try {
+      const token = await getToken();
+      const res = await triggerIntegrationTest(token, integrationsAgent.id, integId);
+      if (res.ok) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setTestingSlack(false);
+    }
+  };
+
+  const handleSaveDiscord = async () => {
+    if (!integrationsAgent) return;
+    setSavingDiscord(true);
+    try {
+      const token = await getToken();
+      const res = await saveAgentIntegration(token, integrationsAgent.id, {
+        platform: "discord",
+        signing_secret: discordPublicKey.trim() || undefined,
+        bot_token: discordBotToken.trim() || undefined,
+        webhook_url: discordWebhookUrl.trim() || undefined,
+        channel_id: discordChannelId.trim() || undefined,
+      });
+      if (res) {
+        toast.success("Discord integration saved!");
+        const list = await getAgentIntegrations(token, integrationsAgent.id);
+        setIntegrationsList(list);
+        setDiscordPublicKey("");
+        setDiscordBotToken("");
+      } else {
+        toast.error("Failed to save Discord settings");
+      }
+    } finally {
+      setSavingDiscord(false);
+    }
+  };
+
+  const handleTestDiscord = async (integId: string) => {
+    if (!integrationsAgent) return;
+    setTestingDiscord(true);
+    try {
+      const token = await getToken();
+      const res = await triggerIntegrationTest(token, integrationsAgent.id, integId);
+      if (res.ok) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setTestingDiscord(false);
+    }
+  };
+
+  const handleDeleteIntegration = async (integId: string) => {
+    if (!integrationsAgent) return;
+    const ok = await deleteAgentIntegration(await getToken(), integrationsAgent.id, integId);
+    if (ok) {
+      toast.success("Integration disconnected");
+      setIntegrationsList((prev) => prev.filter((i) => i.id !== integId));
+    } else {
+      toast.error("Failed to disconnect integration");
+    }
+  };
 
   const openEmbedModal = (agent: Agent) => {
     setEmbedAgent(agent);
@@ -361,6 +508,14 @@ export default function AgentsPage() {
                     </div>
                   )}
                   <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-border hover:bg-muted"
+                      onClick={() => void openIntegrationsModal(a)}
+                    >
+                      <Share2 className="size-3.5 text-muted-foreground" /> Integrations
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1025,6 +1180,369 @@ export default function AgentsPage() {
                 </div>
               </TabsContent>
             </Tabs>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* SLACK & DISCORD INTEGRATIONS DIALOG */}
+      <Dialog
+        open={integrationsAgent !== null}
+        onOpenChange={(open) => !open && setIntegrationsAgent(null)}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex size-7 items-center justify-center rounded-lg text-white"
+                style={{ backgroundColor: integrationsAgent?.color || "#0d9488" }}
+              >
+                <Share2 className="size-4" />
+              </div>
+              <DialogTitle className="text-lg font-heading">
+                Bot Integrations: {integrationsAgent?.name}
+              </DialogTitle>
+            </div>
+            <DialogDescription>
+              Connect this agent to Slack workspaces and Discord servers to answer questions in channels and threads.
+            </DialogDescription>
+          </DialogHeader>
+
+          {integrationsAgent && (
+            loadingIntegrations ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                <Loader2 className="size-6 animate-spin text-primary" />
+                <p className="text-xs font-medium">Loading bot integrations...</p>
+              </div>
+            ) : (
+            <Tabs defaultValue="slack" className="mt-2">
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="slack" className="gap-2">
+                  <MessageSquareText className="size-3.5" /> Slack Bot
+                  {integrationsList.some((i) => i.platform === "slack") && (
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="discord" className="gap-2">
+                  <Hash className="size-3.5" /> Discord Bot
+                  {integrationsList.some((i) => i.platform === "discord") && (
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              {/* SLACK INTEGRATION TAB */}
+              <TabsContent value="slack" className="space-y-4 pt-3">
+                {(() => {
+                  const slackInteg = integrationsList.find((i) => i.platform === "slack");
+                  const origin =
+                    typeof window !== "undefined"
+                      ? window.location.origin
+                      : "https://base-mind.vercel.app";
+                  const slackWebhookUrl = `${origin}/api/integrations/slack/${integrationsAgent.id}`;
+
+                  return (
+                    <>
+                      {/* Status Banner */}
+                      <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`size-2.5 rounded-full ${slackInteg ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50"}`} />
+                          <div>
+                            <p className="text-xs font-semibold">
+                              {slackInteg ? "Slack Bot Active & Listening" : "Slack Bot Not Connected"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {slackInteg
+                                ? `Masked Token: ${slackInteg.botTokenMasked || "Configured"}`
+                                : "Add your bot token and signing secret below to activate."}
+                            </p>
+                          </div>
+                        </div>
+                        {slackInteg && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={testingSlack}
+                              onClick={() => void handleTestSlack(slackInteg.id)}
+                              className="h-7 text-xs"
+                            >
+                              {testingSlack ? <Loader2 className="size-3 animate-spin mr-1" /> : null}
+                              Test Ping
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => void handleDeleteIntegration(slackInteg.id)}
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              title="Disconnect"
+                            >
+                              <Unlink className="size-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Webhook URL to paste in Slack */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Request URL (Slack Events API)</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            readOnly
+                            value={slackWebhookUrl}
+                            className="text-xs font-mono bg-muted/50 select-all"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(slackWebhookUrl);
+                              setCopiedSlackWebhook(true);
+                              toast.success("Slack Webhook URL copied!");
+                              setTimeout(() => setCopiedSlackWebhook(false), 2000);
+                            }}
+                            className="shrink-0 text-xs"
+                          >
+                            {copiedSlackWebhook ? <Check className="size-3.5 text-emerald-500 mr-1" /> : <Copy className="size-3.5 mr-1" />}
+                            {copiedSlackWebhook ? "Copied" : "Copy"}
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Paste into Slack App &gt; <strong>Event Subscriptions</strong> &gt; Request URL.
+                        </p>
+                      </div>
+
+                      {/* Credentials Form */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Bot User OAuth Token</Label>
+                          <Input
+                            type="password"
+                            value={slackBotToken}
+                            onChange={(e) => setSlackBotToken(e.target.value)}
+                            placeholder={slackInteg?.hasBotToken ? "•••••••••••• (Leave blank to keep existing)" : "xoxb-your-slack-bot-token"}
+                            className="text-xs"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Found in Slack App &gt; <strong>OAuth &amp; Permissions</strong> &gt; Bot User OAuth Token.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Signing Secret</Label>
+                          <Input
+                            type="password"
+                            value={slackSigningSecret}
+                            onChange={(e) => setSlackSigningSecret(e.target.value)}
+                            placeholder={slackInteg?.hasSigningSecret ? "•••••••••••• (Leave blank to keep existing)" : "Your Slack app signing secret"}
+                            className="text-xs"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Found in Slack App &gt; <strong>Basic Information</strong> &gt; App Credentials &gt; Signing Secret.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Default Channel ID (Optional)</Label>
+                          <Input
+                            type="text"
+                            value={slackChannelId}
+                            onChange={(e) => setSlackChannelId(e.target.value)}
+                            placeholder="C0123456789"
+                            className="text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Setup Guide */}
+                      <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground space-y-1">
+                        <p className="font-semibold text-foreground">Quick Slack Setup:</p>
+                        <ol className="list-decimal list-inside space-y-0.5">
+                          <li>Create an app at <code className="text-foreground">api.slack.com/apps</code></li>
+                          <li>Add Bot Token Scopes: <code className="text-foreground">chat:write</code>, <code className="text-foreground">app_mentions:read</code></li>
+                          <li>Enable Event Subscriptions, paste Request URL above, and subscribe to <code className="text-foreground">app_mention</code></li>
+                          <li>Install App to your Workspace and paste credentials here.</li>
+                        </ol>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t">
+                        <Button
+                          onClick={() => void handleSaveSlack()}
+                          disabled={savingSlack}
+                          className="gap-2 text-xs"
+                        >
+                          {savingSlack ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+                          Save Slack Settings
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </TabsContent>
+
+              {/* DISCORD INTEGRATION TAB */}
+              <TabsContent value="discord" className="space-y-4 pt-3">
+                {(() => {
+                  const discordInteg = integrationsList.find((i) => i.platform === "discord");
+                  const origin =
+                    typeof window !== "undefined"
+                      ? window.location.origin
+                      : "https://base-mind.vercel.app";
+                  const discordWebhookUrlStr = `${origin}/api/integrations/discord/${integrationsAgent.id}`;
+
+                  return (
+                    <>
+                      {/* Status Banner */}
+                      <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`size-2.5 rounded-full ${discordInteg ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50"}`} />
+                          <div>
+                            <p className="text-xs font-semibold">
+                              {discordInteg ? "Discord Bot Active & Listening" : "Discord Bot Not Connected"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {discordInteg
+                                ? "Interactions endpoint configured and verified."
+                                : "Configure your Discord Public Key or Webhook below."}
+                            </p>
+                          </div>
+                        </div>
+                        {discordInteg && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={testingDiscord}
+                              onClick={() => void handleTestDiscord(discordInteg.id)}
+                              className="h-7 text-xs"
+                            >
+                              {testingDiscord ? <Loader2 className="size-3 animate-spin mr-1" /> : null}
+                              Test Ping
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => void handleDeleteIntegration(discordInteg.id)}
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              title="Disconnect"
+                            >
+                              <Unlink className="size-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Interactions Endpoint URL to paste in Discord */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Interactions Endpoint URL (Discord Developer Portal)</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            readOnly
+                            value={discordWebhookUrlStr}
+                            className="text-xs font-mono bg-muted/50 select-all"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(discordWebhookUrlStr);
+                              setCopiedDiscordWebhook(true);
+                              toast.success("Discord Endpoint URL copied!");
+                              setTimeout(() => setCopiedDiscordWebhook(false), 2000);
+                            }}
+                            className="shrink-0 text-xs"
+                          >
+                            {copiedDiscordWebhook ? <Check className="size-3.5 text-emerald-500 mr-1" /> : <Copy className="size-3.5 mr-1" />}
+                            {copiedDiscordWebhook ? "Copied" : "Copy"}
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Paste into Discord Developer Portal &gt; General Information &gt; <strong>Interactions Endpoint URL</strong>.
+                        </p>
+                      </div>
+
+                      {/* Credentials Form */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Public Key (Required for Slash Commands &amp; Validation)</Label>
+                          <Input
+                            type="password"
+                            value={discordPublicKey}
+                            onChange={(e) => setDiscordPublicKey(e.target.value)}
+                            placeholder={discordInteg?.hasSigningSecret ? "•••••••••••• (Leave blank to keep existing)" : "Hex-encoded public key"}
+                            className="text-xs font-mono"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Found in Discord Developer Portal &gt; General Information &gt; Public Key.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Bot Token (Optional - for direct channel messaging)</Label>
+                          <Input
+                            type="password"
+                            value={discordBotToken}
+                            onChange={(e) => setDiscordBotToken(e.target.value)}
+                            placeholder={discordInteg?.hasBotToken ? "•••••••••••• (Leave blank to keep existing)" : "Bot token from Bot tab"}
+                            className="text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Channel Webhook URL (Alternative simple integration)</Label>
+                          <Input
+                            type="url"
+                            value={discordWebhookUrl}
+                            onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                            placeholder="https://discord.com/api/webhooks/..."
+                            className="text-xs font-mono"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Discord Server Channel Settings &gt; Integrations &gt; Webhooks &gt; Copy Webhook URL.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Default Channel ID (Optional)</Label>
+                          <Input
+                            type="text"
+                            value={discordChannelId}
+                            onChange={(e) => setDiscordChannelId(e.target.value)}
+                            placeholder="123456789012345678"
+                            className="text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Setup Guide */}
+                      <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground space-y-1">
+                        <p className="font-semibold text-foreground">Quick Discord Setup:</p>
+                        <ol className="list-decimal list-inside space-y-0.5">
+                          <li>Create Application at <code className="text-foreground">discord.com/developers/applications</code></li>
+                          <li>Copy the <strong>Public Key</strong> and paste it here first</li>
+                          <li>Click Save Discord Settings</li>
+                          <li>Paste the Interactions Endpoint URL in Discord and click Save in Discord</li>
+                          <li>Discord will ping this URL to verify Ed25519 signature!</li>
+                        </ol>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t">
+                        <Button
+                          onClick={() => void handleSaveDiscord()}
+                          disabled={savingDiscord}
+                          className="gap-2 text-xs"
+                        >
+                          {savingDiscord ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+                          Save Discord Settings
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </TabsContent>
+            </Tabs>
+            )
           )}
         </DialogContent>
       </Dialog>

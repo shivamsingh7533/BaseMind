@@ -30,6 +30,7 @@ class User(Base):
 
     agents: Mapped[list["Agent"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     leads: Mapped[list["Lead"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    integrations: Mapped[list["Integration"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Agent(Base):
@@ -64,6 +65,7 @@ class Agent(Base):
     owner: Mapped["User"] = relationship(back_populates="agents")
     documents: Mapped[list["Document"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     leads: Mapped[list["Lead"]] = relationship(back_populates="agent")
+    integrations: Mapped[list["Integration"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -195,4 +197,24 @@ class Lead(Base):
     user: Mapped["User"] = relationship(back_populates="leads")
     agent: Mapped[Agent | None] = relationship(back_populates="leads")
     conversation: Mapped[Conversation | None] = relationship()
+
+
+class Integration(Base):
+    __tablename__ = "integrations"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    bot_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signing_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, default="active", server_default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    user: Mapped["User"] = relationship(back_populates="integrations")
+    agent: Mapped["Agent"] = relationship(back_populates="integrations")
+
 

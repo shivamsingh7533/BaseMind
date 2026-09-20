@@ -111,6 +111,31 @@ export interface LeadsResponse {
   summary: LeadsSummary;
 }
 
+export type IntegrationPlatform = "slack" | "discord";
+
+export interface AgentIntegration {
+  id: string;
+  agentId: string;
+  platform: IntegrationPlatform;
+  botTokenMasked: string;
+  signingSecretMasked: string;
+  hasBotToken: boolean;
+  hasSigningSecret: boolean;
+  webhookUrl: string;
+  channelId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationInput {
+  platform: IntegrationPlatform;
+  bot_token?: string;
+  signing_secret?: string;
+  webhook_url?: string;
+  channel_id?: string;
+}
+
 export type DocStatus = "ready" | "processing" | "failed";
 
 export interface KnowledgeDoc {

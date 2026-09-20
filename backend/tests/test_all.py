@@ -16,6 +16,7 @@ import asyncio
 import io
 import json
 import os
+import sys
 import time
 import uuid
 
@@ -30,6 +31,7 @@ from app.models import (
     Document,
     DocumentChunk,
     EventLog,
+    Integration,
     Lead,
     Message,
     Subscription,
@@ -45,6 +47,8 @@ from app.schemas import (
     SyncUrlRequest,
 )
 from app.storage import get_blob_api, is_b2_enabled
+
+sys.stdout.reconfigure(line_buffering=True)
 
 TEST_CLERK = "func-test-" + uuid.uuid4().hex
 results = []
@@ -276,6 +280,120 @@ async def main():
             await routers.delete_lead(pub_lead["id"], user, db)
             leads_after_del = await routers.get_leads(user=user, db=db)
             check("delete_lead", all(item["id"] != pub_lead["id"] for item in leads_after_del["leads"]))
+
+            # ---- Slack & Discord Integrations ----
+            import hashlib  # noqa: PLC0415
+            import hmac  # noqa: PLC0415
+
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: PLC0415
+            from starlette.requests import Request  # noqa: PLC0415
+
+            from app.schemas import IntegrationCreate  # noqa: PLC0415
+
+            # 1. Upsert Slack integration
+            slack_secret = "slack-secret-123456789"  # noqa: S105
+            slack_integ = await routers.upsert_agent_integration(
+                agent["id"],
+                IntegrationCreate(
+                    platform="slack",
+                    bot_token="xoxb-testbot-token-1234",  # noqa: S106
+                    signing_secret=slack_secret,
+                    channel_id="C12345678",
+                ),
+                user,
+                db,
+            )
+            check("upsert slack integration", slack_integ["platform"] == "slack" and slack_integ["hasBotToken"] is True)
+            check("slack token is masked", "••••••••" in slack_integ["botTokenMasked"])
+
+            # 2. Slack URL challenge verification
+            challenge_body = b'{"type": "url_verification", "challenge": "test-challenge-token"}'
+            challenge_req = Request({
+                "type": "http",
+                "method": "POST",
+                "path": f"/api/integrations/slack/{agent['id']}",
+                "headers": [],
+            })
+            challenge_req._body = challenge_body
+            bg_tasks = BackgroundTasks()
+            challenge_res = await routers.handle_slack_webhook(agent["id"], challenge_req, bg_tasks, db)
+            check("slack url verification challenge", challenge_res.get("challenge") == "test-challenge-token")
+
+            # 3. Slack HMAC signature verification
+            ts = str(int(time.time()))
+            event_body = b'{"type": "event_callback", "event": {"type": "app_mention", "text": "<@U123> help", "channel": "C12345678"}}'
+            sig_basestring = f"v0:{ts}:{event_body.decode('utf-8')}".encode()
+            valid_sig = "v0=" + hmac.new(slack_secret.encode(), sig_basestring, hashlib.sha256).hexdigest()
+
+            event_req = Request({
+                "type": "http",
+                "method": "POST",
+                "path": f"/api/integrations/slack/{agent['id']}",
+                "headers": [
+                    (b"x-slack-request-timestamp", ts.encode()),
+                    (b"x-slack-signature", valid_sig.encode()),
+                ],
+            })
+            event_req._body = event_body
+            event_res = await routers.handle_slack_webhook(agent["id"], event_req, bg_tasks, db)
+            check("slack event with valid HMAC accepted", event_res.get("ok") is True)
+
+            # 4. Slack forged signature rejected
+            bad_req = Request({
+                "type": "http",
+                "method": "POST",
+                "path": f"/api/integrations/slack/{agent['id']}",
+                "headers": [
+                    (b"x-slack-request-timestamp", ts.encode()),
+                    (b"x-slack-signature", b"v0=invalid-signature"),
+                ],
+            })
+            bad_req._body = event_body
+            try:
+                await routers.handle_slack_webhook(agent["id"], bad_req, bg_tasks, db)
+                check("slack forged signature rejected", False)
+            except HTTPException as e:
+                check("slack forged signature rejected", e.status_code == 401)
+
+            # 5. Discord Ed25519 Integration & Ping (Type 1)
+            discord_priv = Ed25519PrivateKey.generate()
+            discord_pub = discord_priv.public_key()
+            discord_pub_hex = discord_pub.public_bytes_raw().hex()
+
+            discord_integ = await routers.upsert_agent_integration(
+                agent["id"],
+                IntegrationCreate(
+                    platform="discord",
+                    signing_secret=discord_pub_hex,
+                    webhook_url="https://discord.com/api/webhooks/test/123",
+                ),
+                user,
+                db,
+            )
+            check("upsert discord integration", discord_integ["platform"] == "discord")
+
+            # Discord PING with Ed25519 signature
+            d_ts = str(int(time.time()))
+            d_body = b'{"type": 1}'
+            d_sig = discord_priv.sign(d_ts.encode() + d_body).hex()
+
+            discord_req = Request({
+                "type": "http",
+                "method": "POST",
+                "path": f"/api/integrations/discord/{agent['id']}",
+                "headers": [
+                    (b"x-signature-timestamp", d_ts.encode()),
+                    (b"x-signature-ed25519", d_sig.encode()),
+                ],
+            })
+            discord_req._body = d_body
+            discord_res = await routers.handle_discord_webhook(agent["id"], discord_req, bg_tasks, db)
+            check("discord PING type 1 acknowledged with type 1", discord_res.get("type") == 1)
+
+            # Delete integration
+            await routers.delete_agent_integration(agent["id"], slack_integ["id"], user, db)
+            integs_after_del = await routers.list_agent_integrations(agent["id"], user, db)
+            check("delete slack integration", all(i["id"] != slack_integ["id"] for i in integs_after_del))
 
             # ---- Dashboard ----
             dash = await routers.dashboard(user, db)
@@ -818,6 +936,7 @@ async def main():
             if doc_ids:
                 await db.execute(delete(Document).where(Document.id.in_(doc_ids)))
             await db.execute(delete(Lead).where(Lead.user_id == user.id))
+            await db.execute(delete(Integration).where(Integration.user_id == user.id))
             await db.execute(delete(Agent).where(Agent.user_id == user.id))
             await db.execute(delete(EventLog).where(EventLog.user_id == user.id))
             await db.execute(delete(User).where(User.id == user.id))
