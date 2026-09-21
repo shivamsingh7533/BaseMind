@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from ..ai import embed_texts, stream_answer
 from ..cache import invalidate_user_cache
 from ..db import SessionFactory, get_db
-from ..models import Agent, Conversation, Document, DocumentChunk, Lead, Message, User
+from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, Lead, Message, User
 from ..schemas import (
     LeadCreate,
     MessageFeedbackIn,
@@ -393,6 +393,16 @@ async def public_chat(
     conversation_id_value = conv.id
     question = payload.text
 
+    actions = []
+    if conv.agent_id:
+        act_res = await db.execute(
+            select(AgentAction).where(
+                AgentAction.agent_id == conv.agent_id,
+                AgentAction.enabled.is_(True),
+            )
+        )
+        actions = act_res.scalars().all()
+
     async def event_stream():
         answer_parts: list[str] = []
         sources_line = json.dumps(
@@ -403,13 +413,31 @@ async def public_chat(
         )
         yield f"data: {sources_line}\n\n"
         saved_message_id: str | None = None
+        action_events: list[str] = []
+
+        async def on_action_call(name: str, args: dict, result: dict):
+            action_events.append(
+                json.dumps(
+                    {
+                        "type": "action_executed",
+                        "name": name,
+                        "args": args,
+                        "result": result,
+                    }
+                )
+            )
+
         try:
             async for token in stream_answer(
                 question,
                 contexts,
                 history=history,
                 extra_instructions=agent_instructions,
+                actions=actions,
+                on_action_call=on_action_call,
             ):
+                while action_events:
+                    yield f"data: {action_events.pop(0)}\n\n"
                 answer_parts.append(token)
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
 

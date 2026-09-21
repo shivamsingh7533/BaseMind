@@ -196,6 +196,31 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "ALTER TABLE agents ADD COLUMN IF NOT EXISTS custom_brand_name TEXT DEFAULT ''"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS agent_actions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    webhook_url TEXT NOT NULL,
+                    method TEXT NOT NULL DEFAULT 'POST',
+                    headers_json TEXT DEFAULT '{}',
+                    parameters_schema_json TEXT DEFAULT '[]',
+                    enabled BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+                """
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_agent_actions_agent_id ON agent_actions(agent_id)"
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_agent_actions_user_id ON agent_actions(user_id)"
+            )
 
     await run_migrations()
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from .actions import router as _actions
 from .admin import router as _admin
 from .agents import router as _agents
 from .analytics import router as _analytics
@@ -12,6 +13,7 @@ from .leads import router as _leads
 from .public import router as _public
 
 router = APIRouter()
+router.include_router(_actions)
 router.include_router(_agents)
 router.include_router(_analytics)
 router.include_router(_billing)

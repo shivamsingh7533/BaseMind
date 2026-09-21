@@ -24,6 +24,7 @@ import {
   Trash2,
   Unlink,
   X,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ import {
   type AgentStatus,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
+import { AgentActionsDialog } from "./components/agent-actions-dialog";
 
 const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   active: {
@@ -136,6 +138,9 @@ export default function AgentsPage() {
 
   const [copiedSlackWebhook, setCopiedSlackWebhook] = useState(false);
   const [copiedDiscordWebhook, setCopiedDiscordWebhook] = useState(false);
+
+  // Actions & Tools Modal State
+  const [actionsAgent, setActionsAgent] = useState<Agent | null>(null);
 
   const openIntegrationsModal = async (agent: Agent) => {
     setIntegrationsAgent(agent);
@@ -514,6 +519,14 @@ export default function AgentsPage() {
                     </div>
                   )}
                   <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                      onClick={() => setActionsAgent(a)}
+                    >
+                      <Zap className="size-3.5 text-emerald-500" /> Tools &amp; Actions
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1589,6 +1602,12 @@ export default function AgentsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AgentActionsDialog
+        agent={actionsAgent}
+        open={Boolean(actionsAgent)}
+        onOpenChange={(open) => !open && setActionsAgent(null)}
+      />
     </div>
   );
 }

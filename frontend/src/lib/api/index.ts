@@ -10,3 +10,5 @@ export * from "./settings";
 export * from "./leads";
 export * from "./integrations";
 export * from "./analytics";
+export * from "./actions";
+export * from "./copilot";

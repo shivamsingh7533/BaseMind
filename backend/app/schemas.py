@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -265,4 +265,67 @@ def serialize_knowledge_gap(gap, agent_name: str | None = None) -> dict:
         "resolutionNote": gap.resolution_note or "",
         "createdAt": gap.created_at.isoformat() if getattr(gap, "created_at", None) else "",
         "lastAskedAt": gap.last_asked_at.isoformat() if getattr(gap, "last_asked_at", None) else "",
+    }
+
+
+class ActionParameter(BaseModel):
+    name: str
+    type: Literal["string", "number", "integer", "boolean"] = "string"
+    description: str = ""
+    required: bool = True
+
+
+class AgentActionCreate(BaseModel):
+    agent_id: str
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    description: str = Field(min_length=1, max_length=1000)
+    webhook_url: str = Field(min_length=1, max_length=2048)
+    method: Literal["GET", "POST", "PUT", "DELETE"] = "POST"
+    headers_json: str | None = "{}"
+    parameters_schema_json: str | None = "[]"
+    enabled: bool = True
+
+
+class AgentActionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    description: str | None = Field(default=None, min_length=1, max_length=1000)
+    webhook_url: str | None = Field(default=None, min_length=1, max_length=2048)
+    method: Literal["GET", "POST", "PUT", "DELETE"] | None = None
+    headers_json: str | None = None
+    parameters_schema_json: str | None = None
+    enabled: bool | None = None
+
+
+class AgentActionTest(BaseModel):
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class CoPilotSuggestRequest(BaseModel):
+    tone: Literal["friendly", "concise", "formal"] = "friendly"
+
+
+class CoPilotSummaryResponse(BaseModel):
+    summary: str
+    sentiment: str = "neutral"
+    key_details: list[str] = Field(default_factory=list)
+
+
+class CoPilotSuggestResponse(BaseModel):
+    suggestions: list[str] = Field(default_factory=list)
+
+
+def serialize_agent_action(action) -> dict:
+    return {
+        "id": action.id,
+        "userId": action.user_id,
+        "agentId": action.agent_id,
+        "name": action.name,
+        "description": action.description,
+        "webhookUrl": action.webhook_url,
+        "method": action.method,
+        "headersJson": action.headers_json or "{}",
+        "parametersSchemaJson": action.parameters_schema_json or "[]",
+        "enabled": action.enabled,
+        "createdAt": action.created_at.isoformat() if getattr(action, "created_at", None) else "",
+        "updatedAt": action.updated_at.isoformat() if getattr(action, "updated_at", None) else "",
     }

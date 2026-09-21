@@ -28,6 +28,7 @@ import {
 import { useAppData } from "@/lib/store";
 import { ConversationList } from "./components/conversation-list";
 import { ChatHeader } from "./components/chat-header";
+import { CoPilotPanel } from "./components/copilot-panel";
 import { MessageThread } from "./components/message-thread";
 import { Composer } from "./components/composer";
 import { SourcesDialog } from "./components/sources-dialog";
@@ -494,6 +495,13 @@ export function Chat() {
                 onTakeover={handleTakeover}
                 onReturnToAI={handleReturnToAI}
               />
+              {selectedId && (
+                <CoPilotPanel
+                  conversationId={selectedId}
+                  isOperatorMode={isOperatorMode}
+                  onApplyDraft={(text) => setDraft(text)}
+                />
+              )}
               <MessageThread
                 messages={messages}
                 streaming={streaming}

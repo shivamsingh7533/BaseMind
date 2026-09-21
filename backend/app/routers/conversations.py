@@ -7,13 +7,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..ai import embed_texts, stream_answer
+from ..ai import embed_texts, generate_conversation_summary, generate_copilot_suggestions, stream_answer
 from ..auth import get_current_user
 from ..cache import cache_get, cache_set, invalidate_user_cache
 from ..db import SessionFactory, get_db
 from ..email import dispatch_rate_limit
-from ..models import Agent, Conversation, Document, DocumentChunk, EventLog, Message, User
-from ..schemas import ConversationCreate, ConversationUpdate, MessageIn, serialize_conversation
+from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, EventLog, Message, User
+from ..schemas import (
+    ConversationCreate,
+    ConversationUpdate,
+    CoPilotSuggestRequest,
+    CoPilotSuggestResponse,
+    CoPilotSummaryResponse,
+    MessageIn,
+    serialize_conversation,
+)
 from .deps import CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS, _allow_chat_async, _get_owned, log
 
 router = APIRouter(prefix="/api")
@@ -257,6 +265,16 @@ async def chat(
     user_id_value = user.id
     question = payload.text
 
+    actions = []
+    if agent_id:
+        act_res = await db.execute(
+            select(AgentAction).where(
+                AgentAction.agent_id == agent_id,
+                AgentAction.enabled.is_(True),
+            )
+        )
+        actions = act_res.scalars().all()
+
     async def event_stream():
         answer_parts: list[str] = []
         sources_line = json.dumps(
@@ -266,8 +284,31 @@ async def chat(
             }
         )
         yield f"data: {sources_line}\n\n"
+        action_events: list[str] = []
+
+        async def on_action_call(name: str, args: dict, result: dict):
+            action_events.append(
+                json.dumps(
+                    {
+                        "type": "action_executed",
+                        "name": name,
+                        "args": args,
+                        "result": result,
+                    }
+                )
+            )
+
         try:
-            async for token in stream_answer(question, contexts, history, extra_instructions):
+            async for token in stream_answer(
+                question,
+                contexts,
+                history,
+                extra_instructions,
+                actions=actions,
+                on_action_call=on_action_call,
+            ):
+                while action_events:
+                    yield f"data: {action_events.pop(0)}\n\n"
                 answer_parts.append(token)
                 yield "data: " + json.dumps({"type": "token", "token": token}) + "\n\n"
         except Exception as exc:
@@ -319,3 +360,67 @@ async def chat(
         yield f"data: {done_line}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/conversations/{conversation_id}/copilot/summary", response_model=CoPilotSummaryResponse)
+async def get_copilot_summary(
+    conversation_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CoPilotSummaryResponse:
+    conv = await _get_owned(db, Conversation, conversation_id, user)
+    msg_res = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conv.id)
+        .order_by(Message.created_at.asc())
+    )
+    messages = msg_res.scalars().all()
+    if not messages:
+        return CoPilotSummaryResponse(summary="No messages in this conversation yet.", sentiment="neutral", key_details=[])
+
+    msg_dicts = [{"role": m.role, "content": m.content} for m in messages]
+    summary_data = await generate_conversation_summary(msg_dicts)
+
+    return CoPilotSummaryResponse(
+        summary=summary_data.get("summary", ""),
+        sentiment=summary_data.get("sentiment", "neutral"),
+        key_details=summary_data.get("key_details", []),
+    )
+
+
+@router.post("/conversations/{conversation_id}/copilot/suggest", response_model=CoPilotSuggestResponse)
+async def get_copilot_suggestions(
+    conversation_id: str,
+    payload: CoPilotSuggestRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CoPilotSuggestResponse:
+    conv = await _get_owned(db, Conversation, conversation_id, user)
+    msg_res = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conv.id)
+        .order_by(Message.created_at.asc())
+    )
+    messages = msg_res.scalars().all()
+    if not messages:
+        return CoPilotSuggestResponse(suggestions=["Hello! How can I assist you today?"])
+
+    # Find the last user question to retrieve context
+    last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "")
+    contexts = []
+    if last_user_msg:
+        try:
+            query_emb = (await embed_texts([last_user_msg]))[0]
+            search = select(DocumentChunk, Document.name).join(Document, DocumentChunk.document_id == Document.id)
+            search = search.where(DocumentChunk.user_id == user.id)
+            if conv.agent_id:
+                search = search.where((DocumentChunk.agent_id == conv.agent_id) | (DocumentChunk.agent_id.is_(None)))
+            search = search.order_by(DocumentChunk.embedding.cosine_distance(query_emb)).limit(3)
+            matches = (await db.execute(search)).all()
+            contexts = [{"source": name, "content": chunk.content} for chunk, name in matches]
+        except Exception:
+            pass
+
+    msg_dicts = [{"role": m.role, "content": m.content} for m in messages]
+    suggestions = await generate_copilot_suggestions(msg_dicts, contexts, tone=payload.tone)
+    return CoPilotSuggestResponse(suggestions=suggestions)

@@ -32,6 +32,7 @@ class User(Base):
     leads: Mapped[list["Lead"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     integrations: Mapped[list["Integration"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     knowledge_gaps: Mapped[list["KnowledgeGap"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    actions: Mapped[list["AgentAction"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Agent(Base):
@@ -72,6 +73,7 @@ class Agent(Base):
     leads: Mapped[list["Lead"]] = relationship(back_populates="agent")
     integrations: Mapped[list["Integration"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     knowledge_gaps: Mapped[list["KnowledgeGap"]] = relationship(back_populates="agent")
+    actions: Mapped[list["AgentAction"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -253,6 +255,26 @@ class KnowledgeGap(Base):
     user: Mapped["User"] = relationship(back_populates="knowledge_gaps")
     agent: Mapped[Agent | None] = relationship(back_populates="knowledge_gaps")
     conversation: Mapped[Conversation | None] = relationship()
+
+
+class AgentAction(Base):
+    __tablename__ = "agent_actions"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    webhook_url: Mapped[str] = mapped_column(Text, nullable=False)
+    method: Mapped[str] = mapped_column(Text, default="POST", server_default="POST")
+    headers_json: Mapped[str | None] = mapped_column(Text, default="{}", server_default="{}")
+    parameters_schema_json: Mapped[str | None] = mapped_column(Text, default="[]", server_default="[]")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    user: Mapped["User"] = relationship(back_populates="actions")
+    agent: Mapped["Agent"] = relationship(back_populates="actions")
 
 
 

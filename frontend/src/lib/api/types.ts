@@ -413,3 +413,49 @@ export interface KnowledgeGapUpdateInput {
   status?: "unresolved" | "resolved" | "dismissed";
   resolution_note?: string;
 }
+
+export interface AgentAction {
+  id: string;
+  userId: string;
+  agentId: string;
+  name: string;
+  description: string;
+  webhookUrl: string;
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  headersJson: string;
+  parametersSchemaJson: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentActionCreatePayload {
+  agent_id: string;
+  name: string;
+  description: string;
+  webhook_url: string;
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  headers_json?: string;
+  parameters_schema_json?: string;
+  enabled?: boolean;
+}
+
+export interface AgentActionUpdatePayload {
+  name?: string;
+  description?: string;
+  webhook_url?: string;
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  headers_json?: string;
+  parameters_schema_json?: string;
+  enabled?: boolean;
+}
+
+export interface CoPilotSummary {
+  summary: string;
+  sentiment: string;
+  key_details: string[];
+}
+
+export interface CoPilotSuggestions {
+  suggestions: string[];
+}
