@@ -12,6 +12,7 @@ import {
   Hash,
   Headset,
   Loader2,
+  MessageCircle,
   MessageSquareText,
   Pause,
   Play,
@@ -59,6 +60,7 @@ import {
   getAgentIntegrations,
   saveAgentIntegration,
   setAgentStatus,
+  setTelegramWebhook,
   streamChat,
   triggerIntegrationTest,
   updateAgent,
@@ -180,6 +182,21 @@ export default function AgentsPage() {
   const [copiedSlackWebhook, setCopiedSlackWebhook] = useState(false);
   const [copiedDiscordWebhook, setCopiedDiscordWebhook] = useState(false);
 
+  // WhatsApp & Telegram Integration States
+  const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState("");
+  const [whatsappAccessToken, setWhatsappAccessToken] = useState("");
+  const [whatsappVerifyToken, setWhatsappVerifyToken] = useState("");
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [testingWhatsapp, setTestingWhatsapp] = useState(false);
+  const [copiedWhatsappWebhook, setCopiedWhatsappWebhook] = useState(false);
+  const [copiedWhatsappVerifyToken, setCopiedWhatsappVerifyToken] = useState(false);
+
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [registeringTelegramWebhook, setRegisteringTelegramWebhook] = useState(false);
+  const [copiedTelegramWebhook, setCopiedTelegramWebhook] = useState(false);
+
   // Actions & Tools Modal State
   const [actionsAgent, setActionsAgent] = useState<Agent | null>(null);
 
@@ -201,6 +218,13 @@ export default function AgentsPage() {
       setDiscordBotToken("");
       setDiscordWebhookUrl(discord?.webhookUrl || "");
       setDiscordChannelId(discord?.channelId || "");
+
+      const wa = list.find((i) => i.platform === "whatsapp");
+      setWhatsappPhoneNumberId(wa?.channelId || "");
+      setWhatsappAccessToken("");
+      setWhatsappVerifyToken(wa?.signingSecretMasked ? "" : "basemind_wa_verify");
+
+      setTelegramBotToken("");
     } finally {
       setLoadingIntegrations(false);
     }
@@ -286,6 +310,100 @@ export default function AgentsPage() {
       }
     } finally {
       setTestingDiscord(false);
+    }
+  };
+
+  const handleSaveWhatsapp = async () => {
+    if (!integrationsAgent) return;
+    setSavingWhatsapp(true);
+    try {
+      const token = await getToken();
+      const res = await saveAgentIntegration(token, integrationsAgent.id, {
+        platform: "whatsapp",
+        channel_id: whatsappPhoneNumberId.trim() || undefined,
+        bot_token: whatsappAccessToken.trim() || undefined,
+        signing_secret: whatsappVerifyToken.trim() || undefined,
+      });
+      if (res) {
+        toast.success("WhatsApp settings saved!");
+        const list = await getAgentIntegrations(token, integrationsAgent.id);
+        setIntegrationsList(list);
+        setWhatsappAccessToken("");
+      } else {
+        toast.error("Failed to save WhatsApp settings");
+      }
+    } finally {
+      setSavingWhatsapp(false);
+    }
+  };
+
+  const handleTestWhatsapp = async (integId: string) => {
+    if (!integrationsAgent) return;
+    setTestingWhatsapp(true);
+    try {
+      const token = await getToken();
+      const res = await triggerIntegrationTest(token, integrationsAgent.id, integId);
+      if (res.ok) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setTestingWhatsapp(false);
+    }
+  };
+
+  const handleSaveTelegram = async () => {
+    if (!integrationsAgent) return;
+    setSavingTelegram(true);
+    try {
+      const token = await getToken();
+      const res = await saveAgentIntegration(token, integrationsAgent.id, {
+        platform: "telegram",
+        bot_token: telegramBotToken.trim() || undefined,
+      });
+      if (res) {
+        toast.success("Telegram settings saved!");
+        const list = await getAgentIntegrations(token, integrationsAgent.id);
+        setIntegrationsList(list);
+        setTelegramBotToken("");
+      } else {
+        toast.error("Failed to save Telegram settings");
+      }
+    } finally {
+      setSavingTelegram(false);
+    }
+  };
+
+  const handleRegisterTelegramWebhook = async (integId: string) => {
+    if (!integrationsAgent) return;
+    setRegisteringTelegramWebhook(true);
+    try {
+      const token = await getToken();
+      const res = await setTelegramWebhook(token, integrationsAgent.id, integId);
+      if (res.ok) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setRegisteringTelegramWebhook(false);
+    }
+  };
+
+  const handleTestTelegram = async (integId: string) => {
+    if (!integrationsAgent) return;
+    setTestingTelegram(true);
+    try {
+      const token = await getToken();
+      const res = await triggerIntegrationTest(token, integrationsAgent.id, integId);
+      if (res.ok) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } finally {
+      setTestingTelegram(false);
     }
   };
 
@@ -1538,7 +1656,7 @@ export default function AgentsPage() {
               </DialogTitle>
             </div>
             <DialogDescription>
-              Connect this agent to Slack workspaces and Discord servers to answer questions in channels and threads.
+              Connect this agent to WhatsApp, Telegram, Slack, and Discord to deliver automated customer service across all mobile and workspace channels.
             </DialogDescription>
           </DialogHeader>
 
@@ -1550,16 +1668,28 @@ export default function AgentsPage() {
               </div>
             ) : (
             <Tabs defaultValue="slack" className="mt-2">
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="slack" className="gap-2">
-                  <MessageSquareText className="size-3.5" /> Slack Bot
+              <TabsList className="grid grid-cols-4 w-full">
+                <TabsTrigger value="slack" className="gap-1.5 text-xs">
+                  <MessageSquareText className="size-3.5" /> Slack
                   {integrationsList.some((i) => i.platform === "slack") && (
                     <span className="size-1.5 rounded-full bg-emerald-500" />
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="discord" className="gap-2">
-                  <Hash className="size-3.5" /> Discord Bot
+                <TabsTrigger value="discord" className="gap-1.5 text-xs">
+                  <Hash className="size-3.5" /> Discord
                   {integrationsList.some((i) => i.platform === "discord") && (
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="whatsapp" className="gap-1.5 text-xs">
+                  <MessageCircle className="size-3.5 text-emerald-500" /> WhatsApp
+                  {integrationsList.some((i) => i.platform === "whatsapp") && (
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="telegram" className="gap-1.5 text-xs">
+                  <Send className="size-3.5 text-sky-500" /> Telegram
+                  {integrationsList.some((i) => i.platform === "telegram") && (
                     <span className="size-1.5 rounded-full bg-emerald-500" />
                   )}
                 </TabsTrigger>
@@ -1870,6 +2000,330 @@ export default function AgentsPage() {
                         >
                           {savingDiscord ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
                           Save Discord Settings
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </TabsContent>
+
+              {/* WHATSAPP INTEGRATION TAB */}
+              <TabsContent value="whatsapp" className="space-y-4 pt-3">
+                {(() => {
+                  const waInteg = integrationsList.find((i) => i.platform === "whatsapp");
+                  const origin =
+                    typeof window !== "undefined"
+                      ? window.location.origin
+                      : "https://base-mind.vercel.app";
+                  const waWebhookUrl = `${origin}/api/integrations/whatsapp/${integrationsAgent.id}`;
+
+                  return (
+                    <>
+                      {/* Status Banner */}
+                      <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`size-2.5 rounded-full ${waInteg ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50"}`} />
+                          <div>
+                            <p className="text-xs font-semibold">
+                              {waInteg ? "WhatsApp Cloud API Active & Listening" : "WhatsApp Cloud API Not Connected"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {waInteg
+                                ? `Phone Number ID: ${waInteg.channelId || "Configured"}`
+                                : "Configure your Meta Cloud API Phone Number ID and System Token below."}
+                            </p>
+                          </div>
+                        </div>
+                        {waInteg && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={testingWhatsapp}
+                              onClick={() => void handleTestWhatsapp(waInteg.id)}
+                              className="h-7 text-xs"
+                            >
+                              {testingWhatsapp ? <Loader2 className="size-3 animate-spin mr-1" /> : null}
+                              Test Ping
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => void handleDeleteIntegration(waInteg.id)}
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              title="Disconnect"
+                            >
+                              <Unlink className="size-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Meta Webhook Endpoint & Verify Token */}
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">Callback URL (Meta WhatsApp Webhook)</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              readOnly
+                              value={waWebhookUrl}
+                              className="text-xs font-mono bg-muted/50 select-all"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(waWebhookUrl);
+                                setCopiedWhatsappWebhook(true);
+                                toast.success("WhatsApp Webhook URL copied!");
+                                setTimeout(() => setCopiedWhatsappWebhook(false), 2000);
+                              }}
+                              className="shrink-0 text-xs"
+                            >
+                              {copiedWhatsappWebhook ? <Check className="size-3.5 text-emerald-500 mr-1" /> : <Copy className="size-3.5 mr-1" />}
+                              {copiedWhatsappWebhook ? "Copied" : "Copy"}
+                            </Button>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Paste into Meta App &gt; WhatsApp &gt; <strong>Configuration &gt; Callback URL</strong>.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">Verify Token</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="text"
+                              value={whatsappVerifyToken || "basemind_wa_verify"}
+                              onChange={(e) => setWhatsappVerifyToken(e.target.value)}
+                              className="text-xs font-mono select-all"
+                              placeholder="basemind_wa_verify"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(whatsappVerifyToken || "basemind_wa_verify");
+                                setCopiedWhatsappVerifyToken(true);
+                                toast.success("Verify Token copied!");
+                                setTimeout(() => setCopiedWhatsappVerifyToken(false), 2000);
+                              }}
+                              className="shrink-0 text-xs"
+                            >
+                              {copiedWhatsappVerifyToken ? <Check className="size-3.5 text-emerald-500 mr-1" /> : <Copy className="size-3.5 mr-1" />}
+                              {copiedWhatsappVerifyToken ? "Copied" : "Copy"}
+                            </Button>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Enter this same token in Meta App &gt; WhatsApp &gt; <strong>Verify Token</strong>.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Credentials Form */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">WhatsApp Phone Number ID</Label>
+                          <Input
+                            type="text"
+                            value={whatsappPhoneNumberId}
+                            onChange={(e) => setWhatsappPhoneNumberId(e.target.value)}
+                            placeholder={waInteg?.channelId ? waInteg.channelId : "e.g. 109876543210987"}
+                            className="text-xs font-mono"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Found in Meta App &gt; WhatsApp &gt; <strong>API Setup &gt; Phone number ID</strong>.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Meta System User / Permanent Access Token</Label>
+                          <Input
+                            type="password"
+                            value={whatsappAccessToken}
+                            onChange={(e) => setWhatsappAccessToken(e.target.value)}
+                            placeholder={waInteg?.hasBotToken ? "•••••••••••• (Leave blank to keep existing)" : "EAAB... Permanent Access Token"}
+                            className="text-xs font-mono"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Generate from Meta Business Manager &gt; System Users with <code className="text-foreground">whatsapp_business_messaging</code> permission.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Setup Guide */}
+                      <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground space-y-1">
+                        <p className="font-semibold text-foreground">Zero-Cost Meta Cloud Setup Guide:</p>
+                        <ol className="list-decimal list-inside space-y-0.5">
+                          <li>Create a Meta Business app at <code className="text-foreground">developers.facebook.com</code> and add <strong>WhatsApp</strong></li>
+                          <li>Go to <strong>Configuration</strong>, paste Callback URL &amp; Verify Token, click <strong>Verify and Save</strong></li>
+                          <li>Under <strong>Webhook fields</strong>, subscribe to <code className="text-foreground">messages</code></li>
+                          <li>Copy your Phone Number ID and Access Token from <strong>API Setup</strong> and paste above</li>
+                          <li>Includes 1,000 free customer-initiated service conversations each month at $0!</li>
+                        </ol>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t">
+                        <Button
+                          onClick={() => void handleSaveWhatsapp()}
+                          disabled={savingWhatsapp}
+                          className="gap-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          {savingWhatsapp ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+                          Save WhatsApp Settings
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </TabsContent>
+
+              {/* TELEGRAM INTEGRATION TAB */}
+              <TabsContent value="telegram" className="space-y-4 pt-3">
+                {(() => {
+                  const tgInteg = integrationsList.find((i) => i.platform === "telegram");
+                  const origin =
+                    typeof window !== "undefined"
+                      ? window.location.origin
+                      : "https://base-mind.vercel.app";
+                  const tgWebhookUrl = `${origin}/api/integrations/telegram/${integrationsAgent.id}`;
+
+                  return (
+                    <>
+                      {/* Status Banner */}
+                      <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`size-2.5 rounded-full ${tgInteg ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50"}`} />
+                          <div>
+                            <p className="text-xs font-semibold">
+                              {tgInteg ? "Telegram Bot Active & Listening" : "Telegram Bot Not Connected"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {tgInteg
+                                ? `Masked Token: ${tgInteg.botTokenMasked || "Configured"}`
+                                : "Create a bot with @BotFather and paste your token below."}
+                            </p>
+                          </div>
+                        </div>
+                        {tgInteg && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={testingTelegram}
+                              onClick={() => void handleTestTelegram(tgInteg.id)}
+                              className="h-7 text-xs"
+                            >
+                              {testingTelegram ? <Loader2 className="size-3 animate-spin mr-1" /> : null}
+                              Test Ping
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => void handleDeleteIntegration(tgInteg.id)}
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              title="Disconnect"
+                            >
+                              <Unlink className="size-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Telegram Webhook Endpoint */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">BaseMind Telegram Webhook URL</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            readOnly
+                            value={tgWebhookUrl}
+                            className="text-xs font-mono bg-muted/50 select-all"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(tgWebhookUrl);
+                              setCopiedTelegramWebhook(true);
+                              toast.success("Telegram Webhook URL copied!");
+                              setTimeout(() => setCopiedTelegramWebhook(false), 2000);
+                            }}
+                            className="shrink-0 text-xs"
+                          >
+                            {copiedTelegramWebhook ? <Check className="size-3.5 text-emerald-500 mr-1" /> : <Copy className="size-3.5 mr-1" />}
+                            {copiedTelegramWebhook ? "Copied" : "Copy"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Credentials Form */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Telegram Bot Token</Label>
+                          <Input
+                            type="password"
+                            value={telegramBotToken}
+                            onChange={(e) => setTelegramBotToken(e.target.value)}
+                            placeholder={tgInteg?.hasBotToken ? "•••••••••••• (Leave blank to keep existing)" : "123456789:ABCdefGhIJKlmNoPQRstuVWxYZ"}
+                            className="text-xs font-mono"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Generated by <code className="text-foreground">@BotFather</code> on Telegram.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Quick Auto-Register Button */}
+                      {tgInteg && (
+                        <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                                1-Click Telegram Webhook Registration
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Register this agent&apos;s webhook directly with the official Telegram Bot API in one click.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={registeringTelegramWebhook}
+                              onClick={() => void handleRegisterTelegramWebhook(tgInteg.id)}
+                              className="text-xs border-sky-500/30 hover:bg-sky-500/10 text-sky-600 dark:text-sky-400 shrink-0"
+                            >
+                              {registeringTelegramWebhook ? <Loader2 className="size-3 animate-spin mr-1" /> : <Send className="size-3 mr-1" />}
+                              Register Webhook
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Setup Guide */}
+                      <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground space-y-1">
+                        <p className="font-semibold text-foreground">Zero-Cost Telegram Setup Guide:</p>
+                        <ol className="list-decimal list-inside space-y-0.5">
+                          <li>Open Telegram, search for <code className="text-foreground">@BotFather</code>, and send <code className="text-foreground">/newbot</code></li>
+                          <li>Follow prompts to choose a Name and Username (e.g. <code className="text-foreground">MyStoreSupportBot</code>)</li>
+                          <li>Copy the <strong>HTTP API Token</strong> provided and paste it above</li>
+                          <li>Click <strong>Save Telegram Settings</strong></li>
+                          <li>Click <strong>Register Webhook</strong> for automatic 0-config synchronization!</li>
+                          <li>100% Free forever with unlimited messages and instant bot responses!</li>
+                        </ol>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t">
+                        <Button
+                          onClick={() => void handleSaveTelegram()}
+                          disabled={savingTelegram}
+                          className="gap-2 text-xs bg-sky-600 hover:bg-sky-700 text-white"
+                        >
+                          {savingTelegram ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+                          Save Telegram Settings
                         </Button>
                       </div>
                     </>

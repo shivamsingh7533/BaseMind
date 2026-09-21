@@ -72,7 +72,7 @@ class LeadUpdate(BaseModel):
 
 
 class IntegrationCreate(BaseModel):
-    platform: Literal["slack", "discord"]
+    platform: Literal["slack", "discord", "whatsapp", "telegram"]
     bot_token: str | None = Field(default=None, max_length=1000)
     signing_secret: str | None = Field(default=None, max_length=1000)
     webhook_url: str | None = Field(default=None, max_length=2048)
@@ -250,22 +250,25 @@ def serialize_message(message) -> dict:
 
 
 def serialize_conversation(conv, with_messages: bool = False) -> dict:
+    msgs = conv.messages if "messages" in conv.__dict__ and conv.messages is not None else []
     data = {
         "id": conv.id,
         "user": conv.visitor,
         "status": conv.status,
+        "channel": getattr(conv, "channel", "web") or "web",
+        "externalChatId": getattr(conv, "external_chat_id", None),
         "sentiment": getattr(conv, "sentiment", "neutral") or "neutral",
         "csatScore": getattr(conv, "csat_score", None),
         "time": _fmt_time(conv.started_at),
         "preview": conv.preview,
-        "messageCount": len(conv.messages),
+        "messageCount": len(msgs),
         "duration": _fmt_duration(conv.duration_seconds),
         "startedAt": conv.started_at.isoformat() if conv.started_at else "",
         "handoverRequestedAt": conv.handover_requested_at.isoformat() if getattr(conv, "handover_requested_at", None) else None,
         "assignedTo": getattr(conv, "assigned_to", None),
     }
     if with_messages:
-        data["messages"] = [serialize_message(m) for m in conv.messages]
+        data["messages"] = [serialize_message(m) for m in msgs]
     return data
 
 

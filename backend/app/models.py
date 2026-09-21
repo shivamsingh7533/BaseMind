@@ -108,6 +108,8 @@ class Conversation(Base):
     agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     visitor: Mapped[str] = mapped_column(Text, default="Guest")
     status: Mapped[str] = mapped_column(Text, default="active")
+    channel: Mapped[str] = mapped_column(Text, default="web", server_default="web", index=True)
+    external_chat_id: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
     preview: Mapped[str] = mapped_column(Text, default="")
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
     sentiment: Mapped[str | None] = mapped_column(Text, default="neutral")

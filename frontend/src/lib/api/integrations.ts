@@ -88,3 +88,37 @@ export async function triggerIntegrationTest(
     };
   }
 }
+
+export async function setTelegramWebhook(
+  token: string | null | undefined,
+  agentId: string,
+  integrationId: string
+): Promise<{ ok: boolean; message: string; telegram_response?: unknown }> {
+  try {
+    const res = await fetch(
+      `${API_URL}/api/agents/${agentId}/integrations/${integrationId}/set-telegram-webhook`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          ...authHeader(token),
+        },
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, message: data.detail || "Failed to set Telegram webhook" };
+    }
+    return {
+      ok: true,
+      message: data.message || "Telegram webhook configured successfully!",
+      telegram_response: data.telegram_response,
+    };
+  } catch (err: unknown) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Network error registering Telegram webhook",
+    };
+  }
+}
+

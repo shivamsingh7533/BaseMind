@@ -4,18 +4,19 @@ import json
 import logging
 import re
 import time
+from datetime import UTC, datetime
 
 import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..ai import embed_texts, stream_answer
 from ..auth import get_current_user
 from ..db import SessionFactory, get_db
-from ..models import Agent, Document, DocumentChunk, Integration, User
+from ..models import Agent, Conversation, Document, DocumentChunk, Integration, Message, User
 from ..schemas import IntegrationCreate, serialize_integration
 from .deps import _get_owned
 
@@ -115,6 +116,229 @@ async def _bg_reply_discord(
                 )
     except Exception as exc:  # noqa: BLE001
         log.exception("Failed to reply to Discord: %s", exc)
+
+
+async def _bg_reply_whatsapp(phone_number_id: str, bot_token: str, recipient_phone: str, reply_text: str) -> None:
+    try:
+        url = f"https://graph.facebook.com/v21.0/{phone_number_id}/messages"
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": recipient_phone,
+            "type": "text",
+            "text": {"body": reply_text},
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"},
+                json=payload,
+            )
+            if not res.is_success:
+                log.warning("WhatsApp API error %s: %s", res.status_code, res.text)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Failed to reply to WhatsApp: %s", exc)
+
+
+async def _bg_reply_telegram(bot_token: str, chat_id: str, reply_text: str) -> None:
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": reply_text,
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(url, json=payload)
+            if not res.is_success:
+                log.warning("Telegram API error %s: %s", res.status_code, res.text)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Failed to reply to Telegram: %s", exc)
+
+
+async def _get_or_create_omnichannel_conversation(
+    agent_id: str,
+    user_id: str,
+    channel: str,
+    external_chat_id: str,
+    visitor_name: str,
+) -> Conversation:
+    async with SessionFactory() as db:
+        stmt = (
+            select(Conversation)
+            .where(
+                Conversation.agent_id == agent_id,
+                Conversation.channel == channel,
+                Conversation.external_chat_id == external_chat_id,
+                Conversation.status != "resolved",
+            )
+            .order_by(Conversation.started_at.desc())
+            .limit(1)
+        )
+        conv = (await db.execute(stmt)).scalar_one_or_none()
+        if not conv:
+            conv = Conversation(
+                user_id=user_id,
+                agent_id=agent_id,
+                visitor=visitor_name,
+                channel=channel,
+                external_chat_id=external_chat_id,
+                status="active",
+            )
+            db.add(conv)
+            await db.commit()
+            await db.refresh(conv)
+        return conv
+
+
+async def _process_inbound_whatsapp(
+    agent_id: str,
+    user_id: str,
+    phone_number_id: str,
+    bot_token: str,
+    sender_phone: str,
+    sender_name: str,
+    message_text: str,
+) -> None:
+    try:
+        conv = await _get_or_create_omnichannel_conversation(
+            agent_id=agent_id,
+            user_id=user_id,
+            channel="whatsapp",
+            external_chat_id=sender_phone,
+            visitor_name=sender_name or sender_phone,
+        )
+
+        # 1. Save visitor message
+        async with SessionFactory() as db:
+            user_msg = Message(
+                conversation_id=conv.id,
+                role="user",
+                content=message_text,
+            )
+            c = (await db.execute(select(Conversation).where(Conversation.id == conv.id))).scalar_one()
+            c.preview = message_text[:120]
+            db.add(user_msg)
+            await db.commit()
+
+        # 2. Check if human operator is handling thread
+        if conv.status in ("needs_human", "in_takeover"):
+            log.info("Inbound WhatsApp message queued for human operator (conv %s)", conv.id)
+            return
+
+        # 3. Check natural language human escalation intent
+        lower = message_text.lower()
+        keywords = ["human", "agent", "person", "operator", "representative", "real person", "support team"]
+        if any(kw in lower for kw in keywords):
+            async with SessionFactory() as db:
+                c = (await db.execute(select(Conversation).where(Conversation.id == conv.id))).scalar_one()
+                c.status = "needs_human"
+                c.handover_requested_at = datetime.now(UTC)
+                notice = Message(
+                    conversation_id=conv.id,
+                    role="agent",
+                    content="I have connected you to a human operator. An agent will respond to you shortly.",
+                )
+                db.add(notice)
+                await db.commit()
+
+            handover_text = "I've connected you to our live human support team. An operator will respond to you directly here on WhatsApp."
+            await _bg_reply_whatsapp(phone_number_id, bot_token, sender_phone, handover_text)
+            return
+
+        # 4. Generate RAG answer
+        reply_text = await _generate_bot_answer(agent_id, message_text)
+
+        # 5. Store agent answer
+        async with SessionFactory() as db:
+            agent_msg = Message(
+                conversation_id=conv.id,
+                role="agent",
+                content=reply_text,
+            )
+            c = (await db.execute(select(Conversation).where(Conversation.id == conv.id))).scalar_one()
+            c.preview = reply_text[:120]
+            db.add(agent_msg)
+            await db.commit()
+
+        # 6. Dispatch reply via Meta Cloud API
+        await _bg_reply_whatsapp(phone_number_id, bot_token, sender_phone, reply_text)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Error processing inbound WhatsApp message: %s", exc)
+
+
+async def _process_inbound_telegram(
+    agent_id: str,
+    user_id: str,
+    bot_token: str,
+    chat_id: str,
+    sender_name: str,
+    message_text: str,
+) -> None:
+    try:
+        conv = await _get_or_create_omnichannel_conversation(
+            agent_id=agent_id,
+            user_id=user_id,
+            channel="telegram",
+            external_chat_id=chat_id,
+            visitor_name=sender_name or f"Telegram User {chat_id}",
+        )
+
+        # 1. Save visitor message
+        async with SessionFactory() as db:
+            user_msg = Message(
+                conversation_id=conv.id,
+                role="user",
+                content=message_text,
+            )
+            c = (await db.execute(select(Conversation).where(Conversation.id == conv.id))).scalar_one()
+            c.preview = message_text[:120]
+            db.add(user_msg)
+            await db.commit()
+
+        # 2. Check if human operator is handling thread
+        if conv.status in ("needs_human", "in_takeover"):
+            log.info("Inbound Telegram message queued for human operator (conv %s)", conv.id)
+            return
+
+        # 3. Check natural language human escalation intent
+        lower = message_text.lower()
+        keywords = ["human", "agent", "person", "operator", "representative", "real person", "support team"]
+        if any(kw in lower for kw in keywords):
+            async with SessionFactory() as db:
+                c = (await db.execute(select(Conversation).where(Conversation.id == conv.id))).scalar_one()
+                c.status = "needs_human"
+                c.handover_requested_at = datetime.now(UTC)
+                notice = Message(
+                    conversation_id=conv.id,
+                    role="agent",
+                    content="I have connected you to a human operator. An agent will respond to you shortly.",
+                )
+                db.add(notice)
+                await db.commit()
+
+            handover_text = "I've connected you to our live human support team. An operator will respond to you directly here on Telegram."
+            await _bg_reply_telegram(bot_token, chat_id, handover_text)
+            return
+
+        # 4. Generate RAG answer
+        reply_text = await _generate_bot_answer(agent_id, message_text)
+
+        # 5. Store agent answer
+        async with SessionFactory() as db:
+            agent_msg = Message(
+                conversation_id=conv.id,
+                role="agent",
+                content=reply_text,
+            )
+            c = (await db.execute(select(Conversation).where(Conversation.id == conv.id))).scalar_one()
+            c.preview = reply_text[:120]
+            db.add(agent_msg)
+            await db.commit()
+
+        # 6. Dispatch reply via Telegram Bot API
+        await _bg_reply_telegram(bot_token, chat_id, reply_text)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Error processing inbound Telegram message: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +474,31 @@ async def trigger_integration_test(
                     raise HTTPException(status_code=400, detail=f"Discord Bot error: HTTP {res.status_code}")
             return {"ok": True, "message": "Discord test message delivered!"}
         raise HTTPException(status_code=400, detail="Discord Webhook URL or Bot Token + Channel ID is required to test.")
+
+    if integ.platform == "whatsapp":
+        if not integ.bot_token or not integ.channel_id:
+            raise HTTPException(status_code=400, detail="WhatsApp System User Token and Phone Number ID are required to test.")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(
+                f"https://graph.facebook.com/v21.0/{integ.channel_id}",
+                headers={"Authorization": f"Bearer {integ.bot_token}"},
+            )
+            if not res.is_success:
+                data = res.json() if res.content else {}
+                err_msg = data.get("error", {}).get("message", f"HTTP {res.status_code}")
+                raise HTTPException(status_code=400, detail=f"WhatsApp verification failed: {err_msg}")
+        return {"ok": True, "message": "WhatsApp Phone Number ID and Access Token verified with Meta Graph API!"}
+
+    if integ.platform == "telegram":
+        if not integ.bot_token:
+            raise HTTPException(status_code=400, detail="Telegram Bot Token is required to test.")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(f"https://api.telegram.org/bot{integ.bot_token}/getMe")
+            data = res.json()
+            if not data.get("ok"):
+                raise HTTPException(status_code=400, detail=f"Telegram Bot error: {data.get('description', 'invalid token')}")
+            bot_name = data.get("result", {}).get("username", "bot")
+        return {"ok": True, "message": f"Telegram Bot verified successfully (@{bot_name})!"}
 
     raise HTTPException(status_code=400, detail=f"Unsupported platform: {integ.platform}")
 
@@ -402,3 +651,200 @@ async def handle_discord_webhook(
         }
 
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp Cloud API Webhook Handlers
+# ---------------------------------------------------------------------------
+@router.get("/api/integrations/whatsapp/{agent_id}")
+async def verify_whatsapp_webhook(
+    agent_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Meta Webhook Verification Handshake.
+
+    Meta calls this GET endpoint with hub.mode, hub.verify_token, and hub.challenge
+    when configuring the Webhook in Meta App Dashboard.
+    """
+    hub_mode = request.query_params.get("hub.mode")
+    hub_challenge = request.query_params.get("hub.challenge")
+    hub_verify_token = request.query_params.get("hub.verify_token")
+
+    if not hub_mode or not hub_verify_token:
+        raise HTTPException(status_code=400, detail="Missing hub.mode or hub.verify_token")
+
+    integ = (
+        await db.execute(
+            select(Integration).where(
+                Integration.agent_id == agent_id,
+                Integration.platform == "whatsapp",
+                Integration.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not integ or not integ.signing_secret:
+        raise HTTPException(status_code=404, detail="WhatsApp integration not found for this agent")
+
+    if hub_mode == "subscribe" and hub_verify_token == integ.signing_secret:
+        return Response(content=hub_challenge or "", media_type="text/plain")
+
+    raise HTTPException(status_code=403, detail="Verification token mismatch")
+
+
+@router.post("/api/integrations/whatsapp/{agent_id}")
+async def handle_whatsapp_webhook(
+    agent_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Processes inbound visitor messages from WhatsApp Cloud API."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    integ = (
+        await db.execute(
+            select(Integration).where(
+                Integration.agent_id == agent_id,
+                Integration.platform == "whatsapp",
+                Integration.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not integ or not integ.bot_token:
+        return {"status": "ignored_no_integration"}
+
+    for entry in body.get("entry", []):
+        for change in entry.get("changes", []):
+            val = change.get("value", {})
+            metadata = val.get("metadata", {})
+            phone_number_id = integ.channel_id or metadata.get("phone_number_id", "")
+            contacts = {c.get("wa_id"): c.get("profile", {}).get("name") for c in val.get("contacts", [])}
+            for msg in val.get("messages", []):
+                sender_phone = msg.get("from")
+                sender_name = contacts.get(sender_phone) or sender_phone or "WhatsApp User"
+                msg_type = msg.get("type")
+                raw_text = msg.get("text")
+                if isinstance(raw_text, dict):
+                    message_text = raw_text.get("body", "")
+                elif isinstance(raw_text, str):
+                    message_text = raw_text
+                elif msg_type == "image":
+                    raw_img = msg.get("image", {})
+                    caption = raw_img.get("caption", "") if isinstance(raw_img, dict) else ""
+                    message_text = f"[Image Attached] {caption}".strip()
+                else:
+                    message_text = ""
+
+                if sender_phone and message_text:
+                    background_tasks.add_task(
+                        _process_inbound_whatsapp,
+                        agent_id=agent_id,
+                        user_id=integ.user_id,
+                        phone_number_id=phone_number_id,
+                        bot_token=integ.bot_token,
+                        sender_phone=sender_phone,
+                        sender_name=sender_name,
+                        message_text=message_text,
+                    )
+
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Telegram Bot API Webhook Handlers
+# ---------------------------------------------------------------------------
+@router.post("/api/integrations/telegram/{agent_id}")
+async def handle_telegram_webhook(
+    agent_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Processes inbound Telegram updates (messages/photos)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    integ = (
+        await db.execute(
+            select(Integration).where(
+                Integration.agent_id == agent_id,
+                Integration.platform == "telegram",
+                Integration.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not integ or not integ.bot_token:
+        return {"status": "ignored_no_integration"}
+
+    msg = body.get("message") or body.get("edited_message")
+    if msg and "chat" in msg:
+        chat_id = str(msg["chat"]["id"])
+        from_user = msg.get("from", {})
+        first_name = from_user.get("first_name", "")
+        last_name = from_user.get("last_name", "")
+        username = from_user.get("username", "")
+        display_name = f"{first_name} {last_name}".strip() or username or f"Telegram User {chat_id}"
+
+        message_text = msg.get("text", "")
+        if not message_text and msg.get("photo"):
+            message_text = f"[Photo Attached] {msg.get('caption', '')}".strip()
+
+        if message_text:
+            background_tasks.add_task(
+                _process_inbound_telegram,
+                agent_id=agent_id,
+                user_id=integ.user_id,
+                bot_token=integ.bot_token,
+                chat_id=chat_id,
+                sender_name=display_name,
+                message_text=message_text,
+            )
+
+    return {"ok": True}
+
+
+@router.post("/api/agents/{agent_id}/integrations/{integration_id}/set-telegram-webhook")
+async def set_telegram_webhook(
+    agent_id: str,
+    integration_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Registers the BaseMind webhook URL directly with Telegram Bot API."""
+    await _get_owned(db, Agent, agent_id, user)
+    integ = (
+        await db.execute(
+            select(Integration).where(
+                Integration.id == integration_id,
+                Integration.agent_id == agent_id,
+                Integration.platform == "telegram",
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not integ or not integ.bot_token:
+        raise HTTPException(status_code=400, detail="Telegram Bot Token is required.")
+
+    webhook_url = integ.webhook_url
+    if not webhook_url:
+        raise HTTPException(status_code=400, detail="Webhook URL is required.")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        res = await client.post(
+            f"https://api.telegram.org/bot{integ.bot_token}/setWebhook",
+            json={"url": webhook_url},
+        )
+        data = res.json() if res.content else {}
+        if not data.get("ok"):
+            raise HTTPException(status_code=400, detail=f"Telegram error: {data.get('description', 'failed')}")
+
+    return {"ok": True, "message": "Telegram webhook set successfully!"}

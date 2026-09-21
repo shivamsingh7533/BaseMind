@@ -14,7 +14,18 @@ from ..cache import cache_get, cache_set, invalidate_user_cache
 from ..db import SessionFactory, get_db
 from ..email import dispatch_rate_limit
 from ..llm_gateway import decrypt_api_key
-from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, EventLog, Message, User, UserApiKey
+from ..models import (
+    Agent,
+    AgentAction,
+    Conversation,
+    Document,
+    DocumentChunk,
+    EventLog,
+    Integration,
+    Message,
+    User,
+    UserApiKey,
+)
 from ..schemas import (
     ConversationCreate,
     ConversationUpdate,
@@ -25,6 +36,7 @@ from ..schemas import (
     serialize_conversation,
 )
 from .deps import CHAT_RATE_MAX, CHAT_RATE_WINDOW_SECONDS, _allow_chat_async, _get_owned, log
+from .integrations import _bg_reply_telegram, _bg_reply_whatsapp
 
 router = APIRouter(prefix="/api")
 
@@ -81,6 +93,7 @@ async def conversation_detail(
 async def add_message(
     conversation_id: str,
     payload: MessageIn,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -98,6 +111,48 @@ async def add_message(
             conv.status = "in_takeover"
         if not conv.assigned_to:
             conv.assigned_to = user.name or user.email or "Operator"
+
+        # Dispatch outbound message to external channels
+        channel = getattr(conv, "channel", "web")
+        external_chat_id = getattr(conv, "external_chat_id", None)
+        if conv.agent_id and external_chat_id:
+            if channel == "whatsapp":
+                integ = (
+                    await db.execute(
+                        select(Integration).where(
+                            Integration.agent_id == conv.agent_id,
+                            Integration.platform == "whatsapp",
+                            Integration.status == "active",
+                        )
+                    )
+                ).scalar_one_or_none()
+                if integ and integ.bot_token:
+                    phone_id = integ.channel_id or ""
+                    background_tasks.add_task(
+                        _bg_reply_whatsapp,
+                        phone_number_id=phone_id,
+                        bot_token=integ.bot_token,
+                        recipient_phone=external_chat_id,
+                        reply_text=payload.text,
+                    )
+            elif channel == "telegram":
+                integ = (
+                    await db.execute(
+                        select(Integration).where(
+                            Integration.agent_id == conv.agent_id,
+                            Integration.platform == "telegram",
+                            Integration.status == "active",
+                        )
+                    )
+                ).scalar_one_or_none()
+                if integ and integ.bot_token:
+                    background_tasks.add_task(
+                        _bg_reply_telegram,
+                        bot_token=integ.bot_token,
+                        chat_id=external_chat_id,
+                        reply_text=payload.text,
+                    )
+
     db.add(message)
     await db.commit()
     await db.refresh(message)

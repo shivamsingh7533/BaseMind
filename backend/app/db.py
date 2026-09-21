@@ -267,6 +267,19 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_documents_sync_schedule ON documents(sync_schedule)"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS channel TEXT DEFAULT 'web'"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS external_chat_id TEXT"
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_channel ON conversations(channel)"
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_external_chat_id ON conversations(external_chat_id)"
+            )
 
     await run_migrations()
 

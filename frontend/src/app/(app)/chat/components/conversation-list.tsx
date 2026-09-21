@@ -11,6 +11,7 @@ import type { Conversation } from "@/lib/api";
 import { STATUS } from "../utils";
 
 type FilterTab = "all" | "needs_human" | "in_takeover" | "active" | "resolved";
+type ChannelFilter = "all" | "web" | "whatsapp" | "telegram" | "slack" | "discord";
 
 export function ConversationList({
   conversations,
@@ -24,6 +25,7 @@ export function ConversationList({
   onDelete: (id: string, name: string) => void;
 }) {
   const [filter, setFilter] = useState<FilterTab>("all");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
 
   const counts = useMemo(() => {
     if (!conversations) return { all: 0, needs_human: 0, in_takeover: 0, active: 0, resolved: 0 };
@@ -36,11 +38,28 @@ export function ConversationList({
     };
   }, [conversations]);
 
+  const channelCounts = useMemo(() => {
+    if (!conversations) return { whatsapp: 0, telegram: 0, slack: 0, discord: 0, web: 0 };
+    return {
+      whatsapp: conversations.filter((c) => c.channel === "whatsapp").length,
+      telegram: conversations.filter((c) => c.channel === "telegram").length,
+      slack: conversations.filter((c) => c.channel === "slack").length,
+      discord: conversations.filter((c) => c.channel === "discord").length,
+      web: conversations.filter((c) => !c.channel || c.channel === "web").length,
+    };
+  }, [conversations]);
+
   const filtered = useMemo(() => {
     if (!conversations) return [];
-    if (filter === "all") return conversations;
-    return conversations.filter((c) => c.status === filter);
-  }, [conversations, filter]);
+    let list = conversations;
+    if (filter !== "all") {
+      list = list.filter((c) => c.status === filter);
+    }
+    if (channelFilter !== "all") {
+      list = list.filter((c) => (c.channel || "web") === channelFilter);
+    }
+    return list;
+  }, [conversations, filter, channelFilter]);
 
   return (
     <Card className="flex h-[55dvh] min-h-72 flex-col overflow-hidden lg:h-[calc(100dvh-12rem)] lg:min-h-96">
@@ -114,6 +133,67 @@ export function ConversationList({
             <span className="text-[10px] opacity-75">({counts.active})</span>
           </button>
         </div>
+
+        {/* Channel Filter Pills */}
+        <div className="flex flex-wrap items-center gap-1 pt-1.5 border-t border-border/40 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setChannelFilter("all")}
+            className={cn(
+              "rounded px-1.5 py-0.5 font-medium transition-colors",
+              channelFilter === "all"
+                ? "bg-secondary text-secondary-foreground font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All Channels
+          </button>
+          {channelCounts.whatsapp > 0 && (
+            <button
+              type="button"
+              onClick={() => setChannelFilter(channelFilter === "whatsapp" ? "all" : "whatsapp")}
+              className={cn(
+                "flex items-center gap-1 rounded px-1.5 py-0.5 font-medium transition-colors",
+                channelFilter === "whatsapp"
+                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>🟢 WhatsApp</span>
+              <span className="text-[10px]">({channelCounts.whatsapp})</span>
+            </button>
+          )}
+          {channelCounts.telegram > 0 && (
+            <button
+              type="button"
+              onClick={() => setChannelFilter(channelFilter === "telegram" ? "all" : "telegram")}
+              className={cn(
+                "flex items-center gap-1 rounded px-1.5 py-0.5 font-medium transition-colors",
+                channelFilter === "telegram"
+                  ? "bg-sky-500/20 text-sky-700 dark:text-sky-400 font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>✈️ Telegram</span>
+              <span className="text-[10px]">({channelCounts.telegram})</span>
+            </button>
+          )}
+          {channelCounts.web > 0 && (
+            <button
+              type="button"
+              onClick={() => setChannelFilter(channelFilter === "web" ? "all" : "web")}
+              className={cn(
+                "flex items-center gap-1 rounded px-1.5 py-0.5 font-medium transition-colors",
+                channelFilter === "web"
+                  ? "bg-secondary text-secondary-foreground font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>🌐 Web</span>
+              <span className="text-[10px]">({channelCounts.web})</span>
+            </button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto p-2">
         {!conversations ? (
@@ -155,6 +235,26 @@ export function ConversationList({
                     </span>
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {c.channel === "whatsapp" && (
+                      <Badge variant="outline" className="text-[10px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1 py-0">
+                        🟢 WhatsApp
+                      </Badge>
+                    )}
+                    {c.channel === "telegram" && (
+                      <Badge variant="outline" className="text-[10px] border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-1 py-0">
+                        ✈️ Telegram
+                      </Badge>
+                    )}
+                    {c.channel === "slack" && (
+                      <Badge variant="outline" className="text-[10px] border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0">
+                        #️⃣ Slack
+                      </Badge>
+                    )}
+                    {c.channel === "discord" && (
+                      <Badge variant="outline" className="text-[10px] border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-1 py-0">
+                        🎮 Discord
+                      </Badge>
+                    )}
                     <Badge
                       variant="outline"
                       className={cn("text-[10px]", statusConfig.badge)}

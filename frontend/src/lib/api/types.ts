@@ -119,7 +119,7 @@ export interface LeadsResponse {
   summary: LeadsSummary;
 }
 
-export type IntegrationPlatform = "slack" | "discord";
+export type IntegrationPlatform = "slack" | "discord" | "whatsapp" | "telegram";
 
 export interface AgentIntegration {
   id: string;
@@ -185,6 +185,8 @@ export interface Conversation {
   id: string;
   user: string;
   status: ConversationStatus;
+  channel?: "web" | "whatsapp" | "telegram" | "slack" | "discord" | null;
+  externalChatId?: string | null;
   sentiment?: "positive" | "neutral" | "negative" | null;
   csatScore?: number | null;
   time: string;

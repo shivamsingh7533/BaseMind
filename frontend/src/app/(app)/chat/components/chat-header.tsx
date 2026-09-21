@@ -1,4 +1,4 @@
-import { Bot, CircleCheckBig, Headphones, OctagonX, RotateCw, UserCheck } from "lucide-react";
+import { Bot, CircleCheckBig, Globe, Hash, Headphones, MessageCircle, OctagonX, RotateCw, Send, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -64,6 +64,33 @@ export function ChatHeader({
                   />
                   {statusConfig.label}
                 </Badge>
+                {view.channel === "whatsapp" && (
+                  <Badge variant="outline" className="text-[11px] font-normal border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1">
+                    <MessageCircle className="size-3" /> WhatsApp
+                    {view.externalChatId && <span className="opacity-75 font-mono text-[10px]">({view.externalChatId})</span>}
+                  </Badge>
+                )}
+                {view.channel === "telegram" && (
+                  <Badge variant="outline" className="text-[11px] font-normal border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 gap-1">
+                    <Send className="size-3" /> Telegram
+                    {view.externalChatId && <span className="opacity-75 font-mono text-[10px]">({view.externalChatId})</span>}
+                  </Badge>
+                )}
+                {view.channel === "slack" && (
+                  <Badge variant="outline" className="text-[11px] font-normal border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 gap-1">
+                    <Hash className="size-3" /> Slack
+                  </Badge>
+                )}
+                {view.channel === "discord" && (
+                  <Badge variant="outline" className="text-[11px] font-normal border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 gap-1">
+                    <Hash className="size-3" /> Discord
+                  </Badge>
+                )}
+                {(!view.channel || view.channel === "web") && (
+                  <Badge variant="outline" className="text-[11px] font-normal border-muted-foreground/30 bg-muted/40 text-muted-foreground gap-1">
+                    <Globe className="size-3" /> Web
+                  </Badge>
+                )}
                 {view.assignedTo && (
                   <Badge variant="secondary" className="text-[11px] font-normal">
                     <UserCheck className="mr-1 size-3 text-indigo-500" />
