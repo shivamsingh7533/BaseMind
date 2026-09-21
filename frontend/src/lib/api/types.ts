@@ -153,7 +153,12 @@ export interface KnowledgeDoc {
   detail: string;
   status: DocStatus;
   storageKey?: string;
+  syncSchedule?: "manual" | "daily" | "weekly" | null;
+  lastSyncedAt?: string | null;
+  crawlDepth?: number | null;
 }
+
+export type Document = KnowledgeDoc;
 
 export interface CodeBlock {
   lang: string;
@@ -165,6 +170,7 @@ export interface ChatMessage {
   role: "user" | "agent" | "operator";
   text: string;
   senderName?: string | null;
+  imageUrl?: string | null;
   code?: CodeBlock;
   time: string;
   latencyNote?: string;

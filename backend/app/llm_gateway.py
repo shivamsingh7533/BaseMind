@@ -179,6 +179,8 @@ async def _stream_openai_compatible(
     api_key: str,
     base_url: str | None = None,
     temperature: float = 0.2,
+    image_bytes: bytes | None = None,
+    image_mime_type: str = "image/png",
 ) -> AsyncIterator[str]:
     endpoint = (base_url or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
     headers = {
@@ -186,15 +188,26 @@ async def _stream_openai_compatible(
         "Content-Type": "application/json",
     }
 
-    messages = [{"role": "system", "content": system_prompt}]
-    for c in contents:
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    for idx, c in enumerate(contents):
         role = "assistant" if c.get("role") in ("model", "assistant") else "user"
         text = ""
         if "parts" in c:
             text = "".join(p.get("text", "") for p in c["parts"] if isinstance(p, dict))
         else:
             text = c.get("content", "")
-        if text.strip():
+
+        if idx == len(contents) - 1 and role == "user" and image_bytes:
+            b64_str = base64.b64encode(image_bytes).decode("utf-8")
+            data_uri = f"data:{image_mime_type or 'image/png'};base64,{b64_str}"
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text or "Please analyze this image."},
+                    {"type": "image_url", "image_url": {"url": data_uri}},
+                ],
+            })
+        elif text.strip():
             messages.append({"role": role, "content": text})
 
     payload = {
@@ -239,6 +252,8 @@ async def _stream_anthropic(
     system_prompt: str,
     api_key: str,
     temperature: float = 0.2,
+    image_bytes: bytes | None = None,
+    image_mime_type: str = "image/png",
 ) -> AsyncIterator[str]:
     endpoint = "https://api.anthropic.com/v1/messages"
     headers = {
@@ -247,15 +262,32 @@ async def _stream_anthropic(
         "content-type": "application/json",
     }
 
-    messages = []
-    for c in contents:
+    messages: list[dict] = []
+    for idx, c in enumerate(contents):
         role = "assistant" if c.get("role") in ("model", "assistant") else "user"
         text = ""
         if "parts" in c:
             text = "".join(p.get("text", "") for p in c["parts"] if isinstance(p, dict))
         else:
             text = c.get("content", "")
-        if text.strip():
+
+        if idx == len(contents) - 1 and role == "user" and image_bytes:
+            b64_str = base64.b64encode(image_bytes).decode("utf-8")
+            messages.append({
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image_mime_type or "image/png",
+                            "data": b64_str,
+                        },
+                    },
+                    {"type": "text", "text": text or "Please analyze this image."},
+                ],
+            })
+        elif text.strip():
             messages.append({"role": role, "content": text})
 
     # Anthropic models: map friendly names

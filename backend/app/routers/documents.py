@@ -1,16 +1,20 @@
 import contextlib
 import ipaddress
 import socket
+from datetime import UTC, datetime
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse
-from sqlalchemy import func, select
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..ai import chunk_text, embed_texts, extract_html, extract_text, page_title
 from ..auth import get_current_user
 from ..cache import cache_get, cache_set, invalidate_user_cache
+from ..crawler import crawl_domain
 from ..db import get_db
 from ..models import Agent, Document, DocumentChunk, EventLog, User
 from ..resilience import DEFAULT_TIMEOUT
@@ -87,6 +91,9 @@ async def _persist_document(
     text: str,
     agent_id: str | None = None,
     source: str | None = None,
+    sync_schedule: str = "manual",
+    crawl_depth: int = 1,
+    last_synced_at: datetime | None = None,
 ) -> Document:
     try:
         chunks = chunk_text(text)
@@ -115,6 +122,9 @@ async def _persist_document(
         status="ready",
         agent_id=agent_id,
         storage_key=source,
+        sync_schedule=sync_schedule,
+        crawl_depth=crawl_depth,
+        last_synced_at=last_synced_at,
     )
     db.add(doc)
     await db.flush()
@@ -346,6 +356,19 @@ async def sync_url(
     html = raw.decode("utf-8", errors="ignore")
     title = page_title(html) or parsed.host or payload.url
     text = extract_html(html)
+
+    crawl_depth = getattr(payload, "crawl_depth", 1) or 1
+    sync_sched = getattr(payload, "sync_schedule", "manual") or "manual"
+    now_sync = datetime.now(UTC)
+
+    # If crawler depth > 1, spider same-domain internal links
+    if crawl_depth > 1:
+        pages = await crawl_domain(str(parsed), max_depth=crawl_depth, max_pages=10)
+        if pages:
+            full_text = "\n\n".join(f"### Page: {p['title']} ({p['url']})\n{p['text']}" for p in pages)
+            title = f"{page_title(html) or parsed.host} ({len(pages)} pages spidered)"
+            text = full_text
+
     chunks = chunk_text(text)
     if not chunks:
         raise HTTPException(status_code=422, detail="No readable text found at that URL")
@@ -360,6 +383,9 @@ async def sync_url(
             status="processing",
             agent_id=payload.agent_id,
             storage_key=str(parsed),
+            sync_schedule=sync_sched,
+            crawl_depth=crawl_depth,
+            last_synced_at=now_sync,
         )
         db.add(doc)
         await db.commit()
@@ -376,7 +402,76 @@ async def sync_url(
         text=text,
         agent_id=payload.agent_id,
         source=str(parsed),
+        sync_schedule=sync_sched,
+        crawl_depth=crawl_depth,
+        last_synced_at=now_sync,
     )
+    await invalidate_user_cache(user.id)
+    return serialize_document(doc)
+
+
+class DocumentScheduleUpdate(BaseModel):
+    sync_schedule: Literal["manual", "daily", "weekly"]
+
+
+@router.post("/documents/{document_id}/resync")
+async def resync_document(
+    document_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await _get_owned(db, Document, document_id, user)
+    if not doc.storage_key or not doc.storage_key.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Only web link documents can be re-synced")
+
+    depth = getattr(doc, "crawl_depth", 1) or 1
+    pages = await crawl_domain(doc.storage_key, max_depth=depth, max_pages=10)
+    if not pages:
+        raise HTTPException(status_code=422, detail="Failed to fetch content from URL during resync")
+
+    full_text = "\n\n".join(f"### Page: {p['title']} ({p['url']})\n{p['text']}" for p in pages)
+    chunks = chunk_text(full_text)
+    if not chunks:
+        raise HTTPException(status_code=422, detail="No readable text found during resync")
+
+    embeddings = await embed_texts(chunks)
+
+    # Delete old chunks
+    await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc.id))
+
+    # Insert new chunks
+    for idx, (content, emb) in enumerate(zip(chunks, embeddings, strict=True)):
+        db.add(
+            DocumentChunk(
+                document_id=doc.id,
+                user_id=user.id,
+                agent_id=doc.agent_id,
+                content=content,
+                chunk_index=idx,
+                embedding=emb,
+            )
+        )
+
+    doc.last_synced_at = datetime.now(UTC)
+    doc.detail = f"Synced {len(pages)} page{'s' if len(pages) > 1 else ''}, {len(chunks)} chunks"
+    doc.status = "ready"
+    await db.commit()
+    await db.refresh(doc)
+    await invalidate_user_cache(user.id)
+    return serialize_document(doc)
+
+
+@router.patch("/documents/{document_id}/schedule")
+async def update_document_schedule(
+    document_id: str,
+    payload: DocumentScheduleUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await _get_owned(db, Document, document_id, user)
+    doc.sync_schedule = payload.sync_schedule
+    await db.commit()
+    await db.refresh(doc)
     await invalidate_user_cache(user.id)
     return serialize_document(doc)
 

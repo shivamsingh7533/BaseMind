@@ -92,6 +92,9 @@ class Document(Base):
     detail: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(Text, default="processing")
     storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_schedule: Mapped[str | None] = mapped_column(Text, default="manual", server_default="manual")
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    crawl_depth: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     agent: Mapped[Agent | None] = relationship(back_populates="documents")
@@ -131,6 +134,7 @@ class Message(Base):
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     feedback_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     sender_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")

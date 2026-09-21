@@ -1,3 +1,4 @@
+import base64
 import fnmatch
 import json
 from datetime import UTC, datetime
@@ -308,7 +309,29 @@ async def public_chat(
     if not await _allow_chat_async(conv.user_id):
         raise HTTPException(status_code=429, detail="Agent message capacity reached for this minute. Please wait a moment.")
 
-    visitor_message = Message(conversation_id=conv.id, role="user", content=payload.text)
+    image_raw_bytes = None
+    image_data_uri = None
+    if payload.image_base64:
+        try:
+            raw_b64 = payload.image_base64
+            if "," in raw_b64:
+                _, raw_b64 = raw_b64.split(",", 1)
+            image_raw_bytes = base64.b64decode(raw_b64)
+            if len(image_raw_bytes) > 4 * 1024 * 1024:
+                raise HTTPException(status_code=413, detail="Image size exceeds 4MB limit")
+            mime = payload.image_mime_type or "image/png"
+            image_data_uri = f"data:{mime};base64,{raw_b64}"
+        except HTTPException:
+            raise
+        except Exception:
+            image_raw_bytes = None
+
+    visitor_message = Message(
+        conversation_id=conv.id,
+        role="user",
+        content=payload.text,
+        image_url=image_data_uri,
+    )
     conv.preview = payload.text[:120]
     db.add(visitor_message)
     await db.commit()
@@ -462,6 +485,8 @@ async def public_chat(
                 temperature=temperature,
                 custom_api_key=custom_api_key,
                 custom_base_url=custom_base_url,
+                image_bytes=image_raw_bytes,
+                image_mime_type=payload.image_mime_type or "image/png",
             ):
                 while action_events:
                     yield f"data: {action_events.pop(0)}\n\n"

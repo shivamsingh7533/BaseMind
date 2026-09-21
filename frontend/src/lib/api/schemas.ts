@@ -41,6 +41,9 @@ export const KnowledgeDocSchema = z.object({
   detail: z.string(),
   status: z.enum(["ready", "processing", "failed"]),
   storageKey: z.string().optional(),
+  syncSchedule: z.enum(["manual", "daily", "weekly"]).nullable().optional(),
+  lastSyncedAt: z.string().nullable().optional(),
+  crawlDepth: z.number().nullable().optional(),
 });
 
 const CodeBlockSchema = z.object({
@@ -53,6 +56,7 @@ export const ChatMessageSchema = z.object({
   role: z.enum(["user", "agent", "operator"]),
   text: z.string(),
   senderName: z.string().nullable().optional(),
+  imageUrl: z.string().nullable().optional(),
   code: CodeBlockSchema.optional(),
   time: z.string(),
   latencyNote: z.string().optional(),

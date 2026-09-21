@@ -30,7 +30,7 @@ import { ConversationList } from "./components/conversation-list";
 import { ChatHeader } from "./components/chat-header";
 import { CoPilotPanel } from "./components/copilot-panel";
 import { MessageThread } from "./components/message-thread";
-import { Composer } from "./components/composer";
+import { Composer, type AttachedImageState } from "./components/composer";
 import { SourcesDialog } from "./components/sources-dialog";
 import { chipsFrom, fmtTime, PENDING_ID, type SourceRef } from "./utils";
 
@@ -46,6 +46,7 @@ export function Chat() {
   const [detail, setDetail] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [attachedImage, setAttachedImage] = useState<AttachedImageState | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [sourceDocs, setSourceDocs] = useState<SourceRef[]>([]);
@@ -238,8 +239,10 @@ export function Chat() {
     async (rawText?: string) => {
       if (streaming) return;
       const t = await getToken();
+      const currentImage = attachedImage;
       const text = (rawText ?? draft).trim();
-      if (!text) return;
+      if (!text && !currentImage) return;
+      const effectiveText = text || "Please analyze this image and help diagnose the issue.";
       let cid = selectedId;
       if (!cid) {
         const created = await createConversation(t, null, visitorLabel);
@@ -252,13 +255,14 @@ export function Chat() {
         await fetchConversations(t, true);
       }
       setDraft("");
+      setAttachedImage(null);
       setFollowUps([]);
 
       if (isOperatorMode) {
         const opMsg: ChatMessage = {
           id: `op-${Date.now()}`,
           role: "operator",
-          text,
+          text: effectiveText,
           senderName: operatorName,
           time: fmtTime(new Date()),
         };
@@ -266,7 +270,7 @@ export function Chat() {
         setDetail((prev) =>
           prev ? { ...prev, status: "in_takeover", assignedTo: operatorName } : prev
         );
-        const ok = await sendOperatorMessage(t, cid, text, operatorName);
+        const ok = await sendOperatorMessage(t, cid, effectiveText, operatorName);
         if (!ok) {
           toast.error("Could not send operator message");
         } else {
@@ -278,55 +282,72 @@ export function Chat() {
       setDetail((prev) => (prev ? { ...prev, status: "active" } : prev));
       setMessages((prev) => [
         ...prev,
-        { id: `local-${Date.now()}`, role: "user", text, time: "" },
+        {
+          id: `local-${Date.now()}`,
+          role: "user",
+          text: effectiveText,
+          imageUrl: currentImage?.previewUrl,
+          time: "",
+        },
         { id: PENDING_ID, role: "agent", text: "", time: "" },
       ]);
       setStreaming(true);
       streamingRef.current = true;
       let answer = "";
       try {
-        await streamChat(t, cid, text, (e) => {
-          if (e.type === "sources") {
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (last?.role === "agent" && last.id === PENDING_ID)
-                copy[copy.length - 1] = { ...last, sources: e.sources };
-              return copy;
-            });
-          } else if (e.type === "token") {
-            answer += e.token;
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (last?.role === "agent" && last.id === PENDING_ID)
-                copy[copy.length - 1] = { ...last, text: last.text + e.token };
-              return copy;
-            });
-          } else if (e.type === "error") {
-            toast.error(e.error);
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (last?.role === "agent" && last.id === PENDING_ID && !last.text)
-                copy.pop();
-              return copy;
-            });
-          } else if (e.type === "done") {
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (last?.role === "agent" && last.id === PENDING_ID)
-                copy[copy.length - 1] = {
-                  ...last,
-                  id: e.messageId ?? last.id,
-                  time: fmtTime(new Date()),
-                };
-              return copy;
-            });
-            setFollowUps(chipsFrom(answer));
-          }
-        });
+        await streamChat(
+          t,
+          cid,
+          effectiveText,
+          (e) => {
+            if (e.type === "sources") {
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "agent" && last.id === PENDING_ID)
+                  copy[copy.length - 1] = { ...last, sources: e.sources };
+                return copy;
+              });
+            } else if (e.type === "token") {
+              answer += e.token;
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "agent" && last.id === PENDING_ID)
+                  copy[copy.length - 1] = { ...last, text: last.text + e.token };
+                return copy;
+              });
+            } else if (e.type === "error") {
+              toast.error(e.error);
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "agent" && last.id === PENDING_ID && !last.text)
+                  copy.pop();
+                return copy;
+              });
+            } else if (e.type === "done") {
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "agent" && last.id === PENDING_ID)
+                  copy[copy.length - 1] = {
+                    ...last,
+                    id: e.messageId ?? last.id,
+                    time: fmtTime(new Date()),
+                  };
+                return copy;
+              });
+              setFollowUps(chipsFrom(answer));
+            }
+          },
+          currentImage
+            ? {
+                image_base64: currentImage.base64,
+                image_mime_type: currentImage.mimeType,
+              }
+            : undefined
+        );
       } catch {
         toast.error("Could not reach the agent");
         setMessages((prev) => {
@@ -342,7 +363,7 @@ export function Chat() {
         void fetchConversations(t, true);
       }
     },
-    [draft, fetchConversations, getToken, isOperatorMode, operatorName, selectedId, streaming, visitorLabel]
+    [attachedImage, draft, fetchConversations, getToken, isOperatorMode, operatorName, selectedId, streaming, visitorLabel]
   );
 
   const retry = () => {
@@ -516,6 +537,8 @@ export function Chat() {
               <Composer
                 draft={draft}
                 onDraftChange={setDraft}
+                attachedImage={attachedImage}
+                onAttachedImageChange={setAttachedImage}
                 onSend={() => void send()}
                 onRetry={retry}
                 streaming={streaming}

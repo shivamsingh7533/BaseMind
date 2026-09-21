@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
+  Clock,
   CloudUpload,
   Download,
   ExternalLink,
@@ -11,6 +12,7 @@ import {
   Globe,
   Link2,
   Loader2,
+  RefreshCw,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -31,12 +33,15 @@ import {
 import {
   deleteDocument,
   getDocumentDownloadUrl,
+  resyncDocument,
+  syncUrl,
+  updateDocumentSchedule,
+  uploadDocument,
   type DocStatus,
   type KnowledgeDoc,
-  syncUrl,
-  uploadDocument,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 const STATUS: Record<
   DocStatus,
@@ -64,11 +69,29 @@ function TypeIcon({ type }: { type: string }) {
   return <FileText className="size-4 text-muted-foreground" />;
 }
 
+function formatRelativeTime(isoString?: string | null): string {
+  if (!isoString) return "Never";
+  try {
+    const diffMs = Date.now() - new Date(isoString).getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  } catch {
+    return "Recently";
+  }
+}
+
 export default function KnowledgeBasePage() {
   const { getToken } = useAuth();
   const docs = useAppData((s) => s.documents);
   const fetchDocuments = useAppData((s) => s.fetchDocuments);
   const [urlInput, setUrlInput] = useState("");
+  const [crawlDepth, setCrawlDepth] = useState<number>(1);
+  const [syncSchedule, setSyncSchedule] = useState<"manual" | "daily" | "weekly">("manual");
   const [syncing, setSyncing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -98,7 +121,7 @@ export default function KnowledgeBasePage() {
     if (!file || uploading) return;
     if (file.size > MAX_FILE_SIZE) {
       toast.error("File too large", {
-        description: "Maximum size is 10MB",
+        description: "Maximum file size is 10MB.",
       });
       return;
     }
@@ -126,7 +149,10 @@ export default function KnowledgeBasePage() {
     if (syncing) return;
     setSyncing(true);
     try {
-      const doc = await syncUrl(await getToken().catch(() => null), url);
+      const doc = await syncUrl(await getToken().catch(() => null), url, {
+        crawlDepth,
+        syncSchedule,
+      });
       if (doc) {
         toast.success(`${doc.name} synced`, {
           description: doc.detail,
@@ -136,6 +162,45 @@ export default function KnowledgeBasePage() {
       }
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleResync = async (d: KnowledgeDoc) => {
+    if (actionBusy) return;
+    setActionBusy(`resync-${d.id}`);
+    try {
+      const token = await getToken().catch(() => null);
+      const res = await resyncDocument(token, d.id);
+      if (res) {
+        toast.success(`Re-sync triggered for ${d.name}`, {
+          description: "Fetching newest pages and re-indexing in background...",
+        });
+        await fetchDocuments(token, true);
+      } else {
+        toast.error("Could not trigger re-sync");
+      }
+    } catch {
+      toast.error("Could not trigger re-sync");
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const handleUpdateSchedule = async (
+    d: KnowledgeDoc,
+    schedule: "manual" | "daily" | "weekly"
+  ) => {
+    try {
+      const token = await getToken().catch(() => null);
+      const res = await updateDocumentSchedule(token, d.id, schedule);
+      if (res) {
+        toast.success(`Schedule set to ${schedule} for ${d.name}`);
+        await fetchDocuments(token, true);
+      } else {
+        toast.error("Could not update sync schedule");
+      }
+    } catch {
+      toast.error("Could not update sync schedule");
     }
   };
 
@@ -183,7 +248,7 @@ export default function KnowledgeBasePage() {
       </div>
       <p className="-mt-3 mb-6 text-sm text-muted-foreground">
         Train your agents by connecting data sources. Supported formats: PDF,
-        TXT, CSV, MD.
+        TXT, CSV, MD, and automated multi-page Web Crawler.
       </p>
 
       <Card>
@@ -217,12 +282,22 @@ export default function KnowledgeBasePage() {
                 : "Drag & Drop files here"}
             </p>
             <p className="text-xs text-muted-foreground">
-              {uploading ? "This may take a few seconds" : "or click to browse (PDF, TXT, CSV · max 10MB)"}
+              {uploading
+                ? "This may take a few seconds"
+                : "or click to browse (PDF, TXT, CSV · max 10MB)"}
             </p>
           </button>
 
-          <div className="flex flex-col justify-center gap-2">
-            <label htmlFor="sync-url" className="text-sm font-medium">Sync URL</label>
+          <div className="flex flex-col justify-center gap-3">
+            <div className="flex items-center justify-between">
+              <label htmlFor="sync-url" className="text-sm font-medium">
+                Sync Website / Documentation
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                Automated Web Crawler
+              </span>
+            </div>
+
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -231,21 +306,77 @@ export default function KnowledgeBasePage() {
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://docs.example.com"
-                  className="pl-9"
+                  className="pl-9 text-xs"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void handleSync();
                   }}
                 />
               </div>
-              <Button onClick={() => void handleSync()} disabled={syncing}>
+              <Button onClick={() => void handleSync()} disabled={syncing} size="sm">
                 {syncing ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                 ) : null}
-                {syncing ? "Syncing…" : "Sync"}
+                {syncing ? "Crawling…" : "Sync"}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Fetches the page, extracts text, and indexes it for RAG.
+
+            {/* CRAWL & AUTO-SYNC OPTIONS */}
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-foreground">Depth:</span>
+                <div className="flex items-center rounded-md border bg-background p-0.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCrawlDepth(1)}
+                    className={cn(
+                      "rounded px-2 py-0.5 transition-colors",
+                      crawlDepth === 1
+                        ? "bg-primary text-primary-foreground font-medium"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Single
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrawlDepth(2)}
+                    className={cn(
+                      "rounded px-2 py-0.5 transition-colors",
+                      crawlDepth === 2
+                        ? "bg-primary text-primary-foreground font-medium"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title="Crawl root and up to 10 subpages"
+                  >
+                    Spider (10 pgs)
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Clock className="size-3 text-muted-foreground" />
+                <span className="text-[11px] font-medium text-foreground">Schedule:</span>
+                <select
+                  value={syncSchedule}
+                  aria-label="Auto-sync schedule"
+                  onChange={(e) =>
+                    setSyncSchedule(
+                      e.target.value as "manual" | "daily" | "weekly"
+                    )
+                  }
+                  className="rounded-md border bg-background px-1.5 py-0.5 text-[11px] text-foreground outline-none focus:border-primary"
+                >
+                  <option value="manual">Manual</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              {crawlDepth > 1
+                ? "Discovers and indexes up to 10 internal subpages with SSRF protection."
+                : "Fetches and indexes the specified single page for RAG responses."}
             </p>
           </div>
         </CardContent>
@@ -255,7 +386,7 @@ export default function KnowledgeBasePage() {
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="font-heading">Connected Sources</CardTitle>
           <Badge variant="secondary">
-            {docs ? `${docs.length} Files` : "…"}
+            {docs ? `${docs.length} Sources` : "…"}
           </Badge>
         </CardHeader>
         <CardContent>
@@ -263,64 +394,223 @@ export default function KnowledgeBasePage() {
             <Skeleton className="h-36 w-full" />
           ) : (
             <>
-            <div className="hidden -mx-6 overflow-x-auto px-6 sm:block sm:mx-0 sm:px-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-              <TableBody>
-                {docs.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="py-10 text-center text-sm text-muted-foreground"
-                    >
-                      No knowledge sources yet — upload a file or sync a URL to
-                      train your first agent.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                docs.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <TypeIcon type={d.type} />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {d.name}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {d.status === "failed" ? (
-                              <span className="inline-flex items-center gap-1 text-destructive">
-                                <TriangleAlert className="size-3" /> {d.detail}
-                              </span>
+              <div className="hidden -mx-6 overflow-x-auto px-6 sm:block sm:mx-0 sm:px-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Sync Schedule</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {docs.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="py-10 text-center text-sm text-muted-foreground"
+                        >
+                          No knowledge sources yet — upload a file or sync a URL to
+                          train your first agent.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      docs.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <TypeIcon type={d.type} />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">
+                                  {d.name}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {d.status === "failed" ? (
+                                    <span className="inline-flex items-center gap-1 text-destructive">
+                                      <TriangleAlert className="size-3" /> {d.detail}
+                                    </span>
+                                  ) : (
+                                    d.detail
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {d.type}
+                          </TableCell>
+                          <TableCell>
+                            {d.type.startsWith("Web") ? (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={d.syncSchedule || "manual"}
+                                  aria-label={`Sync schedule for ${d.name}`}
+                                  onChange={(e) =>
+                                    void handleUpdateSchedule(
+                                      d,
+                                      e.target.value as "manual" | "daily" | "weekly"
+                                    )
+                                  }
+                                  className="rounded border bg-background px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none focus:border-primary"
+                                >
+                                  <option value="manual">Manual</option>
+                                  <option value="daily">Daily</option>
+                                  <option value="weekly">Weekly</option>
+                                </select>
+                                <span className="text-[10px] text-muted-foreground">
+                                  Synced: {formatRelativeTime(d.lastSyncedAt)}
+                                </span>
+                              </div>
                             ) : (
-                              d.detail
+                              <span className="text-xs text-muted-foreground">—</span>
                             )}
-                          </p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge
+                              variant="outline"
+                              className={STATUS[d.status].className}
+                            >
+                              {STATUS[d.status].label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="inline-flex items-center justify-end gap-1">
+                              {d.type.startsWith("Web") && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1 text-xs text-primary hover:text-primary"
+                                  disabled={
+                                    d.status === "processing" ||
+                                    actionBusy === `resync-${d.id}`
+                                  }
+                                  onClick={() => void handleResync(d)}
+                                  title="Re-crawl and sync latest content"
+                                >
+                                  <RefreshCw
+                                    className={cn(
+                                      "size-3.5",
+                                      actionBusy === `resync-${d.id}` &&
+                                        "animate-spin"
+                                    )}
+                                  />
+                                  <span>Re-sync</span>
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                disabled={
+                                  d.status === "processing" || actionBusy === d.id
+                                }
+                                onClick={() => void openDoc(d)}
+                              >
+                                {actionBusy === d.id ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : d.type.startsWith("Web") ? (
+                                  <ExternalLink className="size-3.5" />
+                                ) : (
+                                  <Download className="size-3.5" />
+                                )}
+                                {d.type.startsWith("Web") ? "Open" : "Download"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-muted-foreground hover:text-destructive"
+                                aria-label={`Delete ${d.name}`}
+                                disabled={actionBusy !== null}
+                                onClick={() => void removeDoc(d)}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {docs.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground sm:hidden">
+                  No knowledge sources yet — upload a file or sync a URL to train
+                  your first agent.
+                </p>
+              ) : (
+                <div className="space-y-3 sm:hidden">
+                  {docs.map((d) => (
+                    <div key={d.id} className="rounded-xl border p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <TypeIcon type={d.type} />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">
+                              {d.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {d.type}
+                            </p>
+                          </div>
                         </div>
+                        <Badge
+                          variant="outline"
+                          className={STATUS[d.status].className}
+                        >
+                          {STATUS[d.status].label}
+                        </Badge>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {d.type}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="outline" className={STATUS[d.status].className}>
-                        {STATUS[d.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="inline-flex items-center justify-end gap-1">
+                      <p className="mt-2 truncate text-xs text-muted-foreground">
+                        {d.status === "failed" ? (
+                          <span className="inline-flex items-center gap-1 text-destructive">
+                            <TriangleAlert className="size-3" /> {d.detail}
+                          </span>
+                        ) : (
+                          d.detail
+                        )}
+                      </p>
+
+                      {d.type.startsWith("Web") && (
+                        <div className="mt-2 flex items-center justify-between border-t pt-2 text-[11px] text-muted-foreground">
+                          <span>
+                            Sync: <strong>{d.syncSchedule || "manual"}</strong>
+                          </span>
+                          <span>Last: {formatRelativeTime(d.lastSyncedAt)}</span>
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex items-center gap-2">
+                        {d.type.startsWith("Web") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1 text-xs text-primary"
+                            disabled={
+                              d.status === "processing" ||
+                              actionBusy === `resync-${d.id}`
+                            }
+                            onClick={() => void handleResync(d)}
+                          >
+                            <RefreshCw
+                              className={cn(
+                                "size-3.5",
+                                actionBusy === `resync-${d.id}` && "animate-spin"
+                              )}
+                            />
+                            <span>Re-sync</span>
+                          </Button>
+                        )}
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           className="h-8 gap-1.5 text-xs"
-                          disabled={d.status === "processing" || actionBusy === d.id}
+                          disabled={
+                            d.status === "processing" || actionBusy === d.id
+                          }
                           onClick={() => void openDoc(d)}
                         >
                           {actionBusy === d.id ? (
@@ -342,79 +632,11 @@ export default function KnowledgeBasePage() {
                         >
                           <Trash2 className="size-4" />
                         </Button>
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))
-                )}
-                </TableBody>
-              </Table>
-            </div>
-            {docs.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground sm:hidden">
-                No knowledge sources yet — upload a file or sync a URL to train
-                your first agent.
-              </p>
-            ) : (
-              <div className="space-y-3 sm:hidden">
-                {docs.map((d) => (
-                  <div
-                    key={d.id}
-                    className="rounded-xl border p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <TypeIcon type={d.type} />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{d.name}</p>
-                          <p className="text-xs text-muted-foreground">{d.type}</p>
-                        </div>
                       </div>
-                      <Badge variant="outline" className={STATUS[d.status].className}>
-                        {STATUS[d.status].label}
-                      </Badge>
                     </div>
-                    <p className="mt-2 truncate text-xs text-muted-foreground">
-                      {d.status === "failed" ? (
-                        <span className="inline-flex items-center gap-1 text-destructive">
-                          <TriangleAlert className="size-3" /> {d.detail}
-                        </span>
-                      ) : (
-                        d.detail
-                      )}
-                    </p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1.5 text-xs"
-                        disabled={d.status === "processing" || actionBusy === d.id}
-                        onClick={() => void openDoc(d)}
-                      >
-                        {actionBusy === d.id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : d.type.startsWith("Web") ? (
-                          <ExternalLink className="size-3.5" />
-                        ) : (
-                          <Download className="size-3.5" />
-                        )}
-                        {d.type.startsWith("Web") ? "Open" : "Download"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 text-muted-foreground hover:text-destructive"
-                        aria-label={`Delete ${d.name}`}
-                        disabled={actionBusy !== null}
-                        onClick={() => void removeDoc(d)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
             </>
           )}
         </CardContent>

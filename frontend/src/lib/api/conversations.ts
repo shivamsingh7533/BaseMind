@@ -87,7 +87,8 @@ export async function streamChat(
   token: string | null | undefined,
   conversationId: string,
   text: string,
-  onEvent: (event: ChatEvent) => void
+  onEvent: (event: ChatEvent) => void,
+  options?: { image_base64?: string; image_mime_type?: string }
 ): Promise<void> {
   let res: Response;
   try {
@@ -98,7 +99,12 @@ export async function streamChat(
         "Content-Type": "application/json",
         ...authHeader(token),
       },
-      body: JSON.stringify({ text, role: "user" }),
+      body: JSON.stringify({
+        text,
+        role: "user",
+        image_base64: options?.image_base64,
+        image_mime_type: options?.image_mime_type,
+      }),
     });
   } catch {
     onEvent({ type: "error", error: "Network error" });
@@ -149,7 +155,8 @@ export async function getPublicConversation(
 export async function streamPublicChat(
   conversationId: string,
   text: string,
-  onEvent: (event: ChatEvent) => void
+  onEvent: (event: ChatEvent) => void,
+  options?: { image_base64?: string; image_mime_type?: string }
 ): Promise<void> {
   let res: Response;
   try {
@@ -159,7 +166,12 @@ export async function streamPublicChat(
         Accept: "text/event-stream",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text, role: "user" }),
+      body: JSON.stringify({
+        text,
+        role: "user",
+        image_base64: options?.image_base64,
+        image_mime_type: options?.image_mime_type,
+      }),
     });
   } catch {
     onEvent({ type: "error", error: "Network error" });

@@ -97,12 +97,16 @@ class DocumentCreate(BaseModel):
 class SyncUrlRequest(BaseModel):
     url: str = Field(min_length=8, max_length=2048)
     agent_id: str | None = None
+    crawl_depth: int | None = Field(default=1, ge=1, le=3)
+    sync_schedule: Literal["manual", "daily", "weekly"] | None = "manual"
 
 
 class MessageIn(BaseModel):
     role: Literal["user", "agent", "operator"]
     text: str = Field(min_length=1, max_length=8000)
     sender_name: str | None = Field(default=None, max_length=120)
+    image_base64: str | None = Field(default=None, max_length=5_000_000)
+    image_mime_type: str | None = Field(default="image/png", max_length=50)
 
 
 class ConversationCreate(BaseModel):
@@ -226,6 +230,9 @@ def serialize_document(doc) -> dict:
         "detail": doc.detail,
         "status": doc.status,
         "storageKey": doc.storage_key,
+        "syncSchedule": getattr(doc, "sync_schedule", "manual") or "manual",
+        "lastSyncedAt": doc.last_synced_at.isoformat() if getattr(doc, "last_synced_at", None) else None,
+        "crawlDepth": getattr(doc, "crawl_depth", 1) or 1,
     }
 
 
@@ -238,6 +245,7 @@ def serialize_message(message) -> dict:
         "rating": getattr(message, "rating", None),
         "feedbackReason": getattr(message, "feedback_reason", None),
         "senderName": getattr(message, "sender_name", None),
+        "imageUrl": getattr(message, "image_url", None),
     }
 
 

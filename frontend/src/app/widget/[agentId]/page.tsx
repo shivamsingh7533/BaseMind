@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Headphones,
+  ImagePlus,
   Loader2,
   Mail,
   RefreshCw,
@@ -17,6 +18,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,6 +37,7 @@ interface MessageItem {
   role: "user" | "agent" | "operator";
   text: string;
   senderName?: string | null;
+  imageUrl?: string | null;
   sources?: { source: string; docId?: string }[];
   rating?: number | null;
   feedbackReason?: string | null;
@@ -66,6 +69,55 @@ export default function PublicWidgetPage() {
   const [submittingLead, setSubmittingLead] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState(false);
   const [reasonPickerMsgId, setReasonPickerMsgId] = useState<string | null>(null);
+
+  // Multimodal Vision state
+  const [attachedImage, setAttachedImage] = useState<{
+    base64: string;
+    mimeType: string;
+    previewUrl: string;
+    name: string;
+  } | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file (PNG, JPEG, WebP)");
+      return;
+    }
+    if (file.size > 3.5 * 1024 * 1024) {
+      toast.error("Image must be smaller than 3.5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64Data = result.includes(",") ? result.split(",")[1] : result;
+      setAttachedImage({
+        base64: base64Data,
+        mimeType: file.type || "image/png",
+        previewUrl: result,
+        name: file.name,
+      });
+      toast.success("Screenshot attached — ask your question or send to diagnose");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleImageFile(file);
+          break;
+        }
+      }
+    }
+  };
 
   const handleWidgetFeedback = async (
     messageId: string,
@@ -167,6 +219,7 @@ export default function PublicWidgetPage() {
                 role: m.role,
                 text: m.text,
                 senderName: m.senderName,
+                imageUrl: m.imageUrl,
                 sources: m.sources,
                 rating: m.rating,
                 feedbackReason: m.feedbackReason,
@@ -257,15 +310,24 @@ export default function PublicWidgetPage() {
   const handleSendMessage = useCallback(
     async (textToSend?: string) => {
       const query = (textToSend ?? input).trim();
-      if (!query || streaming || !agent) return;
+      if ((!query && !attachedImage) || streaming || !agent) return;
 
+      const effectiveText = query || "Please analyze this image and help diagnose the issue.";
+      const currentImage = attachedImage;
       setInput("");
+      setAttachedImage(null);
+
       const userMsgId = "user-" + Date.now();
       const agentMsgId = "agent-" + Date.now();
 
       setMessages((prev) => [
         ...prev,
-        { id: userMsgId, role: "user", text: query },
+        {
+          id: userMsgId,
+          role: "user",
+          text: effectiveText,
+          imageUrl: currentImage?.previewUrl,
+        },
         { id: agentMsgId, role: "agent", text: "" },
       ]);
       setStreaming(true);
@@ -284,7 +346,10 @@ export default function PublicWidgetPage() {
           }
         }
 
-        await streamPublicChat(activeConvId, query, (event) => {
+        await streamPublicChat(
+          activeConvId,
+          effectiveText,
+          (event) => {
           if (event.type === "token") {
             setMessages((prev) => {
               const copy = [...prev];
@@ -353,7 +418,14 @@ export default function PublicWidgetPage() {
               return copy;
             });
           }
-        });
+        },
+          currentImage
+            ? {
+                image_base64: currentImage.base64,
+                image_mime_type: currentImage.mimeType,
+              }
+            : undefined
+        );
       } catch {
         setMessages((prev) => {
           const copy = [...prev];
@@ -371,7 +443,7 @@ export default function PublicWidgetPage() {
         inputRef.current?.focus();
       }
     },
-    [input, streaming, agent, conversationId]
+    [attachedImage, input, streaming, agent, conversationId]
   );
 
   const brandColor = agent?.color || "#0d9488";
@@ -600,6 +672,16 @@ export default function PublicWidgetPage() {
                   : undefined
               }
             >
+              {m.imageUrl && (
+                <div className="mb-2 overflow-hidden rounded-lg border border-black/10 bg-black/5">
+                  <img
+                    src={m.imageUrl}
+                    alt="Attached screenshot"
+                    className="max-h-48 w-auto max-w-full cursor-pointer object-cover transition-opacity hover:opacity-90"
+                    onClick={() => setLightboxUrl(m.imageUrl || null)}
+                  />
+                </div>
+              )}
               {m.text ? (
                 m.text
               ) : streaming ? (
@@ -688,6 +770,28 @@ export default function PublicWidgetPage() {
 
       {/* INPUT FORM */}
       <div className="p-3 border-t border-border/60 bg-background/95 backdrop-blur-md shrink-0">
+        {/* ATTACHED IMAGE PREVIEW */}
+        {attachedImage && (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs text-foreground">
+            <div className="flex items-center gap-2 truncate">
+              <img
+                src={attachedImage.previewUrl}
+                alt="Preview"
+                className="size-7 rounded object-cover border"
+              />
+              <span className="truncate font-medium text-[11px]">{attachedImage.name}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAttachedImage(null)}
+              className="text-muted-foreground hover:text-foreground p-0.5"
+              aria-label="Remove image"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
+
         <form
           className="flex items-center gap-2"
           onSubmit={(e) => {
@@ -696,18 +800,39 @@ export default function PublicWidgetPage() {
           }}
         >
           <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageFile(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={streaming}
+            className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-input bg-muted/30 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+            title="Attach screenshot (or paste via Ctrl+V)"
+          >
+            <ImagePlus className="size-4" />
+          </button>
+          <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message…"
+            onPaste={handlePaste}
+            placeholder={attachedImage ? "Add context about this image…" : "Type your message or paste screenshot…"}
             disabled={streaming}
             className="flex-1 rounded-xl border border-input bg-muted/30 px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none transition-all focus:border-primary/50 focus:bg-background"
           />
           <Button
             type="submit"
             size="icon"
-            disabled={streaming || !input.trim()}
+            disabled={streaming || (!input.trim() && !attachedImage)}
             className="size-8 rounded-xl text-white shadow-sm transition-transform active:scale-95 shrink-0"
             style={{ backgroundColor: brandColor }}
             title="Send"
@@ -859,6 +984,33 @@ export default function PublicWidgetPage() {
               </div>
             </form>
           )}
+        </div>
+      )}
+
+      {/* IMAGE LIGHTBOX MODAL */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in-50 duration-200"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl border border-white/20 bg-background/90 p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxUrl(null)}
+              className="absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="size-4" />
+            </button>
+            <img
+              src={lightboxUrl}
+              alt="Expanded view"
+              className="max-h-[85vh] w-auto max-w-[85vw] rounded-lg object-contain"
+            />
+          </div>
         </div>
       )}
     </div>

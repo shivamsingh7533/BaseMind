@@ -251,8 +251,21 @@ async def init_db() -> None:
                 )
                 """
             )
+        with suppress(Exception):
             await conn.exec_driver_sql(
-                "CREATE INDEX IF NOT EXISTS ix_user_api_keys_user_id ON user_api_keys(user_id)"
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE documents ADD COLUMN IF NOT EXISTS sync_schedule TEXT DEFAULT 'manual'"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE documents ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE documents ADD COLUMN IF NOT EXISTS crawl_depth INTEGER DEFAULT 1"
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_documents_sync_schedule ON documents(sync_schedule)"
             )
 
     await run_migrations()

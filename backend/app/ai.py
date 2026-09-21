@@ -281,6 +281,8 @@ async def stream_answer(
     temperature: float = 0.2,
     custom_api_key: str | None = None,
     custom_base_url: str | None = None,
+    image_bytes: bytes | None = None,
+    image_mime_type: str = "image/png",
 ) -> AsyncIterator[str]:
     from google.genai import types
 
@@ -315,11 +317,18 @@ async def stream_answer(
     if sanitized_history and sanitized_history[-1]["role"] == "user":
         sanitized_history.pop()
 
+    user_parts: list[Any] = []
+    if image_bytes:
+        user_parts.append(
+            types.Part.from_bytes(data=image_bytes, mime_type=image_mime_type or "image/png")
+        )
+    user_parts.append({"text": f"Knowledge base context:\n{context_block}\n\nCustomer question: {question}"})
+
     contents = [
         *sanitized_history,
         {
             "role": "user",
-            "parts": [{"text": f"Knowledge base context:\n{context_block}\n\nCustomer question: {question}"}],
+            "parts": user_parts,
         },
     ]
 
@@ -336,6 +345,8 @@ async def stream_answer(
                     api_key=key,
                     base_url=custom_base_url,
                     temperature=temperature,
+                    image_bytes=image_bytes,
+                    image_mime_type=image_mime_type,
                 ):
                     yield token
                 return
@@ -354,6 +365,8 @@ async def stream_answer(
                     system_prompt=system_prompt,
                     api_key=key,
                     temperature=temperature,
+                    image_bytes=image_bytes,
+                    image_mime_type=image_mime_type,
                 ):
                     yield token
                 return

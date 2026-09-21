@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Check, FileSearch, Headphones, MessageSquareWarning, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Check, FileSearch, Headphones, MessageSquareWarning, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import type { ChatMessage } from "@/lib/api";
 import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,7 @@ export const ChatBubble = memo(function ChatBubble({
   const isOperator = m.role === "operator";
   const [showReasonPicker, setShowReasonPicker] = useState(false);
   const [submittingRate, setSubmittingRate] = useState(false);
+  const [previewModal, setPreviewModal] = useState<string | null>(null);
 
   const handleRate = async (rating: 1 | -1, reason?: string) => {
     if (!m.id || !onRate || submittingRate) return;
@@ -100,6 +101,16 @@ export const ChatBubble = memo(function ChatBubble({
             <div className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
               <Headphones className="size-3" />
               <span>{m.senderName ? `${m.senderName} (Human Agent)` : "Human Agent"}</span>
+            </div>
+          )}
+          {m.imageUrl && (
+            <div className="mb-2 overflow-hidden rounded-lg border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+              <img
+                src={m.imageUrl}
+                alt="Attached screenshot"
+                className="max-h-56 w-auto max-w-full cursor-pointer rounded-lg object-cover transition-opacity hover:opacity-90"
+                onClick={() => setPreviewModal(m.imageUrl || null)}
+              />
             </div>
           )}
           {renderRich(m.text)}
@@ -205,6 +216,32 @@ export const ChatBubble = memo(function ChatBubble({
           </div>
         )}
       </div>
+
+      {previewModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in-50 duration-200"
+          onClick={() => setPreviewModal(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl border border-white/20 bg-background/90 p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewModal(null)}
+              className="absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="size-4" />
+            </button>
+            <img
+              src={previewModal}
+              alt="Expanded view"
+              className="max-h-[85vh] w-auto max-w-[85vw] rounded-lg object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 });

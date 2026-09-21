@@ -88,7 +88,15 @@ export async function uploadDocument(
 
 export async function syncUrl(
   token: string | null | undefined,
-  url: string
+  url: string,
+  options?: {
+    crawl_depth?: number;
+    crawlDepth?: number;
+    sync_schedule?: "manual" | "daily" | "weekly";
+    syncSchedule?: "manual" | "daily" | "weekly";
+    agent_id?: string;
+    agentId?: string;
+  }
 ): Promise<KnowledgeDoc | null> {
   if (!token) {
     toast.error("Session expired — please refresh and sign in again");
@@ -104,7 +112,12 @@ export async function syncUrl(
         "Content-Type": "application/json",
         ...authHeader(token),
       },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({
+        url,
+        crawl_depth: options?.crawl_depth ?? options?.crawlDepth ?? 1,
+        sync_schedule: options?.sync_schedule ?? options?.syncSchedule ?? "manual",
+        agent_id: options?.agent_id ?? options?.agentId,
+      }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -118,9 +131,11 @@ export async function syncUrl(
       toast.error(`Sync failed: ${detail}`);
       return null;
     }
-    return (await res.json()) as KnowledgeDoc;
+    const json: unknown = await res.json();
+    return KnowledgeDocSchema.parse(json);
   } catch (err) {
-    const aborted = err instanceof DOMException && err.name === "AbortError";
+    const aborted =
+      err instanceof DOMException && err.name === "AbortError";
     toast.error(
       aborted
         ? "Sync timed out — please try again"
@@ -130,4 +145,30 @@ export async function syncUrl(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function resyncDocument(
+  token: string | null | undefined,
+  documentId: string
+): Promise<KnowledgeDoc | null> {
+  if (!token) return null;
+  return request<KnowledgeDoc>(`/api/documents/${documentId}/resync`, {
+    method: "POST",
+    headers: authHeader(token),
+    schema: KnowledgeDocSchema,
+  });
+}
+
+export async function updateDocumentSchedule(
+  token: string | null | undefined,
+  documentId: string,
+  syncSchedule: "manual" | "daily" | "weekly"
+): Promise<KnowledgeDoc | null> {
+  if (!token) return null;
+  return request<KnowledgeDoc>(`/api/documents/${documentId}/schedule`, {
+    method: "PATCH",
+    headers: authHeader(token),
+    body: JSON.stringify({ sync_schedule: syncSchedule }),
+    schema: KnowledgeDocSchema,
+  });
 }
