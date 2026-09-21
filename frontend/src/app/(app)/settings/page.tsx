@@ -42,6 +42,7 @@ import {
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { LlmKeysCard } from "./components/llm-keys-card";
 
 declare global {
   interface Window {
@@ -397,6 +398,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        <LlmKeysCard />
 
         <Card>
           <CardHeader>

@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     razorpay_webhook_secret: str = ""
     razorpay_plan_id: str = ""
     razorpay_annual_plan_id: str = ""
+    encryption_secret: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
 
 
 @lru_cache

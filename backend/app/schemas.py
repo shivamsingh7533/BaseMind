@@ -29,6 +29,10 @@ class AgentCreate(BaseModel):
     lead_capture_title: str | None = Field(default="Get in touch", max_length=200)
     hide_branding: bool | None = False
     custom_brand_name: str | None = Field(default="", max_length=120)
+    model_provider: str | None = Field(default="gemini", max_length=50)
+    model_name: str | None = Field(default="gemini-2.5-flash", max_length=100)
+    fallback_model: str | None = Field(default="gemini-2.5-flash", max_length=100)
+    temperature: float | None = Field(default=0.2, ge=0.0, le=1.0)
 
 
 class AgentUpdate(BaseModel):
@@ -44,6 +48,10 @@ class AgentUpdate(BaseModel):
     lead_capture_title: str | None = Field(default=None, max_length=200)
     hide_branding: bool | None = None
     custom_brand_name: str | None = Field(default=None, max_length=120)
+    model_provider: str | None = Field(default=None, max_length=50)
+    model_name: str | None = Field(default=None, max_length=100)
+    fallback_model: str | None = Field(default=None, max_length=100)
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class LeadCreate(BaseModel):
@@ -159,6 +167,10 @@ def serialize_agent(agent, usage: dict | None = None) -> dict:
         "leadCaptureTitle": getattr(agent, "lead_capture_title", "") or "Get in touch",
         "hideBranding": bool(getattr(agent, "hide_branding", False)),
         "customBrandName": getattr(agent, "custom_brand_name", "") or "",
+        "modelProvider": getattr(agent, "model_provider", "gemini") or "gemini",
+        "modelName": getattr(agent, "model_name", "gemini-2.5-flash") or "gemini-2.5-flash",
+        "fallbackModel": getattr(agent, "fallback_model", "gemini-2.5-flash") or "gemini-2.5-flash",
+        "temperature": getattr(agent, "temperature", 0.2) or 0.2,
         "queries24h": usage.get("queries24h", agent.queries_24h),
         "avgLatencyMs": usage.get("avgLatencyMs", agent.avg_latency_ms),
         "trainProgress": agent.train_progress,
@@ -311,7 +323,25 @@ class CoPilotSummaryResponse(BaseModel):
 
 
 class CoPilotSuggestResponse(BaseModel):
-    suggestions: list[str] = Field(default_factory=list)
+    suggestions: list[str]
+
+
+class UserApiKeyCreate(BaseModel):
+    provider: Literal["openai", "anthropic", "gemini", "custom"]
+    api_key: str = Field(min_length=3, max_length=500)
+    base_url: str | None = Field(default=None, max_length=500)
+
+
+def serialize_user_api_key(key) -> dict:
+    return {
+        "id": key.id,
+        "provider": key.provider,
+        "keyHashSuffix": key.key_hash_suffix,
+        "baseUrl": key.base_url,
+        "isValid": key.is_valid,
+        "createdAt": key.created_at.isoformat() if getattr(key, "created_at", None) else "",
+        "updatedAt": key.updated_at.isoformat() if getattr(key, "updated_at", None) else "",
+    }
 
 
 def serialize_agent_action(action) -> dict:

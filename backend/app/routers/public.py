@@ -13,7 +13,8 @@ from sqlalchemy.orm import selectinload
 from ..ai import embed_texts, stream_answer
 from ..cache import invalidate_user_cache
 from ..db import SessionFactory, get_db
-from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, Lead, Message, User
+from ..llm_gateway import decrypt_api_key
+from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, Lead, Message, User, UserApiKey
 from ..schemas import (
     LeadCreate,
     MessageFeedbackIn,
@@ -389,6 +390,26 @@ async def public_chat(
     ]
 
     agent_instructions = agent_row.instructions if agent_row else ""
+    model_provider = getattr(agent_row, "model_provider", "gemini") if agent_row else "gemini"
+    model_name = getattr(agent_row, "model_name", "gemini-2.5-flash") if agent_row else "gemini-2.5-flash"
+    fallback_model = getattr(agent_row, "fallback_model", "gemini-2.5-flash") if agent_row else "gemini-2.5-flash"
+    temperature = getattr(agent_row, "temperature", 0.2) if agent_row else 0.2
+    custom_api_key = None
+    custom_base_url = None
+
+    if model_provider in ("openai", "anthropic", "custom"):
+        key_res = await db.execute(
+            select(UserApiKey).where(
+                UserApiKey.user_id == conv.user_id,
+                UserApiKey.provider == model_provider,
+                UserApiKey.is_valid.is_(True),
+            )
+        )
+        key_row = key_res.scalar_one_or_none()
+        if key_row:
+            custom_api_key = decrypt_api_key(key_row.api_key_encrypted)
+            custom_base_url = key_row.base_url
+
     agent_id_value = conv.agent_id
     conversation_id_value = conv.id
     question = payload.text
@@ -435,6 +456,12 @@ async def public_chat(
                 extra_instructions=agent_instructions,
                 actions=actions,
                 on_action_call=on_action_call,
+                model_provider=model_provider,
+                model_name=model_name,
+                fallback_model=fallback_model,
+                temperature=temperature,
+                custom_api_key=custom_api_key,
+                custom_base_url=custom_base_url,
             ):
                 while action_events:
                     yield f"data: {action_events.pop(0)}\n\n"

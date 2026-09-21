@@ -275,13 +275,18 @@ async def stream_answer(
     extra_instructions: str = "",
     actions: list[Any] | None = None,
     on_action_call: Callable[[str, dict, dict], Awaitable[None]] | None = None,
+    model_provider: str = "gemini",
+    model_name: str = "gemini-2.5-flash",
+    fallback_model: str = "gemini-2.5-flash",
+    temperature: float = 0.2,
+    custom_api_key: str | None = None,
+    custom_base_url: str | None = None,
 ) -> AsyncIterator[str]:
     from google.genai import types
 
+    from .llm_gateway import _stream_anthropic, _stream_openai_compatible
     from .resilience import _check_circuit, _record_failure, _record_success, retrying
 
-    _check_circuit("gemini")
-    client = get_ai_client()
     system_prompt = SYSTEM_PROMPT
     if extra_instructions.strip():
         system_prompt += (
@@ -318,20 +323,65 @@ async def stream_answer(
         },
     ]
 
+    # --- MULTI-MODEL ROUTING: OPENAI OR CUSTOM ---
+    settings = get_settings()
+    if model_provider in ("openai", "custom"):
+        key = custom_api_key or settings.openai_api_key
+        if key:
+            try:
+                async for token in _stream_openai_compatible(
+                    model=model_name or "gpt-4o",
+                    contents=contents,
+                    system_prompt=system_prompt,
+                    api_key=key,
+                    base_url=custom_base_url,
+                    temperature=temperature,
+                ):
+                    yield token
+                return
+            except Exception:
+                # Log fallback event and transparently failover to Gemini
+                pass
+
+    # --- MULTI-MODEL ROUTING: ANTHROPIC ---
+    if model_provider == "anthropic":
+        key = custom_api_key or settings.anthropic_api_key
+        if key:
+            try:
+                async for token in _stream_anthropic(
+                    model=model_name or "claude-3-5-sonnet",
+                    contents=contents,
+                    system_prompt=system_prompt,
+                    api_key=key,
+                    temperature=temperature,
+                ):
+                    yield token
+                return
+            except Exception:
+                # Log fallback event and transparently failover to Gemini
+                pass
+
+    # --- DEFAULT / FALLBACK: GOOGLE GEMINI ---
+    _check_circuit("gemini")
+    client = get_ai_client()
     tools = build_gemini_tools(actions)
+    target_gemini = model_name if model_provider == "gemini" and model_name else (fallback_model or CHAT_MODEL)
+    if "2.5" in target_gemini or not target_gemini.startswith("gemini"):
+        target_gemini = CHAT_MODEL
+    effective_model = target_gemini
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         tools=tools,
+        temperature=temperature,
     )
 
     # Check for Function Calling if tools are defined
     if tools:
         try:
             initial_resp = await client.aio.models.generate_content(
-                model=CHAT_MODEL, contents=contents, config=config
+                model=effective_model, contents=contents, config=config
             )
             if initial_resp.function_calls:
-                # Add model candidate with the function call to turn history
                 contents.append(initial_resp.candidates[0].content)
                 for call in initial_resp.function_calls:
                     matched_action = next((a for a in (actions or []) if a.name == call.name), None)
@@ -358,7 +408,7 @@ async def stream_answer(
         async for attempt in retrying("gemini", attempts=5):
             with attempt:
                 async for chunk in await client.aio.models.generate_content_stream(
-                    model=CHAT_MODEL, contents=contents, config=config
+                    model=effective_model, contents=contents, config=config
                 ):
                     if chunk.text:
                         yield chunk.text

@@ -12,7 +12,8 @@ from ..auth import get_current_user
 from ..cache import cache_get, cache_set, invalidate_user_cache
 from ..db import SessionFactory, get_db
 from ..email import dispatch_rate_limit
-from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, EventLog, Message, User
+from ..llm_gateway import decrypt_api_key
+from ..models import Agent, AgentAction, Conversation, Document, DocumentChunk, EventLog, Message, User, UserApiKey
 from ..schemas import (
     ConversationCreate,
     ConversationUpdate,
@@ -224,10 +225,34 @@ async def chat(
     agent_id = conv.agent_id
 
     extra_instructions = ""
+    model_provider = "gemini"
+    model_name = "gemini-2.5-flash"
+    fallback_model = "gemini-2.5-flash"
+    temperature = 0.2
+    custom_api_key = None
+    custom_base_url = None
+
     if agent_id:
         agent_row = (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
         if agent_row:
             extra_instructions = agent_row.instructions or ""
+            model_provider = getattr(agent_row, "model_provider", "gemini") or "gemini"
+            model_name = getattr(agent_row, "model_name", "gemini-2.5-flash") or "gemini-2.5-flash"
+            fallback_model = getattr(agent_row, "fallback_model", "gemini-2.5-flash") or "gemini-2.5-flash"
+            temperature = getattr(agent_row, "temperature", 0.2) or 0.2
+
+    if model_provider in ("openai", "anthropic", "custom"):
+        key_res = await db.execute(
+            select(UserApiKey).where(
+                UserApiKey.user_id == user.id,
+                UserApiKey.provider == model_provider,
+                UserApiKey.is_valid.is_(True),
+            )
+        )
+        key_row = key_res.scalar_one_or_none()
+        if key_row:
+            custom_api_key = decrypt_api_key(key_row.api_key_encrypted)
+            custom_base_url = key_row.base_url
 
     user_message = Message(conversation_id=conv.id, role="user", content=payload.text)
     conv.preview = payload.text[:120]
@@ -306,6 +331,12 @@ async def chat(
                 extra_instructions,
                 actions=actions,
                 on_action_call=on_action_call,
+                model_provider=model_provider,
+                model_name=model_name,
+                fallback_model=fallback_model,
+                temperature=temperature,
+                custom_api_key=custom_api_key,
+                custom_base_url=custom_base_url,
             ):
                 while action_events:
                     yield f"data: {action_events.pop(0)}\n\n"

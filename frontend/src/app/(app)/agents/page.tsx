@@ -25,6 +25,7 @@ import {
   Unlink,
   X,
   Zap,
+  Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,36 @@ const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   },
 };
 
+const PROVIDER_OPTIONS = [
+  { value: "gemini", label: "Google Gemini", defaultModel: "gemini-3.6-flash" },
+  { value: "openai", label: "OpenAI", defaultModel: "gpt-4o-mini" },
+  { value: "anthropic", label: "Anthropic Claude", defaultModel: "claude-3-5-sonnet" },
+  { value: "custom", label: "Custom (Groq / Together / DeepSeek)", defaultModel: "custom" },
+];
+
+const MODEL_PRESETS: Record<string, { id: string; label: string; desc: string }[]> = {
+  gemini: [
+    { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", desc: "Default ultra-fast low latency" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "Deep reasoning & extended context" },
+  ],
+  openai: [
+    { id: "gpt-4o-mini", label: "GPT-4o Mini", desc: "Fast, intelligent, lightweight" },
+    { id: "gpt-4o", label: "GPT-4o", desc: "Omni flagship intelligence" },
+  ],
+  anthropic: [
+    { id: "claude-3-5-sonnet", label: "Claude 3.5 Sonnet", desc: "Nuanced writing & reasoning" },
+  ],
+  custom: [
+    { id: "custom", label: "Custom BYOK Endpoint", desc: "Configured via Settings BYOK" },
+  ],
+};
+
+const FALLBACK_OPTIONS = [
+  { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash (Failover default)" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { id: "gpt-4o-mini", label: "GPT-4o Mini" },
+];
+
 export default function AgentsPage() {
   const { getToken } = useAuth();
   const agents = useAppData((s) => s.agents);
@@ -102,8 +133,18 @@ export default function AgentsPage() {
   const [studioConvId, setStudioConvId] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
+  // Agent Studio Multi-Model State
+  const [botProvider, setBotProvider] = useState<string>("gemini");
+  const [botModel, setBotModel] = useState<string>("gemini-3.6-flash");
+  const [botFallback, setBotFallback] = useState<string>("gemini-3.6-flash");
+  const [botTemperature, setBotTemperature] = useState<number>(0.2);
+
   // Embed Widget Modal State
   const [embedAgent, setEmbedAgent] = useState<Agent | null>(null);
+  const [embedProvider, setEmbedProvider] = useState<string>("gemini");
+  const [embedModel, setEmbedModel] = useState<string>("gemini-3.6-flash");
+  const [embedFallback, setEmbedFallback] = useState<string>("gemini-3.6-flash");
+  const [embedTemperature, setEmbedTemperature] = useState<number>(0.2);
   const [embedGreeting, setEmbedGreeting] = useState("");
   const [embedQuestions, setEmbedQuestions] = useState<string[]>([]);
   const [newQuestionDraft, setNewQuestionDraft] = useState("");
@@ -280,6 +321,12 @@ export default function AgentsPage() {
     setEmbedLeadTitle(agent.leadCaptureTitle || "Get in touch");
     setEmbedHideBranding(Boolean(agent.hideBranding));
     setEmbedCustomBrand(agent.customBrandName || "");
+    setEmbedProvider(agent.modelProvider || "gemini");
+    setEmbedModel(agent.modelName || "gemini-3.6-flash");
+    setEmbedFallback(agent.fallbackModel || "gemini-3.6-flash");
+    setEmbedTemperature(
+      typeof agent.temperature === "number" ? agent.temperature : 0.2
+    );
   };
 
   const handleSaveWidget = async () => {
@@ -296,6 +343,10 @@ export default function AgentsPage() {
         lead_capture_title: embedLeadTitle.trim(),
         hide_branding: embedHideBranding,
         custom_brand_name: embedCustomBrand.trim(),
+        model_provider: embedProvider,
+        model_name: embedModel,
+        fallback_model: embedFallback,
+        temperature: embedTemperature,
       });
       if (updated) {
         toast.success("Widget settings saved successfully!");
@@ -417,6 +468,10 @@ export default function AgentsPage() {
         name: botName.trim(),
         instructions: systemPrompt.trim(),
         color: brandColor,
+        model_provider: botProvider,
+        model_name: botModel,
+        fallback_model: botFallback,
+        temperature: botTemperature,
       });
       if (created) {
         toast.success(`${created.name} is live`, {
@@ -484,7 +539,19 @@ export default function AgentsPage() {
                   </span>
                   <div className="min-w-40 flex-1">
                     <p className="text-sm font-semibold">{a.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                      <Badge
+                        variant="outline"
+                        className="h-5 gap-1 font-mono text-[10px] border-primary/25 bg-primary/5 text-primary"
+                      >
+                        <Cpu className="size-2.5" />
+                        {a.modelName || "gemini-3.6-flash"}
+                      </Badge>
+                      <span className="text-[11px] text-muted-foreground">
+                        • {a.modelProvider || "gemini"} (temp {a.temperature ?? 0.2})
+                      </span>
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground mt-0.5">
                       {a.url}
                     </p>
                   </div>
@@ -615,6 +682,104 @@ export default function AgentsPage() {
             <p className="text-xs text-muted-foreground">
               Accent color for buttons and bubbles.
             </p>
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 p-4 lg:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Cpu className="size-4 text-primary" />
+                  <Label className="text-sm font-semibold">
+                    Foundation LLM &amp; Gateway Settings
+                  </Label>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] uppercase tracking-wider font-semibold border-primary/30 text-primary"
+                  >
+                    BYOK Supported
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Select the primary intelligence engine and failover circuit breaker for this agent.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Model Provider</Label>
+                <select
+                  value={botProvider}
+                  onChange={(e) => {
+                    const prov = e.target.value;
+                    setBotProvider(prov);
+                    const defaultMod =
+                      PROVIDER_OPTIONS.find((p) => p.value === prov)?.defaultModel ||
+                      "gemini-3.6-flash";
+                    setBotModel(defaultMod);
+                  }}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {PROVIDER_OPTIONS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Primary Model</Label>
+                <select
+                  value={botModel}
+                  onChange={(e) => setBotModel(e.target.value)}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {(MODEL_PRESETS[botProvider] || MODEL_PRESETS.gemini).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} ({m.desc})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Fallback Model (Failover)</Label>
+                <select
+                  value={botFallback}
+                  onChange={(e) => setBotFallback(e.target.value)}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {FALLBACK_OPTIONS.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Temperature</Label>
+                  <span className="font-mono text-xs font-semibold text-primary">
+                    {botTemperature.toFixed(2)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={botTemperature}
+                  onChange={(e) => setBotTemperature(parseFloat(e.target.value))}
+                  className="h-2 w-full cursor-pointer accent-primary mt-2"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Deterministic (0.0)</span>
+                  <span>Creative (1.0)</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2 lg:col-span-2">
@@ -838,8 +1003,9 @@ export default function AgentsPage() {
 
           {embedAgent && (
             <Tabs defaultValue="code" className="mt-2">
-              <TabsList className="grid grid-cols-3 w-full">
+              <TabsList className="grid grid-cols-4 w-full">
                 <TabsTrigger value="code">Embed Code</TabsTrigger>
+                <TabsTrigger value="model">AI Model</TabsTrigger>
                 <TabsTrigger value="customize">Customize</TabsTrigger>
                 <TabsTrigger value="preview">Live Preview</TabsTrigger>
               </TabsList>
@@ -975,7 +1141,120 @@ export default function AgentsPage() {
                 </div>
               </TabsContent>
 
-              {/* TAB 2: CUSTOMIZE */}
+              {/* TAB: AI MODEL & GATEWAY */}
+              <TabsContent value="model" className="space-y-4 pt-3">
+                <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <Cpu className="size-4 text-primary" />
+                      Foundation Model &amp; Gateway
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Configure the model engine, generation temperature, and automatic fallback failover for {embedAgent.name}.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Model Provider</Label>
+                      <select
+                        value={embedProvider}
+                        onChange={(e) => {
+                          const prov = e.target.value;
+                          setEmbedProvider(prov);
+                          const defaultMod =
+                            PROVIDER_OPTIONS.find((p) => p.value === prov)?.defaultModel ||
+                            "gemini-3.6-flash";
+                          setEmbedModel(defaultMod);
+                        }}
+                        className="h-9 w-full rounded-md border bg-background px-2 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                      >
+                        {PROVIDER_OPTIONS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Primary Model</Label>
+                      <select
+                        value={embedModel}
+                        onChange={(e) => setEmbedModel(e.target.value)}
+                        className="h-9 w-full rounded-md border bg-background px-2 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                      >
+                        {(MODEL_PRESETS[embedProvider] || MODEL_PRESETS.gemini).map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label} ({m.desc})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Fallback Model (Failover)</Label>
+                      <select
+                        value={embedFallback}
+                        onChange={(e) => setEmbedFallback(e.target.value)}
+                        className="h-9 w-full rounded-md border bg-background px-2 text-xs font-medium outline-none focus:ring-1 focus:ring-primary"
+                      >
+                        {FALLBACK_OPTIONS.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Temperature</Label>
+                        <span className="font-mono text-xs font-semibold text-primary">
+                          {embedTemperature.toFixed(2)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={embedTemperature}
+                        onChange={(e) => setEmbedTemperature(parseFloat(e.target.value))}
+                        className="h-2 w-full cursor-pointer accent-primary mt-2"
+                      />
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <span>Precise (0.0)</span>
+                        <span>Creative (1.0)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground border-t pt-2">
+                    💡 If using OpenAI, Claude, or a Custom endpoint, ensure your API key is added in{" "}
+                    <a href="/settings" className="text-primary underline" target="_blank" rel="noreferrer">
+                      Settings &rarr; LLM Keys
+                    </a>. Otherwise, BaseMind will seamlessly route to the fallback model.
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t">
+                  <Button
+                    onClick={handleSaveWidget}
+                    disabled={savingWidget}
+                    className="gap-2"
+                  >
+                    {savingWidget ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    Save Model Settings
+                  </Button>
+                </div>
+              </TabsContent>
+
+              {/* TAB 3: CUSTOMIZE */}
               <TabsContent value="customize" className="space-y-4 pt-3">
                 <div className="space-y-2">
                   <Label htmlFor="widget-greeting" className="text-xs font-semibold">

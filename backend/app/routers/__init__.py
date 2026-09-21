@@ -10,6 +10,7 @@ from .dashboard import router as _dashboard
 from .documents import router as _documents
 from .integrations import router as _integrations
 from .leads import router as _leads
+from .llm_keys import router as _llm_keys
 from .public import router as _public
 
 router = APIRouter()
@@ -24,6 +25,7 @@ router.include_router(_admin)
 router.include_router(_leads)
 router.include_router(_public)
 router.include_router(_integrations)
+router.include_router(_llm_keys)
 
 # Re-exports kept for test compatibility (`from app import routers` then `routers.<fn>`).
 __all__ = [

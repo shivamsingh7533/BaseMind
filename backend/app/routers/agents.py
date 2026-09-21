@@ -59,6 +59,10 @@ async def create_agent(
         lead_capture_title=payload.lead_capture_title or "Get in touch",
         hide_branding=bool(payload.hide_branding),
         custom_brand_name=payload.custom_brand_name or "",
+        model_provider=payload.model_provider or "gemini",
+        model_name=payload.model_name or "gemini-2.5-flash",
+        fallback_model=payload.fallback_model or "gemini-2.5-flash",
+        temperature=payload.temperature if payload.temperature is not None else 0.2,
         status="active",
         train_progress=100,
     )

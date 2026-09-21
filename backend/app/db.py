@@ -221,6 +221,39 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_agent_actions_user_id ON agent_actions(user_id)"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS model_provider TEXT DEFAULT 'gemini'"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS model_name TEXT DEFAULT 'gemini-2.5-flash'"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS fallback_model TEXT DEFAULT 'gemini-2.5-flash'"
+            )
+            await conn.exec_driver_sql(
+                "ALTER TABLE agents ADD COLUMN IF NOT EXISTS temperature DOUBLE PRECISION DEFAULT 0.2"
+            )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS user_api_keys (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    provider TEXT NOT NULL,
+                    key_hash_suffix TEXT NOT NULL,
+                    api_key_encrypted TEXT NOT NULL,
+                    base_url TEXT,
+                    is_valid BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    CONSTRAINT uq_user_provider UNIQUE (user_id, provider)
+                )
+                """
+            )
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_user_api_keys_user_id ON user_api_keys(user_id)"
+            )
 
     await run_migrations()
 

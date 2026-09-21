@@ -48,7 +48,15 @@ export async function deleteAgent(
 
 export async function createAgent(
   token: string | null | undefined,
-  input: { name: string; instructions: string; color: string }
+  input: {
+    name: string;
+    instructions: string;
+    color: string;
+    model_provider?: string;
+    model_name?: string;
+    fallback_model?: string;
+    temperature?: number;
+  }
 ): Promise<Agent | null> {
   try {
     const res = await fetch(`${API_URL}/api/agents`, {
@@ -93,6 +101,10 @@ export async function updateAgent(
     lead_capture_title?: string;
     hide_branding?: boolean;
     custom_brand_name?: string;
+    model_provider?: string;
+    model_name?: string;
+    fallback_model?: string;
+    temperature?: number;
   }
 ): Promise<Agent | null> {
   try {

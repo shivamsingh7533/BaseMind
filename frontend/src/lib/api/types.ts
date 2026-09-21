@@ -68,6 +68,10 @@ export interface Agent {
   leadCaptureTitle?: string;
   hideBranding?: boolean;
   customBrandName?: string;
+  modelProvider?: string;
+  modelName?: string;
+  fallbackModel?: string;
+  temperature?: number;
   queries24h: number;
   avgLatencyMs: number;
   trainProgress?: number | null;
@@ -458,4 +462,33 @@ export interface CoPilotSummary {
 
 export interface CoPilotSuggestions {
   suggestions: string[];
+}
+
+export interface AvailableModel {
+  id: string;
+  provider: string;
+  name: string;
+  description: string;
+  requiresByok: boolean;
+}
+
+export interface UserApiKey {
+  id: string;
+  provider: "openai" | "anthropic" | "gemini" | "custom";
+  keyHashSuffix: string;
+  baseUrl?: string | null;
+  isValid: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserApiKeysResponse {
+  keys: UserApiKey[];
+  availableModels: AvailableModel[];
+}
+
+export interface UserApiKeyCreatePayload {
+  provider: "openai" | "anthropic" | "gemini" | "custom";
+  api_key: string;
+  base_url?: string;
 }

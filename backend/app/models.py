@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -33,6 +33,7 @@ class User(Base):
     integrations: Mapped[list["Integration"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     knowledge_gaps: Mapped[list["KnowledgeGap"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     actions: Mapped[list["AgentAction"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    api_keys: Mapped[list["UserApiKey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Agent(Base):
@@ -65,6 +66,10 @@ class Agent(Base):
     custom_brand_name: Mapped[str | None] = mapped_column(
         Text, default="", nullable=True, server_default=""
     )
+    model_provider: Mapped[str] = mapped_column(Text, default="gemini", server_default="gemini")
+    model_name: Mapped[str] = mapped_column(Text, default="gemini-2.5-flash", server_default="gemini-2.5-flash")
+    fallback_model: Mapped[str] = mapped_column(Text, default="gemini-2.5-flash", server_default="gemini-2.5-flash")
+    temperature: Mapped[float] = mapped_column(Float, default=0.2, server_default="0.2")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
@@ -275,6 +280,23 @@ class AgentAction(Base):
 
     user: Mapped["User"] = relationship(back_populates="actions")
     agent: Mapped["Agent"] = relationship(back_populates="actions")
+
+
+class UserApiKey(Base):
+    __tablename__ = "user_api_keys"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    key_hash_suffix: Mapped[str] = mapped_column(Text, nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    user: Mapped["User"] = relationship(back_populates="api_keys")
+
 
 
 
