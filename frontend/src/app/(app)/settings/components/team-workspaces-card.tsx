@@ -141,8 +141,8 @@ export function TeamWorkspacesCard() {
   useEffect(() => {
     if (!activeWorkspace) return;
     let cancelled = false;
-    setMembersLoading(true);
     getToken().then((token) => {
+      if (!cancelled) setMembersLoading(true);
       void getWorkspaceMembers(activeWorkspace.id, token).then((mList) => {
         if (!cancelled) {
           setMembers(mList);
