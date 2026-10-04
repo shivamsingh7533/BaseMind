@@ -34,6 +34,43 @@ class User(Base):
     knowledge_gaps: Mapped[list["KnowledgeGap"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     actions: Mapped[list["AgentAction"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     api_keys: Mapped[list["UserApiKey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    owned_workspaces: Mapped[list["Workspace"]] = relationship(
+        foreign_keys="Workspace.owner_id", back_populates="owner", cascade="all, delete-orphan"
+    )
+    workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        foreign_keys="WorkspaceMember.user_id", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    owner: Mapped["User"] = relationship(foreign_keys=[owner_id], back_populates="owned_workspaces")
+    members: Mapped[list["WorkspaceMember"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    email: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    role: Mapped[str] = mapped_column(Text, default="operator", server_default="operator", index=True)
+    status: Mapped[str] = mapped_column(Text, default="active", server_default="active")
+    invited_by_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    workspace: Mapped["Workspace"] = relationship(back_populates="members")
+    user: Mapped["User | None"] = relationship(foreign_keys=[user_id], back_populates="workspace_memberships")
 
 
 class Agent(Base):
@@ -41,6 +78,7 @@ class Agent(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     url: Mapped[str] = mapped_column(Text, default="")
     instructions: Mapped[str | None] = mapped_column(Text, default="", nullable=True, server_default="")
@@ -86,6 +124,7 @@ class Document(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[str] = mapped_column(Text, default="PDF")
@@ -105,6 +144,7 @@ class Conversation(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     agent_id: Mapped[str | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     visitor: Mapped[str] = mapped_column(Text, default="Guest")
     status: Mapped[str] = mapped_column(Text, default="active")

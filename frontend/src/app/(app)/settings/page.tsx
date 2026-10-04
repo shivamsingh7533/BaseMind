@@ -43,6 +43,8 @@ import {
 import { useAppData } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LlmKeysCard } from "./components/llm-keys-card";
+import { TeamWorkspacesCard } from "./components/team-workspaces-card";
+import { UsageMeteringCard } from "./components/usage-metering-card";
 
 declare global {
   interface Window {
@@ -398,6 +400,10 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        <UsageMeteringCard onUpgradeClick={onUpgrade} />
+
+        <TeamWorkspacesCard />
 
         <LlmKeysCard />
 

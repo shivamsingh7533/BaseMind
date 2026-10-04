@@ -280,6 +280,46 @@ async def init_db() -> None:
             await conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_conversations_external_chat_id ON conversations(external_chat_id)"
             )
+        with suppress(Exception):
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS workspaces (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    slug TEXT NOT NULL UNIQUE,
+                    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workspaces_owner_id ON workspaces(owner_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workspaces_slug ON workspaces(slug)")
+            await conn.exec_driver_sql(
+                """
+                CREATE TABLE IF NOT EXISTS workspace_members (
+                    id TEXT PRIMARY KEY,
+                    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+                    email TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'operator',
+                    status TEXT NOT NULL DEFAULT 'active',
+                    invited_by_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workspace_members_workspace_id ON workspace_members(workspace_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workspace_members_user_id ON workspace_members(user_id)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workspace_members_email ON workspace_members(email)")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_workspace_members_role ON workspace_members(role)")
+            await conn.exec_driver_sql("ALTER TABLE agents ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_agents_workspace_id ON agents(workspace_id)")
+            await conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_documents_workspace_id ON documents(workspace_id)")
+            await conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL")
+            await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_conversations_workspace_id ON conversations(workspace_id)")
 
     await run_migrations()
 

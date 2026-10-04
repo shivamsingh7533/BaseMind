@@ -20,7 +20,7 @@ from ..models import Agent, Document, DocumentChunk, EventLog, User
 from ..resilience import DEFAULT_TIMEOUT
 from ..schemas import DocumentCreate, SyncUrlRequest, serialize_document
 from ..storage import delete_original, download_url, is_b2_enabled, upload_original
-from .billing import FREE_DOC_LIMIT, get_plan
+from .billing import get_plan, get_plan_limits
 from .deps import (
     MAX_SYNC_BYTES,
     MAX_UPLOAD_BYTES,
@@ -49,13 +49,14 @@ async def list_documents(user: User = Depends(get_current_user), db: AsyncSessio
 
 
 async def _enforce_doc_limit(db: AsyncSession, user: User) -> None:
-    if await get_plan(db, user.id) == "free":
-        result = await db.execute(select(func.count()).select_from(Document).where(Document.user_id == user.id))
-        if result.scalar_one() >= FREE_DOC_LIMIT:
-            raise HTTPException(
-                status_code=402,
-                detail=f"Free plan allows {FREE_DOC_LIMIT} documents. Upgrade to Pro for unlimited knowledge.",
-            )
+    plan = await get_plan(db, user.id)
+    limits = get_plan_limits(plan)
+    result = await db.execute(select(func.count()).select_from(Document).where(Document.user_id == user.id))
+    if result.scalar_one() >= limits.documents:
+        raise HTTPException(
+            status_code=402,
+            detail=f"{plan.title()} plan allows {limits.documents} documents. Upgrade to Pro for more knowledge storage.",
+        )
 
 
 @router.post("/documents", status_code=201)

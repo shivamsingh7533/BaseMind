@@ -8,18 +8,46 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..config import get_settings
 from ..db import get_db
-from ..models import EventLog, Subscription, User
+from ..models import Agent, Conversation, Document, EventLog, Message, Subscription, User, Workspace, WorkspaceMember
+from ..schemas import PlanLimits
 
 router = APIRouter(prefix="/api")
 
 FREE_AGENT_LIMIT = 1
 FREE_DOC_LIMIT = 5
+
+
+def get_plan_limits(plan: str) -> PlanLimits:
+    normalized = (plan or "free").lower()
+    if normalized == "enterprise":
+        return PlanLimits(
+            agents=100,
+            documents=1000,
+            messagesMonthly=100000,
+            teamSeats=50,
+            storageMb=5000,
+        )
+    if normalized == "pro":
+        return PlanLimits(
+            agents=10,
+            documents=100,
+            messagesMonthly=10000,
+            teamSeats=5,
+            storageMb=250,
+        )
+    return PlanLimits(
+        agents=1,
+        documents=5,
+        messagesMonthly=500,
+        teamSeats=1,
+        storageMb=15,
+    )
 
 _pro_settings: dict | None = None
 _client = None
@@ -72,6 +100,94 @@ async def billing_status(user: User = Depends(get_current_user), db: AsyncSessio
         "status": sub.status,
         "current_period_end": sub.current_period_end.isoformat() if sub.current_period_end else None,
         "razorpay_configured": billing_configured(),
+    }
+
+
+@router.get("/billing/usage")
+async def get_usage_metering(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    sub = await _get_or_create_subscription(db, user.id)
+    plan = sub.plan
+    limits = get_plan_limits(plan)
+
+    # 1. Current Agents
+    agent_count = (
+        await db.execute(select(func.count(Agent.id)).where(Agent.user_id == user.id))
+    ).scalar_one()
+
+    # 2. Current Documents
+    doc_count = (
+        await db.execute(select(func.count(Document.id)).where(Document.user_id == user.id))
+    ).scalar_one()
+
+    # 3. Monthly Messages (last 30 days)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
+    msg_count = (
+        await db.execute(
+            select(func.count(Message.id))
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Conversation.user_id == user.id, Message.created_at >= thirty_days_ago)
+        )
+    ).scalar_one()
+
+    # 4. Team Seats (in user's owned workspaces)
+    seat_count = (
+        await db.execute(
+            select(func.count(WorkspaceMember.id))
+            .join(Workspace, Workspace.id == WorkspaceMember.workspace_id)
+            .where(Workspace.owner_id == user.id)
+        )
+    ).scalar_one() or 1
+
+    # 5. Approximate Storage in MB
+    storage_mb = round(doc_count * 1.5, 1)
+
+    pct_agents = min(100.0, round((agent_count / limits.agents) * 100, 1)) if limits.agents else 0.0
+    pct_docs = min(100.0, round((doc_count / limits.documents) * 100, 1)) if limits.documents else 0.0
+    pct_msgs = min(100.0, round((msg_count / limits.messagesMonthly) * 100, 1)) if limits.messagesMonthly else 0.0
+    pct_seats = min(100.0, round((seat_count / limits.teamSeats) * 100, 1)) if limits.teamSeats else 0.0
+    pct_storage = min(100.0, round((storage_mb / limits.storageMb) * 100, 1)) if limits.storageMb else 0.0
+
+    warnings = []
+    if pct_agents >= 100.0:
+        warnings.append(f"Agent limit reached ({agent_count}/{limits.agents}). Upgrade to Pro to create more AI agents.")
+    elif pct_agents >= 80.0:
+        warnings.append(f"Approaching agent limit ({agent_count}/{limits.agents}).")
+
+    if pct_docs >= 100.0:
+        warnings.append(f"Document limit reached ({doc_count}/{limits.documents}). Upgrade to Pro to index more documents.")
+    elif pct_docs >= 80.0:
+        warnings.append(f"Approaching document limit ({doc_count}/{limits.documents}).")
+
+    if pct_msgs >= 100.0:
+        warnings.append(f"Monthly message limit reached ({msg_count}/{limits.messagesMonthly}). Upgrade to Pro for more capacity.")
+    elif pct_msgs >= 80.0:
+        warnings.append(f"Approaching monthly message limit ({msg_count}/{limits.messagesMonthly}).")
+
+    if pct_seats >= 100.0 and limits.teamSeats == 1:
+        warnings.append("Single seat limit (Owner). Upgrade to Pro for multi-seat team workspaces.")
+
+    return {
+        "plan": plan,
+        "status": sub.status,
+        "limits": limits.model_dump(),
+        "current": {
+            "agents": agent_count,
+            "documents": doc_count,
+            "messagesMonthly": msg_count,
+            "teamSeats": seat_count,
+            "storageMb": storage_mb,
+        },
+        "percentages": {
+            "agents": pct_agents,
+            "documents": pct_docs,
+            "messagesMonthly": pct_msgs,
+            "teamSeats": pct_seats,
+            "storageMb": pct_storage,
+        },
+        "warnings": warnings,
     }
 
 

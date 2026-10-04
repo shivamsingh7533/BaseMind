@@ -1,6 +1,20 @@
 import { toast } from "sonner";
 import { API_URL, authHeader } from "./client";
-import type { BillingStatus, CheckoutResponse } from "./types";
+import type { BillingStatus, CheckoutResponse, UsageMetrics } from "./types";
+
+export async function getUsageMetrics(
+  token?: string | null
+): Promise<UsageMetrics | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/billing/usage`, {
+      headers: authHeader(token),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as UsageMetrics;
+  } catch {
+    return null;
+  }
+}
 
 export async function getBilling(
   token?: string | null

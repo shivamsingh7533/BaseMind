@@ -10,7 +10,7 @@ from ..db import get_db
 from ..models import Agent, User
 from ..ops.agent_metrics import agent_metrics
 from ..schemas import AgentCreate, AgentUpdate, serialize_agent
-from .billing import FREE_AGENT_LIMIT, get_plan
+from .billing import get_plan, get_plan_limits
 from .deps import (
     AGENT_CREATE_RATE_MAX,
     AGENT_CREATE_WINDOW,
@@ -65,12 +65,15 @@ async def create_agent(
         temperature=payload.temperature if payload.temperature is not None else 0.2,
         status="active",
         train_progress=100,
+        workspace_id=payload.workspace_id,
     )
     existing = (await db.execute(select(func.count()).select_from(Agent).where(Agent.user_id == user.id))).scalar_one()
-    if await get_plan(db, user.id) == "free" and existing >= FREE_AGENT_LIMIT:
+    plan = await get_plan(db, user.id)
+    limits = get_plan_limits(plan)
+    if existing >= limits.agents:
         raise _HTTPException(
             status_code=402,
-            detail=f"Free plan allows {FREE_AGENT_LIMIT} agent. Upgrade to Pro for unlimited agents.",
+            detail=f"{plan.capitalize()} plan allows {limits.agents} agent{'s' if limits.agents > 1 else ''}. Upgrade your plan to create more agents.",
         )
     db.add(agent)
     await db.commit()

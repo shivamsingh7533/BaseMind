@@ -33,6 +33,7 @@ class AgentCreate(BaseModel):
     model_name: str | None = Field(default="gemini-2.5-flash", max_length=100)
     fallback_model: str | None = Field(default="gemini-2.5-flash", max_length=100)
     temperature: float | None = Field(default=0.2, ge=0.0, le=1.0)
+    workspace_id: str | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -52,6 +53,7 @@ class AgentUpdate(BaseModel):
     model_name: str | None = Field(default=None, max_length=100)
     fallback_model: str | None = Field(default=None, max_length=100)
     temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    workspace_id: str | None = None
 
 
 class LeadCreate(BaseModel):
@@ -178,6 +180,7 @@ def serialize_agent(agent, usage: dict | None = None) -> dict:
         "queries24h": usage.get("queries24h", agent.queries_24h),
         "avgLatencyMs": usage.get("avgLatencyMs", agent.avg_latency_ms),
         "trainProgress": agent.train_progress,
+        "workspaceId": getattr(agent, "workspace_id", None),
     }
 
 
@@ -370,3 +373,93 @@ def serialize_agent_action(action) -> dict:
         "createdAt": action.created_at.isoformat() if getattr(action, "created_at", None) else "",
         "updatedAt": action.updated_at.isoformat() if getattr(action, "updated_at", None) else "",
     }
+
+
+# ---------------------------------------------------------------------------
+# Workspace & RBAC Schemas
+# ---------------------------------------------------------------------------
+WorkspaceRole = Literal["owner", "admin", "operator", "viewer"]
+WorkspaceMemberStatus = Literal["active", "invited", "revoked"]
+
+
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    slug: str | None = Field(default=None, max_length=100)
+
+
+class WorkspaceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=100)
+
+
+class WorkspaceMemberInvite(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    role: WorkspaceRole = "operator"
+
+
+class WorkspaceMemberUpdateRole(BaseModel):
+    role: WorkspaceRole
+
+
+def serialize_workspace_member(member, user=None) -> dict:
+    return {
+        "id": member.id,
+        "workspaceId": member.workspace_id,
+        "userId": member.user_id,
+        "email": member.email,
+        "role": member.role,
+        "status": member.status,
+        "name": getattr(user, "name", None) if user else None,
+        "createdAt": member.created_at.isoformat() if getattr(member, "created_at", None) else "",
+        "updatedAt": member.updated_at.isoformat() if getattr(member, "updated_at", None) else "",
+    }
+
+
+def serialize_workspace(ws, members=None, current_user_role: str = "owner") -> dict:
+    return {
+        "id": ws.id,
+        "name": ws.name,
+        "slug": ws.slug,
+        "ownerId": ws.owner_id,
+        "currentUserRole": current_user_role,
+        "memberCount": len(members) if members is not None else 1,
+        "members": [serialize_workspace_member(m, getattr(m, "user", None)) for m in members] if members is not None else [],
+        "createdAt": ws.created_at.isoformat() if getattr(ws, "created_at", None) else "",
+        "updatedAt": ws.updated_at.isoformat() if getattr(ws, "updated_at", None) else "",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Metering & Usage Quotas
+# ---------------------------------------------------------------------------
+class PlanLimits(BaseModel):
+    agents: int
+    documents: int
+    messagesMonthly: int
+    teamSeats: int
+    storageMb: int
+
+
+class UsageCurrent(BaseModel):
+    agents: int
+    documents: int
+    messagesMonthly: int
+    teamSeats: int
+    storageMb: float
+
+
+class UsagePercentages(BaseModel):
+    agents: float
+    documents: float
+    messagesMonthly: float
+    teamSeats: float
+    storageMb: float
+
+
+class UsageMetricsResponse(BaseModel):
+    plan: str
+    status: str
+    limits: PlanLimits
+    current: UsageCurrent
+    percentages: UsagePercentages
+    warnings: list[str] = Field(default_factory=list)
+

@@ -12,6 +12,7 @@ from .integrations import router as _integrations
 from .leads import router as _leads
 from .llm_keys import router as _llm_keys
 from .public import router as _public
+from .workspaces import router as _workspaces
 
 router = APIRouter()
 router.include_router(_actions)
@@ -26,6 +27,7 @@ router.include_router(_leads)
 router.include_router(_public)
 router.include_router(_integrations)
 router.include_router(_llm_keys)
+router.include_router(_workspaces)
 
 # Re-exports kept for test compatibility (`from app import routers` then `routers.<fn>`).
 __all__ = [

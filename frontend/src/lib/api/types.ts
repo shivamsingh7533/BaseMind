@@ -500,3 +500,80 @@ export interface UserApiKeyCreatePayload {
   api_key: string;
   base_url?: string;
 }
+
+export type WorkspaceRole = "owner" | "admin" | "operator" | "viewer";
+export type WorkspaceMemberStatus = "active" | "invited" | "suspended";
+
+export interface WorkspaceMember {
+  id: string;
+  workspaceId: string;
+  userId?: string | null;
+  email: string;
+  name: string;
+  role: WorkspaceRole;
+  status: WorkspaceMemberStatus;
+  invitedAt: string;
+  joinedAt?: string | null;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  ownerId: string;
+  logoUrl?: string | null;
+  memberCount: number;
+  currentUserRole: WorkspaceRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceCreatePayload {
+  name: string;
+  slug?: string;
+  logo_url?: string;
+}
+
+export interface WorkspaceUpdatePayload {
+  name?: string;
+  slug?: string;
+  logo_url?: string;
+}
+
+export interface WorkspaceMemberInvitePayload {
+  email: string;
+  role?: WorkspaceRole;
+}
+
+export interface PlanLimits {
+  agents: number;
+  documents: number;
+  messagesMonthly: number;
+  teamSeats: number;
+  storageMb: number;
+}
+
+export interface UsageCurrent {
+  agents: number;
+  documents: number;
+  messagesMonthly: number;
+  teamSeats: number;
+  storageMb: number;
+}
+
+export interface UsagePercentages {
+  agents: number;
+  documents: number;
+  messagesMonthly: number;
+  teamSeats: number;
+  storageMb: number;
+}
+
+export interface UsageMetrics {
+  plan: "free" | "pro" | "enterprise";
+  limits: PlanLimits;
+  current: UsageCurrent;
+  percentages: UsagePercentages;
+  isNearQuota: boolean;
+  isOverQuota: boolean;
+}
